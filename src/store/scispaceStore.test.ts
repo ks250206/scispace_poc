@@ -240,6 +240,43 @@ describe("scispace zustand store", () => {
     ]);
   });
 
+  it("updates import settings through scispace commands", async () => {
+    const { store } = await makeStore();
+    const importId = store
+      .getState()
+      .openImportDialog("configured.csv", "skip\nx;y;z\n1;2;3\n4;5;6");
+
+    await store
+      .getState()
+      .runScispace(
+        `import-set ${importId} skipRows=1 delimiter=semicolon hasHeader=true mode=tabular`,
+        { source: "gui" },
+      );
+    await store
+      .getState()
+      .runScispace(`import-column ${importId} column=z action=exclude`, { source: "gui" });
+
+    const pendingImport = store.getState().pendingImports[0];
+    expect(pendingImport?.options).toMatchObject({
+      skipRows: 1,
+      delimiter: "semicolon",
+      excludedColumnIds: ["z"],
+    });
+    expect(pendingImport?.preview ? datasetColumnNames(pendingImport.preview) : []).toEqual([
+      "x",
+      "y",
+    ]);
+    expect(
+      store
+        .getState()
+        .commandHistory.slice(-2)
+        .map((entry) => entry.command),
+    ).toEqual([
+      `import-set ${importId} skipRows=1 delimiter=semicolon hasHeader=true mode=tabular`,
+      `import-column ${importId} column=z action=exclude`,
+    ]);
+  });
+
   it("opens raw import dialogs and confirms them without datasets", async () => {
     const { db, store } = await makeStore();
     const importId = store.getState().openImportDialog("notes.txt", "raw notes");

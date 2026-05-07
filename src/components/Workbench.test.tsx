@@ -392,13 +392,23 @@ describe("Workbench UI", () => {
       ?.querySelector("input");
     fireEvent.click(yColumnToggle as Element);
 
-    expect(useScispaceStore.getState().pendingImports[0]?.options.excludedColumnIds).toEqual([
-      "empty",
-      "y",
-    ]);
+    await waitFor(() =>
+      expect(useScispaceStore.getState().pendingImports[0]?.options.excludedColumnIds).toEqual([
+        "empty",
+        "y",
+      ]),
+    );
 
     fireEvent.change(screen.getByDisplayValue("0"), { target: { value: "1" } });
-    expect(document.querySelector(".raw-text-table tbody tr")).toHaveClass("skipped-row");
+    await waitFor(() =>
+      expect(document.querySelector(".raw-text-table tbody tr")).toHaveClass("skipped-row"),
+    );
+    expect(
+      useScispaceStore
+        .getState()
+        .commandHistory.slice(-2)
+        .map((entry) => entry.source),
+    ).toEqual(["gui", "gui"]);
   });
 
   it("uses the whole import body for raw text mode", async () => {

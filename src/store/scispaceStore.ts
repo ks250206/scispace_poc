@@ -911,6 +911,28 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           activeDatasetId: dataset.id,
         }));
       }
+      if (result.kind === "import-updated") {
+        const updatedImport = result.pendingImport;
+        const { allPreview, preview, error } = createPreviews(
+          updatedImport.id,
+          updatedImport.fileName,
+          updatedImport.text,
+          updatedImport.options,
+        );
+        const normalizedImport: PendingImport = {
+          ...updatedImport,
+          options: normalizeColumnNames(updatedImport.options, allPreview),
+          allPreview,
+          preview,
+          error,
+        };
+        set((state) => ({
+          pendingImports: state.pendingImports.map((pendingImport) =>
+            pendingImport.id === normalizedImport.id ? normalizedImport : pendingImport,
+          ),
+        }));
+        result = { ...result, pendingImport: normalizedImport };
+      }
       if (result.kind === "import-confirm") {
         const importId = result.importId;
         const pendingImport = get().pendingImports.find((item) => item.id === importId);

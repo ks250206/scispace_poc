@@ -37,14 +37,15 @@ const defaultColumnWidth = 140;
 const minColumnWidth = 96;
 const rawLineNumberWidth = 64;
 const rawTextDefaultWidth = 720;
+const quoteCommandArg = (value: string): string =>
+  /[\s"']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
 
 export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   const pendingImport = useScispaceStore((state) =>
     state.pendingImports.find((item) => item.id === importId),
   );
-  const updateImportOptions = useScispaceStore((state) => state.updateImportOptions);
+  const runScispace = useScispaceStore((state) => state.runScispace);
   const updateImportText = useScispaceStore((state) => state.updateImportText);
-  const updateImportMode = useScispaceStore((state) => state.updateImportMode);
   const confirmImport = useScispaceStore((state) => state.confirmImport);
   const cancelImport = useScispaceStore((state) => state.cancelImport);
   const rawParentRef = useRef<HTMLDivElement>(null);
@@ -143,11 +144,16 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
     nextLines[lineIndex] = value;
     updateImportText(importId, nextLines.join("\n"));
   };
+  const runImportSet = (options: string) => {
+    void runScispace(`import-set ${importId} ${options}`, { source: "gui" });
+  };
   const toggleExcludedColumn = (columnId: string, checked: boolean) => {
-    const current = new Set(pendingImport.options.excludedColumnIds);
-    if (checked) current.add(columnId);
-    else current.delete(columnId);
-    updateImportOptions(importId, { excludedColumnIds: [...current] });
+    void runScispace(
+      `import-column ${importId} column=${quoteCommandArg(columnId)} action=${
+        checked ? "exclude" : "include"
+      }`,
+      { source: "gui" },
+    );
   };
 
   return (
@@ -160,9 +166,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
             min={0}
             value={pendingImport.options.skipRows}
             onChange={(event) =>
-              updateImportOptions(importId, {
-                skipRows: Math.max(0, Number(event.currentTarget.value) || 0),
-              })
+              runImportSet(`skipRows=${Math.max(0, Number(event.currentTarget.value) || 0)}`)
             }
           />
         </label>
@@ -171,9 +175,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
           <select
             value={pendingImport.options.delimiter}
             onChange={(event) =>
-              updateImportOptions(importId, {
-                delimiter: event.currentTarget.value as ImportDelimiter,
-              })
+              runImportSet(`delimiter=${event.currentTarget.value as ImportDelimiter}`)
             }
           >
             {delimiterOptions.map((option) => (
@@ -189,7 +191,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
             value={pendingImport.options.commentPrefix}
             placeholder="#"
             onChange={(event) =>
-              updateImportOptions(importId, { commentPrefix: event.currentTarget.value })
+              runImportSet(`commentPrefix=${quoteCommandArg(event.currentTarget.value)}`)
             }
           />
         </label>
@@ -197,9 +199,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
           <input
             type="checkbox"
             checked={pendingImport.options.hasHeader}
-            onChange={(event) =>
-              updateImportOptions(importId, { hasHeader: event.currentTarget.checked })
-            }
+            onChange={(event) => runImportSet(`hasHeader=${event.currentTarget.checked}`)}
           />
           <span>Header row</span>
         </label>
@@ -207,9 +207,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
           <span>Mode</span>
           <select
             value={pendingImport.mode}
-            onChange={(event) =>
-              updateImportMode(importId, event.currentTarget.value as "tabular" | "raw")
-            }
+            onChange={(event) => runImportSet(`mode=${event.currentTarget.value}`)}
           >
             <option value="tabular">Tabular</option>
             <option value="raw">Raw</option>
@@ -241,7 +239,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
                 onChange={(event) => {
                   const columnNames = [...pendingImport.options.columnNames];
                   columnNames[index] = event.currentTarget.value;
-                  updateImportOptions(importId, { columnNames });
+                  runImportSet(`columnNames=${quoteCommandArg(columnNames.join(","))}`);
                 }}
               />
             </label>

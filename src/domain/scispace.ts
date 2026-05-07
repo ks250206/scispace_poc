@@ -74,6 +74,7 @@ const parseOptionalBoolean = (value: string | undefined): boolean | undefined =>
 
 const plotColors = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2"];
 const plotTypes = new Set<PlotType>(["line", "line-marker", "marker"]);
+const importDelimiters = new Set(["auto", "comma", "tab", "space", "semicolon"]);
 const tickDirections = new Set<PlotTickDirection>(["out", "in", "none"]);
 const markerShapes = new Set<PlotMarkerShape>([
   "circle",
@@ -399,6 +400,8 @@ export const executeScispaceCommand = (
         "  file-move <path> to=<directory>",
         "  file-delete <path>",
         "  import-preview <importId>",
+        "  import-set <importId> skipRows=<n> delimiter=<auto|comma|tab|space|semicolon> hasHeader=<true|false> mode=<tabular|raw>",
+        "  import-column <importId> column=<col> action=<include|exclude>",
         "  import-confirm <importId> mode=<tabular|raw> path=<virtualPath>",
         "  elt <dataset> as <newName>",
       ].join("\n"),
@@ -1021,6 +1024,82 @@ export const executeScispaceCommand = (
       const message = error instanceof Error ? error.message : "Unable to parse tabular file";
       return { kind: "import-preview", importId, error: message, output: message };
     }
+  }
+
+  if (command === "import-set") {
+    const importId = args[0] ?? "";
+    const pendingImport = context.pendingImports?.find((item) => item.id === importId);
+    if (!pendingImport) return { kind: "error", output: `Pending import not found: ${importId}` };
+
+    const skipRowsValue = readOption(args, "skipRows");
+    const skipRows = skipRowsValue === undefined ? undefined : parseInteger(skipRowsValue);
+    if (skipRowsValue !== undefined && (skipRows === undefined || skipRows < 0)) {
+      return { kind: "error", output: `Invalid skipRows: ${skipRowsValue}` };
+    }
+
+    const delimiter = readOption(args, "delimiter");
+    if (delimiter !== undefined && !importDelimiters.has(delimiter)) {
+      return { kind: "error", output: `Invalid delimiter: ${delimiter}` };
+    }
+
+    const hasHeader = parseOptionalBoolean(readOption(args, "hasHeader"));
+    if (readOption(args, "hasHeader") !== undefined && hasHeader === undefined) {
+      return { kind: "error", output: "hasHeader must be true or false" };
+    }
+
+    const mode = readOption(args, "mode");
+    if (mode !== undefined && mode !== "tabular" && mode !== "raw") {
+      return { kind: "error", output: "mode must be tabular or raw" };
+    }
+
+    const columnNames = readOption(args, "columnNames")
+      ?.split(",")
+      .map((column) => column.trim());
+    const pendingImportUpdate: PendingImport = {
+      ...pendingImport,
+      mode: mode ?? pendingImport.mode,
+      options: {
+        ...pendingImport.options,
+        skipRows: skipRows ?? pendingImport.options.skipRows,
+        delimiter: (delimiter ??
+          pendingImport.options.delimiter) as PendingImport["options"]["delimiter"],
+        commentPrefix: readOption(args, "commentPrefix") ?? pendingImport.options.commentPrefix,
+        hasHeader: hasHeader ?? pendingImport.options.hasHeader,
+        columnNames: columnNames ?? pendingImport.options.columnNames,
+      },
+    };
+    return {
+      kind: "import-updated",
+      importId,
+      pendingImport: pendingImportUpdate,
+      output: `Import settings updated: ${pendingImport.fileName}`,
+    };
+  }
+
+  if (command === "import-column") {
+    const importId = args[0] ?? "";
+    const pendingImport = context.pendingImports?.find((item) => item.id === importId);
+    if (!pendingImport) return { kind: "error", output: `Pending import not found: ${importId}` };
+    const column = readOption(args, "column");
+    const action = readOption(args, "action");
+    if (!column) return { kind: "error", output: "column is required" };
+    if (action !== "include" && action !== "exclude") {
+      return { kind: "error", output: "action must be include or exclude" };
+    }
+
+    const excluded = new Set(pendingImport.options.excludedColumnIds);
+    if (action === "exclude") excluded.add(column);
+    else excluded.delete(column);
+    const pendingImportUpdate: PendingImport = {
+      ...pendingImport,
+      options: { ...pendingImport.options, excludedColumnIds: [...excluded] },
+    };
+    return {
+      kind: "import-updated",
+      importId,
+      pendingImport: pendingImportUpdate,
+      output: `Import column ${action}: ${column}`,
+    };
   }
 
   if (command === "import-confirm") {

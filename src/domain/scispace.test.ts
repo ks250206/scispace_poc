@@ -602,6 +602,50 @@ describe("scispace pseudo command interpreter", () => {
     if (confirmed.kind === "import-confirm") expect(confirmed.dataset?.name).toBe("configured.csv");
   });
 
+  it("updates import settings and column exclusions through commands", () => {
+    const pendingImport = {
+      id: "import-1",
+      fileName: "configured.csv",
+      text: "skip\nx;y;z\n1;2;3",
+      mode: "tabular" as const,
+      options: {
+        skipRows: 0,
+        delimiter: "auto" as const,
+        commentPrefix: "",
+        hasHeader: true,
+        columnNames: [],
+        excludedColumnIds: [],
+      },
+    };
+
+    const settings = executeScispaceCommand(
+      "import-set import-1 skipRows=1 delimiter=semicolon commentPrefix=# hasHeader=false mode=raw columnNames=a,b,c",
+      { datasets: [], pendingImports: [pendingImport] },
+    );
+    expect(settings.kind).toBe("import-updated");
+    if (settings.kind === "import-updated") {
+      expect(settings.pendingImport).toMatchObject({
+        mode: "raw",
+        options: {
+          skipRows: 1,
+          delimiter: "semicolon",
+          commentPrefix: "#",
+          hasHeader: false,
+          columnNames: ["a", "b", "c"],
+        },
+      });
+    }
+
+    const excluded = executeScispaceCommand("import-column import-1 column=z action=exclude", {
+      datasets: [],
+      pendingImports: [pendingImport],
+    });
+    expect(excluded).toMatchObject({ kind: "import-updated" });
+    if (excluded.kind === "import-updated") {
+      expect(excluded.pendingImport.options.excludedColumnIds).toEqual(["z"]);
+    }
+  });
+
   it("reports import command failures and raw confirmations", () => {
     const pendingImport = {
       id: "import-raw",
