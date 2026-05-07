@@ -185,9 +185,21 @@
   cursor: pointer;
 }
 
+.tree-row.file:disabled {
+  cursor: default;
+}
+
 .tree-row.file:hover,
 .tree-row.file.selected {
   background: var(--blue-soft);
+}
+
+.tree-row.file.raw-only {
+  color: var(--text-muted);
+}
+
+.tree-row.file.raw-only:hover {
+  background: transparent;
 }
 
 .file-name {
@@ -202,6 +214,9 @@
 }
 
 .drop-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   margin-top: auto;
   border: 1px dashed var(--border-strong);
   border-radius: 6px;

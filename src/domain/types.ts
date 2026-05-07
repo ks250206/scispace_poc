@@ -26,6 +26,7 @@ export interface VirtualFile {
   kind: "file" | "directory";
   text?: string;
   datasetId?: string;
+  parseError?: string;
   createdAt: number;
 }
 
@@ -60,5 +61,10 @@ export type ScispaceCommandResult =
 export interface PersistedLayout {
   windows: WorkspaceWindow[];
   viewport: ViewportState;
-  terminalHeight: number;
+}
+
+export interface ImportFileResult {
+  file: VirtualFile;
+  dataset?: Dataset;
+  parseError?: string;
 }

@@ -54,11 +54,14 @@ export function TerminalPanel() {
     const shell = shellRef.current;
     const bash = shell?.bash;
     if (!bash) return;
-    void Promise.all(
-      files
-        .filter((file) => file.text)
-        .map((file) => bash.fs.writeFile(toBashPath(file.path), file.text ?? "")),
-    );
+    void (async () => {
+      await bash.fs.mkdir("/home/user/raw", { recursive: true });
+      await Promise.all(
+        files
+          .filter((file) => file.text)
+          .map((file) => bash.fs.writeFile(toBashPath(file.path), file.text ?? "")),
+      );
+    })();
   }, [files]);
 
   return (

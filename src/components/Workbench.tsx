@@ -57,13 +57,17 @@ export function Workbench() {
 
   const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
     canvasDrag.current = null;
-    event.currentTarget.releasePointerCapture(event.pointerId);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   };
 
   const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     const files = Array.from(event.dataTransfer.files);
-    await Promise.all(files.map(async (file) => importTextFile(file.name, await file.text())));
+    for (const file of files) {
+      await importTextFile(file.name, await file.text());
+    }
   };
 
   return (

@@ -8,6 +8,7 @@ import {
 import { executeScispaceCommand } from "../domain/scispace";
 import type {
   Dataset,
+  ImportFileResult,
   PlotSpec,
   ScispaceCommandResult,
   ViewportState,
@@ -26,9 +27,8 @@ interface ScispaceState {
   activeDatasetId?: string;
   activeWindowId?: string;
   viewport: ViewportState;
-  terminalHeight: number;
   initialize: () => Promise<void>;
-  importTextFile: (name: string, text: string) => Promise<Dataset | undefined>;
+  importTextFile: (name: string, text: string) => Promise<ImportFileResult>;
   selectDataset: (datasetId: string) => Promise<void>;
   openTable: (datasetId: string) => Promise<void>;
   openPlot: (spec: PlotSpec) => Promise<void>;
@@ -39,7 +39,6 @@ interface ScispaceState {
   ) => void;
   focusWindow: (id: string) => void;
   setViewport: (viewport: ViewportState) => void;
-  setTerminalHeight: (height: number) => void;
 }
 
 const initialWindows = (): WorkspaceWindow[] => [
@@ -115,13 +114,19 @@ const seedPlot = (): PlotSpec => ({
   title: "waveform.csv: signal vs time",
 });
 
-const makeFileRecord = (path: string, text: string, datasetId?: string): VirtualFile => ({
+const makeFileRecord = (
+  path: string,
+  text: string,
+  datasetId?: string,
+  parseError?: string,
+): VirtualFile => ({
   id: path,
   path,
   name: path.split("/").at(-1) ?? path,
   kind: "file",
   text,
   datasetId,
+  parseError,
   createdAt: Date.now(),
 });
 
@@ -129,9 +134,27 @@ const persistLayout = (db: SciSpaceDatabase, state: ScispaceState): void => {
   void writePersistedLayout(db, {
     windows: state.windows,
     viewport: state.viewport,
-    terminalHeight: state.terminalHeight,
   });
 };
+
+const uniquifyPath = (path: string, files: VirtualFile[]): string => {
+  const existing = new Set(files.map((file) => file.path));
+  if (!existing.has(path)) return path;
+
+  const slashIndex = path.lastIndexOf("/");
+  const directory = slashIndex >= 0 ? path.slice(0, slashIndex + 1) : "";
+  const fileName = slashIndex >= 0 ? path.slice(slashIndex + 1) : path;
+  const dotIndex = fileName.lastIndexOf(".");
+  const stem = dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
+  const extension = dotIndex > 0 ? fileName.slice(dotIndex) : "";
+
+  for (let index = 1; ; index += 1) {
+    const candidate = `${directory}${stem} (${index})${extension}`;
+    if (!existing.has(candidate)) return candidate;
+  }
+};
+
+const canParseAsTable = (name: string): boolean => /\.(csv|tsv)$/i.test(name);
 
 export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
   create<ScispaceState>()((set, get) => ({
@@ -142,7 +165,6 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     plotSpecs: [],
     terminalEvents: [],
     viewport: { x: 0, y: 0, scale: 1 },
-    terminalHeight: 280,
 
     initialize: async () => {
       const [files, datasets, layout] = await Promise.all([
@@ -172,22 +194,26 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           layout.windows.length > 0 ? ensureTerminalWindow(layout.windows) : initialWindows(),
         plotSpecs: [seedPlot()],
         viewport: layout.viewport,
-        terminalHeight: layout.terminalHeight,
         activeDatasetId: nextDatasets[0]?.id,
       });
     },
 
     importTextFile: async (name, text) => {
-      const path = normalizeVirtualPath(name);
+      const path = uniquifyPath(normalizeVirtualPath(name), get().files);
       let dataset: Dataset | undefined;
+      let parseError: string | undefined;
 
-      try {
-        dataset = parseDelimitedText(text, path.split("/").at(-1) ?? name, path);
-      } catch {
-        dataset = undefined;
+      if (canParseAsTable(name)) {
+        try {
+          dataset = parseDelimitedText(text, path.split("/").at(-1) ?? name, path);
+        } catch (error) {
+          parseError = error instanceof Error ? error.message : "Unable to parse tabular file";
+        }
+      } else {
+        parseError = "Raw file stored without tabular parsing";
       }
 
-      const file = makeFileRecord(path, text, dataset?.id);
+      const file = makeFileRecord(path, text, dataset?.id, parseError);
       await db.files.put(file);
       if (dataset) await db.datasets.put(dataset);
 
@@ -197,9 +223,15 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           ? [...state.datasets.filter((item) => item.id !== dataset.id), dataset]
           : state.datasets,
         activeDatasetId: dataset?.id ?? state.activeDatasetId,
+        terminalEvents: [
+          ...state.terminalEvents,
+          dataset
+            ? `Imported ${file.path} as dataset ${dataset.name}`
+            : `Stored ${file.path}: ${parseError}`,
+        ],
       }));
 
-      return dataset;
+      return { file, dataset, parseError };
     },
 
     selectDataset: async (datasetId) => {
@@ -320,11 +352,6 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
 
     setViewport: (viewport) => {
       set({ viewport });
-      persistLayout(db, get());
-    },
-
-    setTerminalHeight: (height) => {
-      set({ terminalHeight: Math.min(440, Math.max(180, height)) });
       persistLayout(db, get());
     },
   }));

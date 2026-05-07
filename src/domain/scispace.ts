@@ -37,7 +37,10 @@ export const executeScispaceCommand = (
 
   if (command === "lsdata") {
     const output = context.datasets
-      .map((dataset) => `${dataset.name}\t${dataset.rows.length} rows`)
+      .map(
+        (dataset) =>
+          `${dataset.name}\t${dataset.rows.length} rows\tcolumns: ${dataset.columns.join(", ")}`,
+      )
       .join("\n");
     return { kind: "text", output: output || "No datasets loaded" };
   }
@@ -48,7 +51,7 @@ export const executeScispaceCommand = (
     return {
       kind: "open-table",
       datasetId: dataset.id,
-      output: `Opening table for ${dataset.name}`,
+      output: `Table opened: ${dataset.name} (${dataset.rows.length} rows)`,
     };
   }
 
@@ -71,7 +74,7 @@ export const executeScispaceCommand = (
       title: `${dataset.name}: ${y} vs ${x}`,
     };
 
-    return { kind: "plot", spec, output: `Plot queued: ${spec.title}` };
+    return { kind: "plot", spec, output: `Plot opened: ${spec.title}` };
   }
 
   if (command === "elt") {

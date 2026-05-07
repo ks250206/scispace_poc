@@ -32,11 +32,27 @@ describe("scispace zustand store", () => {
 
   it("imports text files through Dexie and exposes parsed datasets", async () => {
     const { db, store } = await makeStore();
-    const dataset = await store.getState().importTextFile("sample.csv", "x,y\n0,1\n1,2");
+    const result = await store.getState().importTextFile("sample.csv", "x,y\n0,1\n1,2");
 
-    expect(dataset?.name).toBe("sample.csv");
+    expect(result.dataset?.name).toBe("sample.csv");
     expect(store.getState().files.some((file) => file.path === "~/raw/sample.csv")).toBe(true);
-    expect(await db.datasets.get(dataset?.id ?? "")).toMatchObject({ name: "sample.csv" });
+    expect(await db.datasets.get(result.dataset?.id ?? "")).toMatchObject({ name: "sample.csv" });
+    expect(store.getState().terminalEvents.at(-1)).toContain("Imported ~/raw/sample.csv");
+  });
+
+  it("keeps unsupported uploads as uniquely named raw files", async () => {
+    const { db, store } = await makeStore();
+    const first = await store.getState().importTextFile("notes.txt", "raw notes");
+    const second = await store.getState().importTextFile("notes.txt", "more notes");
+
+    expect(first.dataset).toBeUndefined();
+    expect(first.parseError).toContain("Raw file stored");
+    expect(second.file.path).toBe("~/raw/notes (1).txt");
+    expect(await db.files.get("~/raw/notes.txt")).toMatchObject({
+      text: "raw notes",
+      parseError: "Raw file stored without tabular parsing",
+    });
+    expect(await db.files.get("~/raw/notes (1).txt")).toMatchObject({ text: "more notes" });
   });
 
   it("runs pseudo commands and mutates real store state", async () => {
@@ -51,7 +67,7 @@ describe("scispace zustand store", () => {
         .getState()
         .windows.some((window) => window.kind === "plot" && window.title.includes("signal")),
     ).toBe(true);
-    expect(store.getState().terminalEvents.at(-1)).toContain("Opening table");
+    expect(store.getState().terminalEvents.at(-1)).toContain("Table opened");
   });
 
   it("handles layout actions and existing table focus", async () => {
@@ -62,12 +78,10 @@ describe("scispace zustand store", () => {
     await store.getState().openTable("seed-waveform");
     store.getState().focusWindow("browser-main");
     store.getState().setViewport({ x: 12, y: 24, scale: 0.75 });
-    store.getState().setTerminalHeight(999);
 
     expect(store.getState().windows.filter((window) => window.id === "table-seed")).toHaveLength(1);
     expect(store.getState().activeWindowId).toBe("browser-main");
     expect(store.getState().viewport).toEqual({ x: 12, y: 24, scale: 0.75 });
-    expect(store.getState().terminalHeight).toBe(440);
   });
 
   it("creates derived datasets through command execution", async () => {
@@ -81,11 +95,9 @@ describe("scispace zustand store", () => {
 
   it("persists layout changes", async () => {
     const { db, store } = await makeStore();
-    store.getState().setTerminalHeight(360);
     store.getState().updateWindow("browser-main", { x: 120, y: 140 });
 
     const layout = await db.layout.get("main");
-    expect(layout?.value.terminalHeight).toBe(360);
     expect(layout?.value.windows.find((window) => window.id === "browser-main")).toMatchObject({
       x: 120,
       y: 140,
@@ -111,7 +123,6 @@ describe("scispace zustand store", () => {
           },
         ],
         viewport: { x: 0, y: 0, scale: 1 },
-        terminalHeight: 280,
       },
     });
 

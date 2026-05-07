@@ -6,11 +6,28 @@ export function DataBrowser() {
   const datasets = useScispaceStore((state) => state.datasets);
   const activeDatasetId = useScispaceStore((state) => state.activeDatasetId);
   const selectDataset = useScispaceStore((state) => state.selectDataset);
+  const importTextFile = useScispaceStore((state) => state.importTextFile);
 
   const rawFiles = useMemo(() => files.filter((file) => file.path.startsWith("~/raw/")), [files]);
 
+  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const droppedFiles = Array.from(event.dataTransfer.files);
+    for (const file of droppedFiles) {
+      await importTextFile(file.name, await file.text());
+    }
+  };
+
   return (
-    <div className="data-browser">
+    <div
+      className="data-browser"
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+      onDrop={handleDrop}
+    >
       <div className="tree-row root">
         <span>▾</span>
         <span className="folder-icon">~/raw</span>
@@ -22,19 +39,24 @@ export function DataBrowser() {
           <button
             key={file.id}
             type="button"
-            className={`tree-row file ${selected ? "selected" : ""}`}
+            className={`tree-row file ${selected ? "selected" : ""} ${dataset ? "parsed" : "raw-only"}`}
             onClick={() => {
               if (dataset) void selectDataset(dataset.id);
             }}
+            disabled={!dataset}
+            title={file.parseError}
           >
             <span className="tree-indent" />
-            <span className="file-icon">▦</span>
+            <span className="file-icon">{dataset ? "▦" : "◇"}</span>
             <span className="file-name">{file.name}</span>
             <span className="file-meta">{dataset ? `${dataset.rows.length}r` : "raw"}</span>
           </button>
         );
       })}
-      <div className="drop-hint">Drop CSV/TSV files anywhere on the canvas.</div>
+      <div className="drop-hint">
+        <strong>Drop files here</strong>
+        <span>CSV/TSV become datasets. Other files stay as raw virtual FS files.</span>
+      </div>
     </div>
   );
 }

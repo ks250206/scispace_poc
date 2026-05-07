@@ -8,6 +8,7 @@ describe("scispace pseudo command interpreter", () => {
   it("lists loaded datasets", () => {
     const result = executeScispaceCommand("lsdata", { datasets: [dataset] });
     expect(result.output).toContain("waveform.csv");
+    expect(result.output).toContain("columns: index, time, signal, background");
   });
 
   it("prints help and empty dataset states", () => {
