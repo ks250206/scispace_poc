@@ -358,13 +358,25 @@ describe("scispace zustand store", () => {
     await store
       .getState()
       .runScispace(
-        'plot-set seed-plot title="Edited signal plot" x=index zoom=x width=820 height=440',
+        'plot-set seed-plot title="Edited signal plot" x=index zoom=x width=820 height=440 fontFamily=Arial fontSize=14 padding=8:10:12:14',
       );
-    await store.getState().runScispace("plot-series seed-plot y=signal label=Signal color=#dc2626");
+    await store
+      .getState()
+      .runScispace(
+        "plot-axis seed-plot axis=y label=Signal color=#111827 gridColor=#d1d5db tickColor=#6b7280 tickLength=10 minorTick=true",
+      );
+    await store
+      .getState()
+      .runScispace(
+        "plot-series seed-plot y=signal label=Signal color=#dc2626 markerShape=diamond order=2",
+      );
     await store.getState().runScispace("plot-series seed-plot y=background action=add");
     await store
       .getState()
       .runScispace("plot-series seed-plot y=background label=Background color=#16a34a");
+    await store
+      .getState()
+      .runScispace("plot-annotation seed-plot action=add type=text-arrow text=Peak x=1 y=0.5");
 
     expect(store.getState().plotSpecs[0]).toMatchObject({
       title: "Edited signal plot",
@@ -372,6 +384,27 @@ describe("scispace zustand store", () => {
       x: "index",
       zoomMode: "x",
       size: { width: 820, height: 440 },
+      font: { family: "Arial", size: 14 },
+      padding: { top: 8, right: 10, bottom: 12, left: 14 },
+      axes: {
+        y: {
+          label: "Signal",
+          color: "#111827",
+          gridColor: "#d1d5db",
+          tickColor: "#6b7280",
+          ticks: { length: 10, minor: true },
+        },
+      },
+    });
+    expect(store.getState().plotSpecs[0]?.series[0]).toMatchObject({
+      markerShape: "diamond",
+      drawOrder: 2,
+    });
+    expect(store.getState().plotSpecs[0]?.annotations[0]).toMatchObject({
+      type: "text-arrow",
+      text: "Peak",
+      x: 1,
+      y: 0.5,
     });
     expect(store.getState().windows.find((window) => window.id === "plot-seed")?.title).toBe(
       "Edited signal plot",
@@ -390,6 +423,9 @@ describe("scispace zustand store", () => {
       x: "index",
       zoomMode: "x",
       size: { width: 820, height: 440 },
+      font: { family: "Arial", size: 14 },
+      padding: { top: 8, right: 10, bottom: 12, left: 14 },
+      annotations: [{ type: "text-arrow", text: "Peak" }],
     });
     expect(restoredStore.getState().plotSpecs[0]?.series.map((series) => series.y)).toEqual([
       "signal",
@@ -628,10 +664,14 @@ describe("scispace zustand store", () => {
           lineWidth: 2,
           markerSize: 6,
           markerShape: "circle",
+          drawOrder: 0,
         },
       ],
       zoomMode: "xy",
       size: { width: 640, height: 360 },
+      font: { family: "Inter, system-ui, sans-serif", size: 12 },
+      padding: { top: 12, right: 12, bottom: 12, left: 12 },
+      annotations: [],
     });
   });
 });
