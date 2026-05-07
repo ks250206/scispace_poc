@@ -5,6 +5,7 @@ import { useScispaceStore } from "../store/scispaceStore";
 const centerViewport = { x: -1920, y: -1080, scale: 1 };
 const minScale = 0.1;
 const maxScale = 3;
+const wheelPanSensitivity = 0.5;
 
 export function Workbench() {
   const viewport = useScispaceStore((state) => state.viewport);
@@ -48,10 +49,11 @@ export function Workbench() {
         return;
       }
       const horizontalDelta = event.shiftKey ? event.deltaY || event.deltaX : event.deltaX;
+      const panStep = wheelPanSensitivity * viewport.scale;
       setViewport({
         ...viewport,
-        x: viewport.x - horizontalDelta,
-        y: viewport.y - (event.shiftKey ? 0 : event.deltaY),
+        x: viewport.x - horizontalDelta * panStep,
+        y: viewport.y - (event.shiftKey ? 0 : event.deltaY * panStep),
       });
     },
     [setViewport, viewport],
