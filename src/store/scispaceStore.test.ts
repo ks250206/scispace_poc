@@ -941,6 +941,50 @@ describe("scispace zustand store", () => {
     ]);
   });
 
+  it("saves the current project before creating and switching projects", async () => {
+    const { db, store } = await makeStore();
+    const firstProjectId = store.getState().currentProjectId;
+
+    await store.getState().runScispace("elt waveform.csv as derived.csv");
+    await store.getState().createNewProject("Second Project");
+
+    const secondProjectId = store.getState().currentProjectId;
+    expect(secondProjectId).not.toBe(firstProjectId);
+    expect(store.getState().projects.map((project) => project.name)).toContain("Second Project");
+    expect(store.getState().datasets.map((dataset) => dataset.name)).toEqual(["waveform.csv"]);
+
+    expect(
+      (await db.projects.get(firstProjectId ?? ""))?.datasets.map((dataset) => dataset.name),
+    ).toContain("derived.csv");
+
+    await store.getState().switchProject(firstProjectId ?? "");
+
+    expect(store.getState().currentProjectId).toBe(firstProjectId);
+    expect(store.getState().datasets.map((dataset) => dataset.name)).toContain("derived.csv");
+    expect((await db.layout.get("main"))?.value.currentProjectId).toBe(firstProjectId);
+  });
+
+  it("renames saved projects and deletes non-current projects", async () => {
+    const { db, store } = await makeStore();
+    const firstProjectId = store.getState().currentProjectId;
+
+    await store.getState().saveCurrentProject("Analysis");
+    expect(
+      store.getState().projects.find((project) => project.id === firstProjectId),
+    ).toMatchObject({
+      name: "Analysis",
+    });
+    expect(await db.projects.get(firstProjectId ?? "")).toMatchObject({ name: "Analysis" });
+
+    await store.getState().createNewProject("Scratch");
+    const secondProjectId = store.getState().currentProjectId;
+    await store.getState().deleteProject(firstProjectId ?? "");
+
+    expect(store.getState().currentProjectId).toBe(secondProjectId);
+    expect(store.getState().projects.some((project) => project.id === firstProjectId)).toBe(false);
+    expect(await db.projects.get(firstProjectId ?? "")).toBeUndefined();
+  });
+
   it("creates folders and moves datasets while preserving their names", async () => {
     const { db, store } = await makeStore();
     await store.getState().createDirectory("analysis");

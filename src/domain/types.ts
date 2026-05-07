@@ -221,6 +221,7 @@ export interface PersistedLayout {
   plotSpecs?: PlotSpec[];
   commandHistory?: CommandHistoryEntry[];
   columnSelections?: Record<string, string[]>;
+  currentProjectId?: string;
 }
 
 export interface ImportFileResult {

@@ -23,8 +23,13 @@ export function Workbench() {
   const viewport = useScispaceStore((state) => state.viewport);
   const setViewport = useScispaceStore((state) => state.setViewport);
   const windows = useScispaceStore((state) => state.windows);
+  const projects = useScispaceStore((state) => state.projects);
+  const currentProjectId = useScispaceStore((state) => state.currentProjectId);
   const runScispace = useScispaceStore((state) => state.runScispace);
   const createNewProject = useScispaceStore((state) => state.createNewProject);
+  const saveCurrentProject = useScispaceStore((state) => state.saveCurrentProject);
+  const switchProject = useScispaceStore((state) => state.switchProject);
+  const deleteProject = useScispaceStore((state) => state.deleteProject);
   const undoStackLength = useScispaceStore((state) => state.undoStack.length);
   const redoStackLength = useScispaceStore((state) => state.redoStack.length);
   const undo = useScispaceStore((state) => state.undo);
@@ -136,8 +141,25 @@ export function Workbench() {
   };
 
   const handleNewProject = () => {
-    const confirmed = window.confirm("Create a new project? Current data and windows will reset.");
-    if (confirmed) void createNewProject();
+    const confirmed = window.confirm("Create a new project? Current project will be saved first.");
+    if (!confirmed) return;
+    const name = window.prompt("Project name", `Untitled Project ${projects.length + 1}`);
+    void createNewProject(name ?? undefined);
+  };
+
+  const handleSaveProject = () => {
+    const currentName =
+      projects.find((project) => project.id === currentProjectId)?.name ?? "Main Project";
+    const name = window.prompt("Project name", currentName);
+    if (name !== null) void saveCurrentProject(name);
+  };
+
+  const handleDeleteProject = () => {
+    if (!currentProjectId) return;
+    const currentName =
+      projects.find((project) => project.id === currentProjectId)?.name ?? "current project";
+    const confirmed = window.confirm(`Delete project "${currentName}"?`);
+    if (confirmed) void deleteProject(currentProjectId);
   };
 
   return (
@@ -145,6 +167,23 @@ export function Workbench() {
       <div className="topbar">
         <div className="brand">SciSpace</div>
         <div className="toolbar-group">
+          <select
+            aria-label="Project"
+            value={currentProjectId ?? ""}
+            onChange={(event) => void switchProject(event.target.value)}
+          >
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+          <button type="button" onClick={handleSaveProject}>
+            Save Project
+          </button>
+          <button type="button" disabled={!currentProjectId} onClick={handleDeleteProject}>
+            Delete Project
+          </button>
           <button type="button" disabled={undoStackLength === 0} onClick={() => void undo()}>
             Undo
           </button>

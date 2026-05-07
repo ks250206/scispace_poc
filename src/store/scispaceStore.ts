@@ -21,18 +21,34 @@ import type {
   ImportFileResult,
   ImportParseOptions,
   PendingImport,
+  PersistedLayout,
   PlotSpec,
   ScispaceCommandResult,
   ViewportState,
   VirtualFile,
   WorkspaceWindow,
 } from "../domain/types";
-import { appDb, readPersistedLayout, type SciSpaceDatabase, writePersistedLayout } from "./db";
+import {
+  appDb,
+  readPersistedLayout,
+  type ProjectRecord,
+  type SciSpaceDatabase,
+  writePersistedLayout,
+} from "./db";
+
+interface ProjectSummary {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+}
 
 interface ScispaceState {
   initialized: boolean;
   files: VirtualFile[];
   datasets: Dataset[];
+  projects: ProjectSummary[];
+  currentProjectId?: string;
   windows: WorkspaceWindow[];
   plotSpecs: PlotSpec[];
   pendingImports: PendingImport[];
@@ -63,7 +79,10 @@ interface ScispaceState {
   undo: () => Promise<void>;
   redo: () => Promise<void>;
   closeWindow: (id: string) => void;
-  createNewProject: () => Promise<void>;
+  createNewProject: (name?: string) => Promise<void>;
+  saveCurrentProject: (name?: string) => Promise<void>;
+  switchProject: (projectId: string) => Promise<void>;
+  deleteProject: (projectId: string) => Promise<void>;
   createDirectory: (name: string, parentPath?: string) => Promise<VirtualFile | undefined>;
   renameVirtualItem: (path: string, name: string) => Promise<void>;
   moveVirtualItem: (path: string, targetDirectory: string) => Promise<void>;
@@ -310,6 +329,66 @@ const createInitialProject = () => {
   };
 };
 
+const defaultProjectId = "project-main";
+const defaultProjectName = "Main Project";
+
+const projectSummary = (record: ProjectRecord): ProjectSummary => ({
+  id: record.id,
+  name: record.name,
+  createdAt: record.createdAt,
+  updatedAt: record.updatedAt,
+});
+
+const layoutFromState = (
+  state: ScispaceState,
+  projectId = state.currentProjectId,
+): PersistedLayout => ({
+  windows: state.windows.filter((window) => window.kind !== "import"),
+  viewport: state.viewport,
+  plotSpecs: state.plotSpecs.map(normalizePlotSpec),
+  commandHistory: state.commandHistory,
+  columnSelections: state.columnSelections,
+  currentProjectId: projectId,
+});
+
+const initialProjectRecord = (id: string, name: string, createdAt = Date.now()): ProjectRecord => {
+  const initialProject = createInitialProject();
+  return {
+    id,
+    name,
+    files: initialProject.files,
+    datasets: initialProject.datasets,
+    layout: {
+      windows: initialProject.windows,
+      viewport: initialProject.viewport,
+      plotSpecs: initialProject.plotSpecs,
+      commandHistory: initialProject.commandHistory,
+      columnSelections: initialProject.columnSelections,
+      currentProjectId: id,
+    },
+    createdAt,
+    updatedAt: createdAt,
+  };
+};
+
+const projectRecordFromState = (
+  state: ScispaceState,
+  id: string,
+  name: string,
+  previous?: ProjectRecord,
+): ProjectRecord => {
+  const now = Date.now();
+  return {
+    id,
+    name,
+    files: cloneState(state.files),
+    datasets: cloneState(state.datasets),
+    layout: layoutFromState(state, id),
+    createdAt: previous?.createdAt ?? now,
+    updatedAt: now,
+  };
+};
+
 const cloneState = <T>(value: T): T => structuredClone(value);
 
 const captureSnapshot = (state: ScispaceState): ProjectSnapshot => ({
@@ -338,13 +417,7 @@ const isUndoableCommand = (input: string): boolean => {
 };
 
 const persistLayout = (db: SciSpaceDatabase, state: ScispaceState): void => {
-  void writePersistedLayout(db, {
-    windows: state.windows.filter((window) => window.kind !== "import"),
-    viewport: state.viewport,
-    plotSpecs: state.plotSpecs.map(normalizePlotSpec),
-    commandHistory: state.commandHistory,
-    columnSelections: state.columnSelections,
-  });
+  void writePersistedLayout(db, layoutFromState(state));
 };
 
 const restoreSnapshot = async (
@@ -365,6 +438,7 @@ const restoreSnapshot = async (
         plotSpecs: snapshot.plotSpecs.map(normalizePlotSpec),
         commandHistory,
         columnSelections: snapshot.columnSelections,
+        currentProjectId: undefined,
       },
     });
   });
@@ -488,6 +562,8 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     initialized: false,
     files: [],
     datasets: [],
+    projects: [],
+    currentProjectId: undefined,
     windows: [],
     plotSpecs: [],
     pendingImports: [],
@@ -501,10 +577,11 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     viewport: initialViewport(),
 
     initialize: async () => {
-      const [files, datasets, layout] = await Promise.all([
+      const [files, datasets, layout, projectRecords] = await Promise.all([
         db.files.toArray(),
         db.datasets.toArray(),
         readPersistedLayout(db),
+        db.projects.toArray(),
       ]);
       let nextDatasets = datasets.map(normalizeDataset);
       let nextFiles = files;
@@ -530,11 +607,39 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       const persistedConfigPlotId = nextWindows.find(
         (window) => window.kind === "plot-config" && window.plotId,
       )?.plotId;
+      const currentProjectId = layout.currentProjectId ?? projectRecords[0]?.id ?? defaultProjectId;
+      let nextProjectRecords = projectRecords;
+      if (nextProjectRecords.length === 0) {
+        const now = Date.now();
+        const record: ProjectRecord = {
+          id: currentProjectId,
+          name: defaultProjectName,
+          files: cloneState(nextFiles),
+          datasets: cloneState(nextDatasets),
+          layout: {
+            windows: nextWindows,
+            viewport: layout.viewport,
+            plotSpecs: nextPlotSpecs,
+            commandHistory: layout.commandHistory ?? [],
+            columnSelections: normalizeColumnSelections(
+              nextDatasets,
+              layout.columnSelections ?? {},
+            ),
+            currentProjectId,
+          },
+          createdAt: now,
+          updatedAt: now,
+        };
+        await db.projects.put(record);
+        nextProjectRecords = [record];
+      }
 
       set({
         initialized: true,
         files: nextFiles,
         datasets: nextDatasets,
+        projects: nextProjectRecords.map(projectSummary),
+        currentProjectId,
         windows: nextWindows,
         plotSpecs: nextPlotSpecs,
         commandHistory: layout.commandHistory ?? [],
@@ -546,6 +651,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
             ? persistedConfigPlotId
             : nextPlotSpecs[0]?.id,
       });
+      persistLayout(db, get());
     },
 
     importTextFile: async (name, text) => {
@@ -1201,23 +1307,32 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       persistLayout(db, get());
     },
 
-    createNewProject: async () => {
-      const initialProject = createInitialProject();
-      await db.transaction("rw", db.files, db.datasets, db.layout, async () => {
+    createNewProject: async (name) => {
+      if (get().initialized && get().currentProjectId) {
+        await get().saveCurrentProject();
+      }
+      const id = `project-${crypto.randomUUID()}`;
+      const projectName = name?.trim() || `Untitled Project ${get().projects.length + 1}`;
+      const record = initialProjectRecord(id, projectName);
+      const initialProject = {
+        files: record.files,
+        datasets: record.datasets,
+        windows: record.layout.windows,
+        plotSpecs: record.layout.plotSpecs ?? [],
+        viewport: record.layout.viewport,
+        commandHistory: record.layout.commandHistory ?? [],
+        columnSelections: record.layout.columnSelections ?? {},
+      };
+      await db.transaction("rw", db.files, db.datasets, db.layout, db.projects, async () => {
         await db.files.clear();
         await db.datasets.clear();
         await db.layout.clear();
+        await db.projects.put(record);
         await db.files.bulkPut(initialProject.files);
         await db.datasets.bulkPut(initialProject.datasets);
         await db.layout.put({
           id: "main",
-          value: {
-            windows: initialProject.windows,
-            viewport: initialProject.viewport,
-            plotSpecs: initialProject.plotSpecs,
-            commandHistory: initialProject.commandHistory,
-            columnSelections: initialProject.columnSelections,
-          },
+          value: record.layout,
         });
       });
 
@@ -1225,6 +1340,11 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         initialized: true,
         files: initialProject.files,
         datasets: initialProject.datasets,
+        projects: [
+          ...get().projects.filter((project) => project.id !== id),
+          projectSummary(record),
+        ],
+        currentProjectId: id,
         windows: initialProject.windows,
         plotSpecs: initialProject.plotSpecs,
         pendingImports: [],
@@ -1238,6 +1358,129 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         activeWindowId: undefined,
         currentPlotId: initialProject.plotSpecs[0]?.id,
         viewport: initialProject.viewport,
+      });
+      persistLayout(db, get());
+    },
+
+    saveCurrentProject: async (name) => {
+      const id = get().currentProjectId ?? defaultProjectId;
+      const previous = await db.projects.get(id);
+      const projectName = name?.trim() || previous?.name || defaultProjectName;
+      const record = projectRecordFromState(get(), id, projectName, previous);
+      await db.transaction("rw", db.projects, db.layout, async () => {
+        await db.projects.put(record);
+        await db.layout.put({ id: "main", value: record.layout });
+      });
+      set((state) => ({
+        currentProjectId: id,
+        projects: [
+          ...state.projects.filter((project) => project.id !== id),
+          projectSummary(record),
+        ].sort((left, right) => left.createdAt - right.createdAt),
+      }));
+      persistLayout(db, get());
+    },
+
+    switchProject: async (projectId) => {
+      if (!projectId || projectId === get().currentProjectId) return;
+      const target = await db.projects.get(projectId);
+      if (!target) return;
+      if (get().currentProjectId) await get().saveCurrentProject();
+      const datasets = target.datasets.map(normalizeDataset);
+      const plotSpecs = (target.layout.plotSpecs ?? [seedPlot()]).map(normalizePlotSpec);
+      const windows = ensureWorkspaceWindows(target.layout.windows);
+      const columnSelections = normalizeColumnSelections(
+        datasets,
+        target.layout.columnSelections ?? {},
+      );
+      await db.transaction("rw", db.files, db.datasets, db.layout, async () => {
+        await db.files.clear();
+        await db.datasets.clear();
+        await db.files.bulkPut(target.files);
+        await db.datasets.bulkPut(datasets);
+        await db.layout.put({
+          id: "main",
+          value: {
+            ...target.layout,
+            windows,
+            plotSpecs,
+            columnSelections,
+            currentProjectId: projectId,
+          },
+        });
+      });
+      const projects = (await db.projects.toArray()).map(projectSummary);
+      const persistedConfigPlotId = windows.find(
+        (window) => window.kind === "plot-config" && window.plotId,
+      )?.plotId;
+      set({
+        files: target.files,
+        datasets,
+        projects,
+        currentProjectId: projectId,
+        windows,
+        plotSpecs,
+        pendingImports: [],
+        terminalEvents: [],
+        commandHistory: target.layout.commandHistory ?? [],
+        undoStack: [],
+        redoStack: [],
+        columnSelections,
+        activeDatasetId: datasets[0]?.id,
+        activeWindowId: undefined,
+        currentPlotId:
+          persistedConfigPlotId && plotSpecs.some((plot) => plot.id === persistedConfigPlotId)
+            ? persistedConfigPlotId
+            : plotSpecs[0]?.id,
+        viewport: target.layout.viewport,
+      });
+      persistLayout(db, get());
+    },
+
+    deleteProject: async (projectId) => {
+      if (!projectId) return;
+      const deletingCurrent = projectId === get().currentProjectId;
+      await db.projects.delete(projectId);
+      const remaining = await db.projects.toArray();
+      if (!deletingCurrent) {
+        set({ projects: remaining.map(projectSummary) });
+        return;
+      }
+      const nextProject = remaining[0];
+      if (nextProject) {
+        set({ currentProjectId: undefined });
+        await get().switchProject(nextProject.id);
+        return;
+      }
+
+      const replacement = initialProjectRecord(defaultProjectId, defaultProjectName);
+      await db.projects.put(replacement);
+      const datasets = replacement.datasets.map(normalizeDataset);
+      await db.transaction("rw", db.files, db.datasets, db.layout, async () => {
+        await db.files.clear();
+        await db.datasets.clear();
+        await db.files.bulkPut(replacement.files);
+        await db.datasets.bulkPut(datasets);
+        await db.layout.put({ id: "main", value: replacement.layout });
+      });
+      set({
+        files: replacement.files,
+        datasets,
+        projects: [projectSummary(replacement)],
+        currentProjectId: replacement.id,
+        windows: replacement.layout.windows,
+        plotSpecs: (replacement.layout.plotSpecs ?? []).map(normalizePlotSpec),
+        pendingImports: [],
+        terminalEvents: [],
+        commandHistory: [],
+        undoStack: [],
+        redoStack: [],
+        columnSelections: replacement.layout.columnSelections ?? {},
+        terminalCommandLineRequest: undefined,
+        activeDatasetId: datasets[0]?.id,
+        activeWindowId: undefined,
+        currentPlotId: replacement.layout.plotSpecs?.[0]?.id,
+        viewport: replacement.layout.viewport,
       });
       persistLayout(db, get());
     },

@@ -7,12 +7,24 @@ const defaultLayout: PersistedLayout = {
   plotSpecs: [],
   commandHistory: [],
   columnSelections: {},
+  currentProjectId: undefined,
 };
+
+export interface ProjectRecord {
+  id: string;
+  name: string;
+  files: VirtualFile[];
+  datasets: Dataset[];
+  layout: PersistedLayout;
+  createdAt: number;
+  updatedAt: number;
+}
 
 export class SciSpaceDatabase extends Dexie {
   files!: Table<VirtualFile, string>;
   datasets!: Table<Dataset, string>;
   layout!: Table<{ id: "main"; value: PersistedLayout }, "main">;
+  projects!: Table<ProjectRecord, string>;
 
   constructor(name = "scispace-poc") {
     super(name);
@@ -20,6 +32,12 @@ export class SciSpaceDatabase extends Dexie {
       files: "id, path, datasetId, createdAt",
       datasets: "id, name, sourcePath, createdAt",
       layout: "id",
+    });
+    this.version(2).stores({
+      files: "id, path, datasetId, createdAt",
+      datasets: "id, name, sourcePath, createdAt",
+      layout: "id",
+      projects: "id, name, updatedAt",
     });
   }
 }
