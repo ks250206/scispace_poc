@@ -676,7 +676,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     },
 
     runScispace: async (input, options) => {
-      const result = executeScispaceCommand(input, {
+      let result = executeScispaceCommand(input, {
         datasets: get().datasets,
         plotSpecs: get().plotSpecs,
       });
@@ -702,26 +702,65 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         persistLayout(db, get());
       }
       if (result.kind === "dataset-created") {
-        await db.datasets.put(result.dataset);
+        const dataset = result.dataset;
+        await db.datasets.put(dataset);
         await db.files.put(
-          makeFileRecord(
-            result.dataset.sourcePath,
-            datasetToDelimitedText(result.dataset),
-            result.dataset.id,
-          ),
+          makeFileRecord(dataset.sourcePath, datasetToDelimitedText(dataset), dataset.id),
         );
         set((state) => ({
-          datasets: [...state.datasets, result.dataset],
+          datasets: [...state.datasets, dataset],
           files: [
             ...state.files,
-            makeFileRecord(
-              result.dataset.sourcePath,
-              datasetToDelimitedText(result.dataset),
-              result.dataset.id,
-            ),
+            makeFileRecord(dataset.sourcePath, datasetToDelimitedText(dataset), dataset.id),
           ],
-          activeDatasetId: result.dataset.id,
+          activeDatasetId: dataset.id,
         }));
+      }
+      if (result.kind === "file-command") {
+        const fileCommand = result;
+        const target = get().files.find((file) => file.path === fileCommand.path);
+        if (fileCommand.action === "mkdir") {
+          const directory = await get().createDirectory(
+            fileCommand.path.split("/").at(-1) ?? "",
+            parentDirectoryOf(fileCommand.path),
+          );
+          result = directory
+            ? { ...fileCommand, output: `Directory created: ${directory.path}` }
+            : { kind: "error", output: `Directory not created: ${fileCommand.path}` };
+        } else if (fileCommand.action === "rename") {
+          if (!target || !fileCommand.name) {
+            result = { kind: "error", output: `File not found: ${fileCommand.path}` };
+          } else {
+            await get().renameVirtualItem(fileCommand.path, fileCommand.name);
+            result = { ...fileCommand, output: `Renamed: ${fileCommand.path}` };
+          }
+        } else if (fileCommand.action === "move") {
+          const directory =
+            fileCommand.targetDirectory === "~/raw"
+              ? undefined
+              : get().files.find((file) => file.path === fileCommand.targetDirectory);
+          if (!target) {
+            result = { kind: "error", output: `File not found: ${fileCommand.path}` };
+          } else if (
+            fileCommand.targetDirectory !== "~/raw" &&
+            (!directory || directory.kind !== "directory")
+          ) {
+            result = {
+              kind: "error",
+              output: `Directory not found: ${fileCommand.targetDirectory}`,
+            };
+          } else {
+            await get().moveVirtualItem(fileCommand.path, fileCommand.targetDirectory ?? "~/raw");
+            result = { ...fileCommand, output: `Moved: ${fileCommand.path}` };
+          }
+        } else if (fileCommand.action === "delete") {
+          if (!target) {
+            result = { kind: "error", output: `File not found: ${fileCommand.path}` };
+          } else {
+            await get().deleteVirtualItem(fileCommand.path);
+            result = { ...fileCommand, output: `Deleted: ${fileCommand.path}` };
+          }
+        }
       }
 
       const commandHistoryEntry: CommandHistoryEntry = {

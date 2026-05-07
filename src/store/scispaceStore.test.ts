@@ -244,6 +244,66 @@ describe("scispace zustand store", () => {
     expect(restoredStore.getState().windows.some((window) => window.kind === "history")).toBe(true);
   });
 
+  it("executes virtual file commands through runScispace and persists their effects", async () => {
+    const { db, store } = await makeStore();
+
+    const mkdir = await store.getState().runScispace("file-mkdir ~/raw/analysis", {
+      source: "terminal",
+    });
+    expect(mkdir).toMatchObject({ kind: "file-command", action: "mkdir" });
+    expect(store.getState().files.some((file) => file.path === "~/raw/analysis")).toBe(true);
+    expect(await db.files.get("~/raw/analysis")).toMatchObject({ kind: "directory" });
+
+    await store.getState().runScispace("file-move ~/raw/waveform.csv to=~/raw/analysis");
+    expect(store.getState().datasets[0]).toMatchObject({
+      name: "waveform.csv",
+      sourcePath: "~/raw/analysis/waveform.csv",
+    });
+
+    await store
+      .getState()
+      .runScispace('file-rename ~/raw/analysis/waveform.csv name="renamed.csv"', {
+        source: "gui",
+      });
+    expect(store.getState().datasets[0]).toMatchObject({
+      name: "renamed.csv",
+      sourcePath: "~/raw/analysis/renamed.csv",
+    });
+    expect(store.getState().windows.find((window) => window.id === "table-seed")?.title).toBe(
+      "Table - renamed.csv",
+    );
+
+    await store.getState().runScispace("file-delete ~/raw/analysis/renamed.csv");
+    expect(store.getState().datasets).toHaveLength(0);
+    expect(store.getState().windows.some((window) => window.kind === "table")).toBe(false);
+    expect(await db.files.get("~/raw/analysis/renamed.csv")).toBeUndefined();
+    expect(store.getState().commandHistory.map((entry) => entry.command)).toEqual([
+      "file-mkdir ~/raw/analysis",
+      "file-move ~/raw/waveform.csv to=~/raw/analysis",
+      'file-rename ~/raw/analysis/waveform.csv name="renamed.csv"',
+      "file-delete ~/raw/analysis/renamed.csv",
+    ]);
+    expect(store.getState().commandHistory[2]).toMatchObject({
+      source: "gui",
+      status: "success",
+    });
+  });
+
+  it("records virtual file command execution errors in command history", async () => {
+    const { store } = await makeStore();
+
+    const result = await store.getState().runScispace("file-delete ~/raw/missing.csv", {
+      source: "gui",
+    });
+
+    expect(result).toMatchObject({ kind: "error", output: "File not found: ~/raw/missing.csv" });
+    expect(store.getState().commandHistory[0]).toMatchObject({
+      command: "file-delete ~/raw/missing.csv",
+      status: "error",
+      source: "gui",
+    });
+  });
+
   it("handles layout actions and existing table focus", async () => {
     const { store } = await makeStore();
 
