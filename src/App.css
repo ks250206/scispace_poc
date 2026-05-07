@@ -493,9 +493,11 @@
 }
 
 .table-scroll table {
-  width: 100%;
+  width: var(--table-width, max-content);
+  min-width: var(--table-width, 100%);
   border-spacing: 0;
   font-size: 12px;
+  table-layout: fixed;
 }
 
 .table-scroll thead {
@@ -507,7 +509,7 @@
 
 .table-scroll th,
 .table-scroll td {
-  min-width: 120px;
+  min-width: 96px;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   padding: 7px 8px;
@@ -516,6 +518,7 @@
 }
 
 .table-scroll th {
+  position: relative;
   padding: 0;
 }
 
@@ -535,6 +538,23 @@
 
 .table-header-button:hover {
   background: #edf4ff;
+}
+
+.column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  z-index: 2;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.column-resize-handle:hover {
+  background: rgba(37, 99, 235, 0.14);
 }
 
 .table-scroll .selected-column {
@@ -572,7 +592,7 @@
 .table-scroll thead,
 .table-scroll tbody tr {
   display: table;
-  width: 100%;
+  width: var(--table-width, 100%);
   table-layout: fixed;
 }
 

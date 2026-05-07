@@ -1,4 +1,11 @@
-import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+} from "react";
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { datasetColumnIds } from "../domain/csv";
@@ -24,6 +31,8 @@ const tableTitlebarHeight = 34;
 const tableControlsHeight = 38;
 const tableHeaderHeight = 32;
 const rowHeight = 32;
+const defaultColumnWidth = 140;
+const minColumnWidth = 96;
 
 const tableScrollHeight = (visibleRows: TableVisibleRows): number =>
   tableHeaderHeight + visibleRows * rowHeight;
@@ -43,25 +52,38 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     column: string;
     value: string;
   }>();
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const parentRef = useRef<HTMLDivElement>(null);
 
-  const columns = useMemo(() => {
+  const requestedColumnIds = useMemo(() => {
     if (!dataset) return [];
-    const requestedColumnIds =
-      columnIds && columnIds.length > 0 ? columnIds : datasetColumnIds(dataset);
-    const visibleColumns = dataset.columns.filter((column) =>
-      requestedColumnIds.includes(column.id),
-    );
-    return visibleColumns.map((column) => ({
+    return columnIds && columnIds.length > 0 ? columnIds : datasetColumnIds(dataset);
+  }, [columnIds, dataset]);
+
+  const visibleDatasetColumns = useMemo(() => {
+    if (!dataset) return [];
+    return dataset.columns.filter((column) => requestedColumnIds.includes(column.id));
+  }, [dataset, requestedColumnIds]);
+
+  const columns = useMemo(() => {
+    return visibleDatasetColumns.map((column) => ({
       accessorKey: column.id,
       header: column.name,
       cell: (info: { getValue: () => unknown }) => formatCellValue(info.getValue()),
     }));
-  }, [columnIds, dataset]);
+  }, [visibleDatasetColumns]);
 
   const data = useMemo(() => dataset?.rows ?? [], [dataset]);
   const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel() });
   const rows = table.getRowModel().rows;
+  const getColumnWidth = useCallback(
+    (columnId: string) => columnWidths[columnId] ?? defaultColumnWidth,
+    [columnWidths],
+  );
+  const tableWidth = useMemo(
+    () => visibleDatasetColumns.reduce((total, column) => total + getColumnWidth(column.id), 0),
+    [getColumnWidth, visibleDatasetColumns],
+  );
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
@@ -79,6 +101,20 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
         }));
 
   if (!dataset) return <div className="empty-state">Dataset not found.</div>;
+
+  const startColumnResize = (columnId: string, startX: number) => {
+    const startWidth = getColumnWidth(columnId);
+    const handlePointerMove = (event: PointerEvent) => {
+      const nextWidth = Math.max(minColumnWidth, startWidth + event.clientX - startX);
+      setColumnWidths((current) => ({ ...current, [columnId]: nextWidth }));
+    };
+    const handlePointerUp = () => {
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", handlePointerUp);
+    };
+    document.addEventListener("pointermove", handlePointerMove);
+    document.addEventListener("pointerup", handlePointerUp);
+  };
 
   const startEdit = (rowIndex: number, column: string, value: unknown) => {
     setSelectedColumn(undefined);
@@ -133,17 +169,26 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
       <div
         ref={parentRef}
         className="table-scroll"
-        style={{ "--table-visible-height": `${tableScrollHeight(visibleRows)}px` } as CSSProperties}
+        style={
+          {
+            "--table-visible-height": `${tableScrollHeight(visibleRows)}px`,
+            "--table-width": `${tableWidth}px`,
+          } as CSSProperties
+        }
       >
-        <table>
+        <table style={{ width: tableWidth, minWidth: tableWidth }}>
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
+              <tr key={headerGroup.id} style={{ width: tableWidth }}>
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
                     className={selectedColumn === header.column.id ? "selected-column" : undefined}
                     aria-selected={selectedColumn === header.column.id}
+                    style={{
+                      width: getColumnWidth(header.column.id),
+                      minWidth: minColumnWidth,
+                    }}
                   >
                     <button
                       type="button"
@@ -157,6 +202,17 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
                     </button>
+                    <button
+                      type="button"
+                      role="separator"
+                      aria-label={`Resize column ${header.column.id}`}
+                      className="column-resize-handle"
+                      onPointerDown={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        startColumnResize(header.column.id, event.clientX);
+                      }}
+                    />
                   </th>
                 ))}
               </tr>
@@ -167,7 +223,10 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
               const row = rows[virtualRow.index];
               if (!row) return null;
               return (
-                <tr key={row.id} style={{ transform: `translateY(${virtualRow.start}px)` }}>
+                <tr
+                  key={row.id}
+                  style={{ width: tableWidth, transform: `translateY(${virtualRow.start}px)` }}
+                >
                   {row.getVisibleCells().map((cell) => {
                     const column = cell.column.id;
                     const value = row.original[column];
@@ -189,6 +248,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
                         className={className || undefined}
                         aria-selected={isSelectedCell}
                         tabIndex={0}
+                        style={{ width: getColumnWidth(column), minWidth: minColumnWidth }}
                         onClick={() => {
                           setSelectedColumn(undefined);
                           setSelectedCell({ rowIndex: virtualRow.index, column });

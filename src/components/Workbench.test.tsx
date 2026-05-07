@@ -182,6 +182,34 @@ describe("Workbench UI", () => {
     expect(document.querySelectorAll(".table-scroll tbody td")[2]).toHaveTextContent("123.45");
   });
 
+  it("resizes table columns and keeps a minimum width with horizontal scrolling", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    const tableScroll = document.querySelector(".table-scroll") as HTMLElement;
+    const signalHeader = tableScroll.querySelectorAll("th")[2] as HTMLElement;
+    expect(tableScroll).toHaveClass("table-scroll");
+    expect(tableScroll.style.getPropertyValue("--table-width")).toBe("560px");
+    expect(signalHeader).toHaveStyle({ width: "140px", minWidth: "96px" });
+
+    fireEvent.pointerDown(screen.getByRole("separator", { name: "Resize column signal" }), {
+      clientX: 200,
+    });
+    fireEvent.pointerMove(document, { clientX: 280 });
+    fireEvent.pointerUp(document);
+
+    expect(signalHeader).toHaveStyle({ width: "220px" });
+    expect(tableScroll.style.getPropertyValue("--table-width")).toBe("640px");
+
+    fireEvent.pointerDown(screen.getByRole("separator", { name: "Resize column signal" }), {
+      clientX: 280,
+    });
+    fireEvent.pointerMove(document, { clientX: 0 });
+    fireEvent.pointerUp(document);
+
+    expect(signalHeader).toHaveStyle({ width: "96px" });
+  });
+
   it("opens an import settings window with a virtualized preview after file drop", async () => {
     render(<App />);
 
