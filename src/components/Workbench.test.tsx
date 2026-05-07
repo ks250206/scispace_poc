@@ -213,6 +213,15 @@ describe("Workbench UI", () => {
     await waitFor(() => expect(screen.queryByText("renamed.csv")).not.toBeInTheDocument());
     expect(confirm).toHaveBeenCalled();
     expect(prompt).toHaveBeenCalledTimes(3);
+    expect(useScispaceStore.getState().commandHistory.map((entry) => entry.command)).toEqual([
+      "file-mkdir ~/raw/analysis",
+      "file-move ~/raw/waveform.csv to=~/raw/analysis",
+      "file-rename ~/raw/analysis/waveform.csv name=renamed.csv",
+      "file-delete ~/raw/analysis/renamed.csv",
+    ]);
+    expect(
+      useScispaceStore.getState().commandHistory.every((entry) => entry.source === "gui"),
+    ).toBe(true);
   });
 
   it("opens shared plot config and edits the current plot", async () => {

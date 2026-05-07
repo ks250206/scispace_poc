@@ -18,16 +18,16 @@ const sortRawItems = (items: VirtualFile[]): VirtualFile[] =>
     return left.kind === "directory" && right.path.startsWith(`${left.path}/`) ? -1 : pathCompare;
   });
 
+const quoteCommandArg = (value: string): string =>
+  /\s|["']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
+
 export function DataBrowser() {
   const files = useScispaceStore((state) => state.files);
   const datasets = useScispaceStore((state) => state.datasets);
   const activeDatasetId = useScispaceStore((state) => state.activeDatasetId);
   const selectDataset = useScispaceStore((state) => state.selectDataset);
   const openImportDialog = useScispaceStore((state) => state.openImportDialog);
-  const createDirectory = useScispaceStore((state) => state.createDirectory);
-  const renameVirtualItem = useScispaceStore((state) => state.renameVirtualItem);
-  const moveVirtualItem = useScispaceStore((state) => state.moveVirtualItem);
-  const deleteVirtualItem = useScispaceStore((state) => state.deleteVirtualItem);
+  const runScispace = useScispaceStore((state) => state.runScispace);
 
   const rawFiles = useMemo(
     () => sortRawItems(files.filter((file) => file.path.startsWith("~/raw/"))),
@@ -45,22 +45,30 @@ export function DataBrowser() {
 
   const handleCreateFolder = () => {
     const name = window.prompt("Folder name", "New Folder");
-    if (name) void createDirectory(name);
+    if (name) void runScispace(`file-mkdir ~/raw/${quoteCommandArg(name)}`, { source: "gui" });
   };
 
   const handleRename = (file: VirtualFile) => {
     const name = window.prompt("Rename", file.name);
-    if (name && name !== file.name) void renameVirtualItem(file.path, name);
+    if (name && name !== file.name) {
+      void runScispace(`file-rename ${quoteCommandArg(file.path)} name=${quoteCommandArg(name)}`, {
+        source: "gui",
+      });
+    }
   };
 
   const handleMove = (file: VirtualFile) => {
     const directory = window.prompt("Move to directory", "~/raw");
-    if (directory) void moveVirtualItem(file.path, directory);
+    if (directory) {
+      void runScispace(`file-move ${quoteCommandArg(file.path)} to=${quoteCommandArg(directory)}`, {
+        source: "gui",
+      });
+    }
   };
 
   const handleDelete = (file: VirtualFile) => {
     const confirmed = window.confirm(`Delete ${file.path}?`);
-    if (confirmed) void deleteVirtualItem(file.path);
+    if (confirmed) void runScispace(`file-delete ${quoteCommandArg(file.path)}`, { source: "gui" });
   };
 
   return (
