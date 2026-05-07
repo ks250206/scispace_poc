@@ -259,7 +259,7 @@ describe("Workbench UI", () => {
       useScispaceStore.getState().windows.find((window) => window.id === "plot-seed"),
     ).toMatchObject({
       width: 720,
-      height: 420,
+      height: 514,
     });
 
     await user.click(screen.getByRole("tab", { name: "Axes" }));

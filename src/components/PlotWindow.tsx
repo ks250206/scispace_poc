@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 import { useScispaceStore } from "../store/scispaceStore";
-import { buildPlotOptions, sortedPlotSeries } from "./plotRendering";
+import { buildPlotOptions, sortedPlotSeries, xAxisLabelHeight } from "./plotRendering";
 
 interface PlotWindowProps {
   plotId: string;
@@ -37,7 +37,8 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
     if (!containerRef.current || !plotData || !spec) return;
     plotRef.current?.destroy();
 
-    plotRef.current = new uPlot(buildPlotOptions(spec), plotData, containerRef.current);
+    const plotHeight = Math.max(160, spec.size.height - xAxisLabelHeight);
+    plotRef.current = new uPlot(buildPlotOptions(spec, plotHeight), plotData, containerRef.current);
 
     const plot = plotRef.current;
     let dragStart: { left: number; top: number } | undefined;
@@ -140,11 +141,14 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
           Config
         </button>
       </div>
-      <div
-        ref={containerRef}
-        className="plot-host"
-        style={{ width: spec.size.width, height: spec.size.height }}
-      />
+      <div className="plot-host" style={{ width: spec.size.width, height: spec.size.height }}>
+        <div
+          ref={containerRef}
+          className="plot-canvas-host"
+          style={{ height: Math.max(160, spec.size.height - xAxisLabelHeight) }}
+        />
+        <div className="plot-x-axis-label">{spec.axes.x.label}</div>
+      </div>
     </div>
   );
 }

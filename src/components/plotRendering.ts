@@ -1,6 +1,8 @@
 import uPlot from "uplot";
 import type { PlotAxisSpec, PlotMarkerShape, PlotSeries, PlotSpec } from "../domain/types";
 
+export const xAxisLabelHeight = 24;
+
 export const sortedPlotSeries = (series: PlotSeries[]): PlotSeries[] =>
   [...series].sort(
     (left, right) => left.drawOrder - right.drawOrder || left.y.localeCompare(right.y),
@@ -162,13 +164,13 @@ const annotationPlugin = (spec: PlotSpec): uPlot.Plugin => ({
   },
 });
 
-export const buildPlotOptions = (spec: PlotSpec): uPlot.Options => {
+export const buildPlotOptions = (spec: PlotSpec, height = spec.size.height): uPlot.Options => {
   const xRange = spec.axes.x.range;
   const yRange = spec.axes.y.range;
   const series = sortedPlotSeries(spec.series);
   return {
     width: spec.size.width,
-    height: spec.size.height,
+    height,
     title: spec.title,
     padding: [spec.padding.top, spec.padding.right, spec.padding.bottom, spec.padding.left],
     cursor: { drag: { x: false, y: false, setScale: false } },
@@ -188,7 +190,7 @@ export const buildPlotOptions = (spec: PlotSpec): uPlot.Options => {
       },
     },
     axes: [
-      axisOptions(spec.axes.x, spec.grid.x, spec.border),
+      { ...axisOptions(spec.axes.x, spec.grid.x, spec.border), label: undefined },
       axisOptions(spec.axes.y, spec.grid.y, spec.border),
     ],
     series: [

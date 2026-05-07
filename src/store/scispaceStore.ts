@@ -78,8 +78,10 @@ interface ScispaceState {
 
 const centerTileX = 1920;
 const centerTileY = 1080;
+const plotWindowChromeHeight = 94;
 const tableWindowHeightForRows = (visibleRows: 10 | 20 | 50): number =>
   34 + 38 + 32 + visibleRows * 32;
+const plotWindowHeightForSpec = (height: number): number => height + plotWindowChromeHeight;
 
 const initialWindows = (): WorkspaceWindow[] => [
   {
@@ -110,7 +112,7 @@ const initialWindows = (): WorkspaceWindow[] => [
     x: centerTileX + 1088,
     y: centerTileY + 88,
     width: 640,
-    height: 420,
+    height: plotWindowHeightForSpec(360),
     zIndex: 3,
     datasetId: "seed-waveform",
     plotId: "seed-plot",
@@ -603,8 +605,8 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
               title: normalizedSpec.title,
               x: 760 + state.windows.length * 20,
               y: 116 + state.windows.length * 16,
-              width: 640,
-              height: 420,
+              width: normalizedSpec.size.width,
+              height: plotWindowHeightForSpec(normalizedSpec.size.height),
               zIndex,
               datasetId: dataset?.id,
               plotId: normalizedSpec.id,
@@ -703,7 +705,11 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
             windows: state.windows.map((window) => {
               const retitledWindow = retitleWindow(window, state.datasets, plotSpecs);
               return retitledWindow.kind === "plot" && retitledWindow.plotId === spec.id
-                ? { ...retitledWindow, width: spec.size.width, height: spec.size.height }
+                ? {
+                    ...retitledWindow,
+                    width: spec.size.width,
+                    height: plotWindowHeightForSpec(spec.size.height),
+                  }
                 : retitledWindow;
             }),
           };

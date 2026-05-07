@@ -411,7 +411,7 @@ describe("scispace zustand store", () => {
     );
     expect(store.getState().windows.find((window) => window.id === "plot-seed")).toMatchObject({
       width: 820,
-      height: 440,
+      height: 534,
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
 

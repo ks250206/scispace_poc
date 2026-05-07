@@ -528,6 +528,19 @@
   padding: 0;
 }
 
+.plot-canvas-host {
+  min-height: 0;
+}
+
+.plot-x-axis-label {
+  display: grid;
+  height: 24px;
+  place-items: center;
+  color: #374151;
+  font-size: 12px;
+  line-height: 1;
+}
+
 .plot-window-toolbar {
   display: flex;
   min-height: 44px;
@@ -630,6 +643,107 @@
   flex: 0 0 auto;
 }
 
+.plot-config-groups,
+.plot-axis-panel,
+.plot-series-panel,
+.plot-annotation-panel {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.plot-config-group {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  padding: 10px;
+}
+
+.plot-config-group h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.plot-subgroup-title {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.plot-field-grid {
+  display: grid;
+  align-items: end;
+  gap: 8px;
+}
+
+.plot-field-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.plot-field-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.plot-field-grid.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.plot-config-field {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.plot-config-field > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plot-config-field.compact input {
+  max-width: 88px;
+}
+
+.plot-config-check {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  align-self: end;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.plot-config-command {
+  height: 28px;
+  align-self: end;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.plot-config-command.danger {
+  color: #b91c1c;
+}
+
+.plot-config-command:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
 .plot-controls {
   display: grid;
   flex: 0 0 auto;
@@ -649,6 +763,8 @@
 }
 
 .plot-title-input,
+.plot-config-field input,
+.plot-config-field select,
 .plot-controls select,
 .plot-style-panel input[type="number"],
 .plot-style-panel input[type="text"],
@@ -674,6 +790,17 @@
   width: 100%;
   padding: 0 8px;
   font-weight: 600;
+}
+
+.plot-config-field input,
+.plot-config-field select {
+  width: 100%;
+  padding: 0 7px;
+}
+
+.plot-config-field input[type="color"] {
+  width: 38px;
+  padding: 2px;
 }
 
 .plot-controls select,
