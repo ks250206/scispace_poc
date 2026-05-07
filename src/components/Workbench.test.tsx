@@ -56,7 +56,9 @@ describe("Workbench UI", () => {
 
     await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
     const shell = document.querySelector(".canvas-shell") as HTMLElement;
+    expect(shell).toHaveAttribute("data-grid-mode", "dots");
     expect(shell.style.getPropertyValue("--canvas-dot-step")).toBe("24px");
+    expect(shell.style.getPropertyValue("--canvas-major-step")).toBe("240px");
 
     fireEvent.wheel(shell, { deltaY: 120 });
     expect(useScispaceStore.getState().viewport).toMatchObject({ x: -1920, y: -1170, scale: 1 });

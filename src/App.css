@@ -64,13 +64,18 @@
   inset: 40px 0 0;
   overflow: hidden;
   background-color: var(--bg);
-  background-image: radial-gradient(
-    circle at 1px 1px,
-    rgba(100, 116, 139, 0.42) 1px,
-    transparent 1.2px
-  );
-  background-position: var(--canvas-dot-x, 0) var(--canvas-dot-y, 0);
-  background-size: var(--canvas-dot-step, 24px) var(--canvas-dot-step, 24px);
+  background-image:
+    linear-gradient(rgba(100, 116, 139, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100, 116, 139, 0.14) 1px, transparent 1px),
+    radial-gradient(circle at 1px 1px, rgba(100, 116, 139, 0.42) 1px, transparent 1.2px);
+  background-position:
+    var(--canvas-dot-x, 0) var(--canvas-dot-y, 0),
+    var(--canvas-dot-x, 0) var(--canvas-dot-y, 0),
+    var(--canvas-dot-x, 0) var(--canvas-dot-y, 0);
+  background-size:
+    var(--canvas-major-step, 240px) var(--canvas-major-step, 240px),
+    var(--canvas-major-step, 240px) var(--canvas-major-step, 240px),
+    var(--canvas-dot-step, 24px) var(--canvas-dot-step, 24px);
   cursor: grab;
 }
 
