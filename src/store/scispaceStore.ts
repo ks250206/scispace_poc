@@ -3,6 +3,7 @@ import {
   createSeedDataset,
   datasetToDelimitedText,
   defaultImportParseOptions,
+  normalizeDataValue,
   normalizeVirtualPath,
   parseDelimitedText,
 } from "../domain/csv";
@@ -48,6 +49,12 @@ interface ScispaceState {
   selectDataset: (datasetId: string) => Promise<void>;
   openTable: (datasetId: string) => Promise<void>;
   openPlot: (spec: PlotSpec) => Promise<void>;
+  updateDatasetCell: (
+    datasetId: string,
+    rowIndex: number,
+    column: string,
+    value: string,
+  ) => Promise<void>;
   runScispace: (
     input: string,
     options?: { source?: CommandHistorySource },
@@ -590,6 +597,37 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         };
       });
       persistLayout(db, get());
+    },
+
+    updateDatasetCell: async (datasetId, rowIndex, column, value) => {
+      const dataset = get().datasets.find((item) => item.id === datasetId);
+      if (!dataset || !dataset.columns.includes(column) || rowIndex < 0) return;
+      if (rowIndex >= dataset.rows.length) return;
+
+      const updatedDataset: Dataset = {
+        ...dataset,
+        rows: dataset.rows.map((row, index) =>
+          index === rowIndex ? { ...row, [column]: normalizeDataValue(value) } : row,
+        ),
+      };
+      const sourceFile = get().files.find(
+        (file) => file.datasetId === datasetId || file.path === updatedDataset.sourcePath,
+      );
+      const updatedFile = sourceFile
+        ? { ...sourceFile, text: datasetToDelimitedText(updatedDataset) }
+        : undefined;
+
+      await db.transaction("rw", db.datasets, db.files, async () => {
+        await db.datasets.put(updatedDataset);
+        if (updatedFile) await db.files.put(updatedFile);
+      });
+
+      set((state) => ({
+        datasets: state.datasets.map((item) => (item.id === datasetId ? updatedDataset : item)),
+        files: updatedFile
+          ? state.files.map((file) => (file.id === updatedFile.id ? updatedFile : file))
+          : state.files,
+      }));
     },
 
     runScispace: async (input, options) => {

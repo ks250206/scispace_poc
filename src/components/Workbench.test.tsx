@@ -119,6 +119,34 @@ describe("Workbench UI", () => {
     );
   });
 
+  it("selects table columns and edits selected cells", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Select column signal" }));
+    expect(screen.getByRole("button", { name: "Select column signal" }).closest("th")).toHaveClass(
+      "selected-column",
+    );
+
+    await waitFor(() =>
+      expect(document.querySelectorAll(".table-scroll tbody td").length).toBeGreaterThan(2),
+    );
+    const firstSignalCell = document.querySelectorAll(".table-scroll tbody td")[2] as HTMLElement;
+    await user.click(firstSignalCell);
+    expect(firstSignalCell).toHaveClass("selected-cell");
+
+    await user.dblClick(firstSignalCell);
+    const editor = screen.getByLabelText("Edit row 1 signal");
+    await user.clear(editor);
+    await user.type(editor, "123.45{Enter}");
+
+    await waitFor(() =>
+      expect(useScispaceStore.getState().datasets[0]?.rows[0]?.signal).toBe(123.45),
+    );
+    expect(document.querySelectorAll(".table-scroll tbody td")[2]).toHaveTextContent("123.45");
+  });
+
   it("opens an import settings window with a virtualized preview after file drop", async () => {
     render(<App />);
 

@@ -97,6 +97,16 @@ describe("scispace zustand store", () => {
     });
   });
 
+  it("updates dataset cells and rewrites the backing virtual file", async () => {
+    const { db, store } = await makeStore();
+
+    await store.getState().updateDatasetCell("seed-waveform", 0, "signal", "42.5");
+
+    expect(store.getState().datasets[0]?.rows[0]?.signal).toBe(42.5);
+    expect((await db.datasets.get("seed-waveform"))?.rows[0]?.signal).toBe(42.5);
+    expect((await db.files.get("~/raw/waveform.csv"))?.text?.split("\n")[1]).toBe("0,0,42.5,7");
+  });
+
   it("opens an import dialog before persisting dropped files and confirms through settings", async () => {
     const { db, store } = await makeStore();
     const importId = store

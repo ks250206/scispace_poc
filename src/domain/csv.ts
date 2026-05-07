@@ -8,7 +8,7 @@ export const defaultImportParseOptions: ImportParseOptions = {
   columnNames: [],
 };
 
-const normalizeCell = (value: string): number | string => {
+export const normalizeDataValue = (value: string): number | string => {
   const trimmed = value.trim();
   if (trimmed === "") return "";
   const numeric = Number(trimmed);
@@ -95,7 +95,7 @@ export const parseDelimitedText = (
   const rows = dataLines.map((line) => {
     const cells = splitDelimitedLine(line, delimiter);
     return Object.fromEntries(
-      headers.map((header, index) => [header, normalizeCell(cells[index] ?? "")]),
+      headers.map((header, index) => [header, normalizeDataValue(cells[index] ?? "")]),
     );
   });
 
