@@ -34,6 +34,7 @@ export function PlotConfigWindow() {
   const runScispace = useScispaceStore((state) => state.runScispace);
   const [seriesToAdd, setSeriesToAdd] = useState("");
   const [activeTab, setActiveTab] = useState<PlotConfigTab>("basic");
+  const [plotSizeDraft, setPlotSizeDraft] = useState({ width: "", height: "" });
 
   const availableSeriesColumns = useMemo(() => {
     if (!dataset || !spec) return [];
@@ -50,6 +51,14 @@ export function PlotConfigWindow() {
       setSeriesToAdd(availableSeriesColumns[0] ?? "");
     }
   }, [availableSeriesColumns, seriesToAdd]);
+
+  useEffect(() => {
+    if (!spec) return;
+    setPlotSizeDraft({
+      width: String(spec.size.width),
+      height: String(spec.size.height),
+    });
+  }, [spec?.size.height, spec?.size.width]);
 
   if (!spec || !dataset || !currentPlotId) {
     return <div className="empty-state">Select a plot window to edit its config.</div>;
@@ -69,6 +78,19 @@ export function PlotConfigWindow() {
   const setPlotSize = (patch: Partial<typeof spec.size>) => {
     const next = { ...spec.size, ...patch };
     runPlotCommand(`plot-set ${currentPlotId} width=${next.width} height=${next.height}`);
+  };
+  const commitPlotSize = () => {
+    const width = Number(plotSizeDraft.width);
+    const height = Number(plotSizeDraft.height);
+    if (
+      !Number.isFinite(width) ||
+      !Number.isFinite(height) ||
+      (width === spec.size.width && height === spec.size.height)
+    ) {
+      setPlotSizeDraft({ width: String(spec.size.width), height: String(spec.size.height) });
+      return;
+    }
+    setPlotSize({ width, height });
   };
   const setGrid = (axis: "x" | "y", value: boolean) =>
     runPlotCommand(`plot-grid ${currentPlotId} ${axis}=${value}`);
@@ -217,8 +239,21 @@ export function PlotConfigWindow() {
                 type="number"
                 min={120}
                 max={4000}
-                value={spec.size.width}
-                onChange={(event) => setPlotSize({ width: Number(event.target.value) })}
+                value={plotSizeDraft.width}
+                onChange={(event) =>
+                  setPlotSizeDraft((current) => ({ ...current, width: event.target.value }))
+                }
+                onBlur={commitPlotSize}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                  if (event.key === "Escape") {
+                    setPlotSizeDraft({
+                      width: String(spec.size.width),
+                      height: String(spec.size.height),
+                    });
+                    event.currentTarget.blur();
+                  }
+                }}
               />
             </label>
             <label>
@@ -228,8 +263,21 @@ export function PlotConfigWindow() {
                 type="number"
                 min={120}
                 max={4000}
-                value={spec.size.height}
-                onChange={(event) => setPlotSize({ height: Number(event.target.value) })}
+                value={plotSizeDraft.height}
+                onChange={(event) =>
+                  setPlotSizeDraft((current) => ({ ...current, height: event.target.value }))
+                }
+                onBlur={commitPlotSize}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                  if (event.key === "Escape") {
+                    setPlotSizeDraft({
+                      width: String(spec.size.width),
+                      height: String(spec.size.height),
+                    });
+                    event.currentTarget.blur();
+                  }
+                }}
               />
             </label>
           </div>

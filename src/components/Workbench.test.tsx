@@ -230,6 +230,14 @@ describe("Workbench UI", () => {
     await user.click(screen.getByRole("button", { name: "x" }));
     fireEvent.change(screen.getByLabelText("Plot width"), { target: { value: "720" } });
     fireEvent.change(screen.getByLabelText("Plot height"), { target: { value: "420" } });
+    expect(useScispaceStore.getState().plotSpecs[0]?.size).toEqual({ width: 640, height: 360 });
+    fireEvent.blur(screen.getByLabelText("Plot height"));
+    await waitFor(() =>
+      expect(useScispaceStore.getState().plotSpecs[0]?.size).toEqual({
+        width: 720,
+        height: 420,
+      }),
+    );
 
     await user.click(screen.getByRole("tab", { name: "Series" }));
     expect(screen.getByRole("tab", { name: "Series" })).toHaveAttribute("aria-selected", "true");
