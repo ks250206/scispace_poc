@@ -330,6 +330,36 @@ describe("scispace zustand store", () => {
     });
   });
 
+  it("keeps confirmed import dataset paths aligned after path collisions", async () => {
+    const { db, store } = await makeStore();
+    await store
+      .getState()
+      .runScispace(`import-open import-a name=replay.csv text=${encodeURIComponent("x,y\n1,2")}`, {
+        source: "history",
+      });
+    await store.getState().runScispace("import-confirm import-a path=~/raw/replay.csv", {
+      source: "history",
+    });
+    await store
+      .getState()
+      .runScispace(`import-open import-b name=replay.csv text=${encodeURIComponent("x,y\n3,4")}`, {
+        source: "history",
+      });
+    await store.getState().runScispace("import-confirm import-b path=~/raw/replay.csv", {
+      source: "history",
+    });
+
+    const replayedFile = await db.files.get("~/raw/replay (1).csv");
+    const replayedDataset = replayedFile?.datasetId
+      ? await db.datasets.get(replayedFile.datasetId)
+      : undefined;
+    expect(replayedFile).toMatchObject({ path: "~/raw/replay (1).csv" });
+    expect(replayedDataset).toMatchObject({
+      name: "replay (1).csv",
+      sourcePath: "~/raw/replay (1).csv",
+    });
+  });
+
   it("opens raw import dialogs and confirms them without datasets", async () => {
     const { db, store } = await makeStore();
     const importId = store.getState().openImportDialog("notes.txt", "raw notes");

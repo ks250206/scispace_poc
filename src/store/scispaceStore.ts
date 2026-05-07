@@ -940,7 +940,13 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         } else {
           const rawPath = readCommandPath(input) ?? normalizeVirtualPath(pendingImport.fileName);
           const path = uniquifyPath(rawPath, get().files);
-          const dataset = result.dataset;
+          const dataset = result.dataset
+            ? {
+                ...result.dataset,
+                name: path.split("/").at(-1) ?? result.dataset.name,
+                sourcePath: path,
+              }
+            : undefined;
           const file = makeFileRecord(path, pendingImport.text, dataset?.id, result.parseError);
           await db.transaction("rw", db.datasets, db.files, async () => {
             await db.files.put(file);
