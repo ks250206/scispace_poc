@@ -1,6 +1,7 @@
 import { Rnd } from "react-rnd";
 import { DataBrowser } from "./DataBrowser";
 import { DataTableWindow } from "./DataTableWindow";
+import { ImportSettingsWindow } from "./ImportSettingsWindow";
 import { PlotWindow } from "./PlotWindow";
 import { TerminalPanel } from "./TerminalPanel";
 import type { WorkspaceWindow } from "../domain/types";
@@ -49,6 +50,9 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
           ) : null}
           {window.kind === "plot" && window.plotId ? <PlotWindow plotId={window.plotId} /> : null}
           {window.kind === "terminal" ? <TerminalPanel /> : null}
+          {window.kind === "import" && window.importId ? (
+            <ImportSettingsWindow importId={window.importId} />
+          ) : null}
         </div>
       </article>
     </Rnd>

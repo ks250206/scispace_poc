@@ -1,7 +1,9 @@
-import type { Dataset, PlotSpec, ScispaceCommandResult } from "./types";
+import { normalizeVirtualPath, parseDelimitedText } from "./csv";
+import type { Dataset, PendingImport, PlotSpec, ScispaceCommandResult } from "./types";
 
 export interface CommandContext {
   datasets: Dataset[];
+  pendingImports?: PendingImport[];
 }
 
 const findDataset = (datasets: Dataset[], token: string): Dataset | undefined =>
@@ -14,6 +16,9 @@ const readOption = (tokens: string[], key: string): string | undefined => {
   const prefix = `${key}=`;
   return tokens.find((token) => token.startsWith(prefix))?.slice(prefix.length);
 };
+
+const parseBooleanOption = (tokens: string[], key: string): boolean =>
+  readOption(tokens, key) === "true";
 
 export const executeScispaceCommand = (
   input: string,
@@ -30,6 +35,8 @@ export const executeScispaceCommand = (
         "  lsdata",
         "  table <dataset>",
         "  plot <dataset> x=<column> y=<column>",
+        "  import-preview <importId>",
+        "  import-confirm <importId> path=<virtualPath>",
         "  elt <dataset> as <newName>",
       ].join("\n"),
     };
@@ -75,6 +82,66 @@ export const executeScispaceCommand = (
     };
 
     return { kind: "plot", spec, output: `Plot opened: ${spec.title}` };
+  }
+
+  if (command === "import-preview") {
+    const importId = args[0] ?? "";
+    const pendingImport = context.pendingImports?.find((item) => item.id === importId);
+    if (!pendingImport) return { kind: "error", output: `Pending import not found: ${importId}` };
+
+    try {
+      const preview = parseDelimitedText(
+        pendingImport.text,
+        pendingImport.fileName,
+        normalizeVirtualPath(pendingImport.fileName),
+        Date.now(),
+        pendingImport.options,
+      );
+      return {
+        kind: "import-preview",
+        importId,
+        preview: parseBooleanOption(args, "full")
+          ? preview
+          : { ...preview, rows: preview.rows.slice(0, 500) },
+        output: `Import preview parsed: ${pendingImport.fileName}`,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to parse tabular file";
+      return { kind: "import-preview", importId, error: message, output: message };
+    }
+  }
+
+  if (command === "import-confirm") {
+    const importId = args[0] ?? "";
+    const pathOption = readOption(args, "path");
+    const path = pathOption ? decodeURIComponent(pathOption) : undefined;
+    const rawOnly = parseBooleanOption(args, "raw");
+    const pendingImport = context.pendingImports?.find((item) => item.id === importId);
+    if (!pendingImport) return { kind: "error", output: `Pending import not found: ${importId}` };
+    if (!path)
+      return { kind: "error", output: "Usage: import-confirm <importId> path=<virtualPath>" };
+    if (rawOnly) {
+      return {
+        kind: "import-confirm",
+        importId,
+        parseError: "Raw file stored without tabular parsing",
+        output: `Raw import confirmed: ${path}`,
+      };
+    }
+
+    try {
+      const dataset = parseDelimitedText(
+        pendingImport.text,
+        path.split("/").at(-1) ?? pendingImport.fileName,
+        path,
+        Date.now(),
+        pendingImport.options,
+      );
+      return { kind: "import-confirm", importId, dataset, output: `Import confirmed: ${path}` };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to parse tabular file";
+      return { kind: "import-confirm", importId, parseError: message, output: message };
+    }
   }
 
   if (command === "elt") {

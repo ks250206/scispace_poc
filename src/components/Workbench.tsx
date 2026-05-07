@@ -9,7 +9,7 @@ export function Workbench() {
   const viewport = useScispaceStore((state) => state.viewport);
   const setViewport = useScispaceStore((state) => state.setViewport);
   const windows = useScispaceStore((state) => state.windows);
-  const importTextFile = useScispaceStore((state) => state.importTextFile);
+  const openImportDialog = useScispaceStore((state) => state.openImportDialog);
   const canvasDrag = useRef<{ x: number; y: number; originX: number; originY: number } | null>(
     null,
   );
@@ -66,7 +66,7 @@ export function Workbench() {
     event.preventDefault();
     const files = Array.from(event.dataTransfer.files);
     for (const file of files) {
-      await importTextFile(file.name, await file.text());
+      openImportDialog(file.name, await file.text());
     }
   };
 

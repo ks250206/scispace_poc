@@ -1,4 +1,14 @@
-export type WindowKind = "browser" | "table" | "plot" | "terminal";
+export type WindowKind = "browser" | "table" | "plot" | "terminal" | "import";
+
+export type ImportDelimiter = "auto" | "comma" | "tab" | "space" | "semicolon";
+
+export interface ImportParseOptions {
+  skipRows: number;
+  delimiter: ImportDelimiter;
+  commentPrefix: string;
+  hasHeader: boolean;
+  columnNames: string[];
+}
 
 export interface ViewportState {
   x: number;
@@ -17,6 +27,7 @@ export interface WorkspaceWindow {
   zIndex: number;
   datasetId?: string;
   plotId?: string;
+  importId?: string;
 }
 
 export interface VirtualFile {
@@ -55,6 +66,14 @@ export type ScispaceCommandResult =
   | { kind: "text"; output: string }
   | { kind: "open-table"; datasetId: string; output: string }
   | { kind: "plot"; spec: PlotSpec; output: string }
+  | { kind: "import-preview"; importId: string; preview?: Dataset; error?: string; output: string }
+  | {
+      kind: "import-confirm";
+      importId: string;
+      dataset?: Dataset;
+      parseError?: string;
+      output: string;
+    }
   | { kind: "dataset-created"; dataset: Dataset; output: string }
   | { kind: "error"; output: string };
 
@@ -67,4 +86,13 @@ export interface ImportFileResult {
   file: VirtualFile;
   dataset?: Dataset;
   parseError?: string;
+}
+
+export interface PendingImport {
+  id: string;
+  fileName: string;
+  text: string;
+  options: ImportParseOptions;
+  preview?: Dataset;
+  error?: string;
 }

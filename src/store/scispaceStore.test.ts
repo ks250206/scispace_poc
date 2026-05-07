@@ -55,6 +55,85 @@ describe("scispace zustand store", () => {
     expect(await db.files.get("~/raw/notes (1).txt")).toMatchObject({ text: "more notes" });
   });
 
+  it("opens an import dialog before persisting dropped files and confirms through settings", async () => {
+    const { db, store } = await makeStore();
+    const importId = store
+      .getState()
+      .openImportDialog("configured.csv", "header\n# comment\nx;y\n1;10\n2;20");
+
+    expect(store.getState().pendingImports).toHaveLength(1);
+    expect(store.getState().windows.some((window) => window.kind === "import")).toBe(true);
+    expect(await db.files.get("~/raw/configured.csv")).toBeUndefined();
+
+    store.getState().updateImportOptions(importId, {
+      skipRows: 1,
+      delimiter: "semicolon",
+      commentPrefix: "#",
+      hasHeader: true,
+    });
+    expect(store.getState().pendingImports[0]?.preview?.rows[0]).toEqual({ x: 1, y: 10 });
+
+    const result = await store.getState().confirmImport(importId);
+
+    expect(result?.dataset?.name).toBe("configured.csv");
+    expect(await db.files.get("~/raw/configured.csv")).toMatchObject({ name: "configured.csv" });
+    expect(store.getState().pendingImports).toHaveLength(0);
+    expect(store.getState().windows.some((window) => window.kind === "import")).toBe(false);
+  });
+
+  it("cancels pending imports without saving files", async () => {
+    const { db, store } = await makeStore();
+    const importId = store.getState().openImportDialog("cancel.csv", "x,y\n1,2");
+
+    store.getState().cancelImport(importId);
+
+    expect(store.getState().pendingImports).toHaveLength(0);
+    expect(await db.files.get("~/raw/cancel.csv")).toBeUndefined();
+  });
+
+  it("updates import preview when header row is disabled", async () => {
+    const { store } = await makeStore();
+    const importId = store.getState().openImportDialog("no-header.csv", "1,2\n3,4");
+
+    store.getState().updateImportOptions(importId, { hasHeader: false });
+
+    expect(store.getState().pendingImports[0]?.preview?.columns).toEqual(["column_1", "column_2"]);
+    expect(store.getState().pendingImports[0]?.preview?.rows[0]).toEqual({
+      column_1: 1,
+      column_2: 2,
+    });
+  });
+
+  it("uses edited column names for headerless imports", async () => {
+    const { store } = await makeStore();
+    const importId = store.getState().openImportDialog("no-header.csv", "1,2\n3,4");
+
+    store.getState().updateImportOptions(importId, { hasHeader: false });
+    store.getState().updateImportOptions(importId, { columnNames: ["energy", "intensity"] });
+    const result = await store.getState().confirmImport(importId);
+
+    expect(result?.dataset?.columns).toEqual(["energy", "intensity"]);
+    expect(result?.dataset?.rows[0]).toEqual({ energy: 1, intensity: 2 });
+  });
+
+  it("opens raw import dialogs and confirms them without datasets", async () => {
+    const { db, store } = await makeStore();
+    const importId = store.getState().openImportDialog("notes.txt", "raw notes");
+
+    expect(store.getState().pendingImports[0]?.error).toContain("Raw file stored");
+    const result = await store.getState().confirmImport(importId);
+
+    expect(result?.dataset).toBeUndefined();
+    expect(result?.parseError).toContain("Raw file stored");
+    expect(await db.files.get("~/raw/notes.txt")).toMatchObject({ text: "raw notes" });
+  });
+
+  it("returns undefined when confirming a missing pending import", async () => {
+    const { store } = await makeStore();
+
+    await expect(store.getState().confirmImport("missing")).resolves.toBeUndefined();
+  });
+
   it("runs pseudo commands and mutates real store state", async () => {
     const { store } = await makeStore();
     const plot = await store.getState().runScispace("plot waveform.csv x=time y=signal");

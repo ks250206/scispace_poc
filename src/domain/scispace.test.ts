@@ -65,4 +65,71 @@ describe("scispace pseudo command interpreter", () => {
     );
     expect(executeScispaceCommand("unknown", { datasets: [dataset] }).output).toContain("Unknown");
   });
+
+  it("routes import preview and confirm through the scispace command path", () => {
+    const pendingImport = {
+      id: "import-1",
+      fileName: "configured.csv",
+      text: "# ignored\nx;y\n1;2",
+      options: {
+        skipRows: 0,
+        delimiter: "semicolon" as const,
+        commentPrefix: "#",
+        hasHeader: true,
+        columnNames: [],
+      },
+    };
+
+    const preview = executeScispaceCommand("import-preview import-1", {
+      datasets: [],
+      pendingImports: [pendingImport],
+    });
+    const confirmed = executeScispaceCommand(
+      `import-confirm import-1 path=${encodeURIComponent("~/raw/configured.csv")}`,
+      {
+        datasets: [],
+        pendingImports: [pendingImport],
+      },
+    );
+
+    expect(preview.kind).toBe("import-preview");
+    if (preview.kind === "import-preview") expect(preview.preview?.rows[0]).toEqual({ x: 1, y: 2 });
+    expect(confirmed.kind).toBe("import-confirm");
+    if (confirmed.kind === "import-confirm") expect(confirmed.dataset?.name).toBe("configured.csv");
+  });
+
+  it("reports import command failures and raw confirmations", () => {
+    const pendingImport = {
+      id: "import-raw",
+      fileName: "notes.txt",
+      text: "hello",
+      options: {
+        skipRows: 0,
+        delimiter: "auto" as const,
+        commentPrefix: "",
+        hasHeader: true,
+        columnNames: [],
+      },
+    };
+
+    expect(executeScispaceCommand("import-preview missing", { datasets: [] }).kind).toBe("error");
+    expect(
+      executeScispaceCommand("import-confirm import-raw", {
+        datasets: [],
+        pendingImports: [pendingImport],
+      }).kind,
+    ).toBe("error");
+    const raw = executeScispaceCommand(
+      `import-confirm import-raw path=${encodeURIComponent("~/raw/notes.txt")} raw=true`,
+      {
+        datasets: [],
+        pendingImports: [pendingImport],
+      },
+    );
+
+    expect(raw).toMatchObject({
+      kind: "import-confirm",
+      parseError: "Raw file stored without tabular parsing",
+    });
+  });
 });

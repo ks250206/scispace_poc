@@ -6,7 +6,7 @@ export function DataBrowser() {
   const datasets = useScispaceStore((state) => state.datasets);
   const activeDatasetId = useScispaceStore((state) => state.activeDatasetId);
   const selectDataset = useScispaceStore((state) => state.selectDataset);
-  const importTextFile = useScispaceStore((state) => state.importTextFile);
+  const openImportDialog = useScispaceStore((state) => state.openImportDialog);
 
   const rawFiles = useMemo(() => files.filter((file) => file.path.startsWith("~/raw/")), [files]);
 
@@ -15,7 +15,7 @@ export function DataBrowser() {
     event.stopPropagation();
     const droppedFiles = Array.from(event.dataTransfer.files);
     for (const file of droppedFiles) {
-      await importTextFile(file.name, await file.text());
+      openImportDialog(file.name, await file.text());
     }
   };
 

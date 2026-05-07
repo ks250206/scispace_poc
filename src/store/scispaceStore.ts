@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   createSeedDataset,
   datasetToDelimitedText,
+  defaultImportParseOptions,
   normalizeVirtualPath,
   parseDelimitedText,
 } from "../domain/csv";
@@ -9,6 +10,8 @@ import { executeScispaceCommand } from "../domain/scispace";
 import type {
   Dataset,
   ImportFileResult,
+  ImportParseOptions,
+  PendingImport,
   PlotSpec,
   ScispaceCommandResult,
   ViewportState,
@@ -23,12 +26,17 @@ interface ScispaceState {
   datasets: Dataset[];
   windows: WorkspaceWindow[];
   plotSpecs: PlotSpec[];
+  pendingImports: PendingImport[];
   terminalEvents: string[];
   activeDatasetId?: string;
   activeWindowId?: string;
   viewport: ViewportState;
   initialize: () => Promise<void>;
   importTextFile: (name: string, text: string) => Promise<ImportFileResult>;
+  openImportDialog: (fileName: string, text: string) => string;
+  updateImportOptions: (importId: string, options: Partial<ImportParseOptions>) => void;
+  confirmImport: (importId: string) => Promise<ImportFileResult | undefined>;
+  cancelImport: (importId: string) => void;
   selectDataset: (datasetId: string) => Promise<void>;
   openTable: (datasetId: string) => Promise<void>;
   openPlot: (spec: PlotSpec) => Promise<void>;
@@ -132,7 +140,7 @@ const makeFileRecord = (
 
 const persistLayout = (db: SciSpaceDatabase, state: ScispaceState): void => {
   void writePersistedLayout(db, {
-    windows: state.windows,
+    windows: state.windows.filter((window) => window.kind !== "import"),
     viewport: state.viewport,
   });
 };
@@ -156,6 +164,37 @@ const uniquifyPath = (path: string, files: VirtualFile[]): string => {
 
 const canParseAsTable = (name: string): boolean => /\.(csv|tsv)$/i.test(name);
 
+const createPreview = (
+  id: string,
+  fileName: string,
+  text: string,
+  options: ImportParseOptions,
+): { preview?: Dataset; error?: string } => {
+  if (!canParseAsTable(fileName)) {
+    return { error: "Raw file stored without tabular parsing" };
+  }
+
+  const result = executeScispaceCommand(`import-preview ${id}`, {
+    datasets: [],
+    pendingImports: [{ id, fileName, text, options }],
+  });
+  if (result.kind === "import-preview") {
+    return { preview: result.preview, error: result.error };
+  }
+  return { error: result.output };
+};
+
+const normalizeColumnNames = (
+  options: ImportParseOptions,
+  preview?: Dataset,
+): ImportParseOptions => {
+  if (options.hasHeader || !preview) return options;
+  const columnNames = preview.columns.map(
+    (column, index) => options.columnNames[index]?.trim() || column || `column_${index + 1}`,
+  );
+  return { ...options, columnNames };
+};
+
 export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
   create<ScispaceState>()((set, get) => ({
     initialized: false,
@@ -163,6 +202,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     datasets: [],
     windows: [],
     plotSpecs: [],
+    pendingImports: [],
     terminalEvents: [],
     viewport: { x: 0, y: 0, scale: 1 },
 
@@ -205,7 +245,13 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
 
       if (canParseAsTable(name)) {
         try {
-          dataset = parseDelimitedText(text, path.split("/").at(-1) ?? name, path);
+          dataset = parseDelimitedText(
+            text,
+            path.split("/").at(-1) ?? name,
+            path,
+            Date.now(),
+            defaultImportParseOptions,
+          );
         } catch (error) {
           parseError = error instanceof Error ? error.message : "Unable to parse tabular file";
         }
@@ -232,6 +278,107 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       }));
 
       return { file, dataset, parseError };
+    },
+
+    openImportDialog: (fileName, text) => {
+      const id = crypto.randomUUID();
+      const options = { ...defaultImportParseOptions };
+      const { preview, error } = createPreview(id, fileName, text, options);
+
+      set((state) => {
+        const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
+        const pendingImport: PendingImport = { id, fileName, text, options, preview, error };
+        const window: WorkspaceWindow = {
+          id: `import-${id}`,
+          kind: "import",
+          title: `Import - ${fileName}`,
+          x: 360 + state.pendingImports.length * 24,
+          y: 130 + state.pendingImports.length * 20,
+          width: 820,
+          height: 540,
+          zIndex,
+          importId: id,
+        };
+
+        return {
+          pendingImports: [...state.pendingImports, pendingImport],
+          windows: [...state.windows, window],
+          activeWindowId: window.id,
+        };
+      });
+      persistLayout(db, get());
+      return id;
+    },
+
+    updateImportOptions: (importId, options) => {
+      set((state) => ({
+        pendingImports: state.pendingImports.map((pendingImport) => {
+          if (pendingImport.id !== importId) return pendingImport;
+          const nextOptions = { ...pendingImport.options, ...options };
+          const { preview, error } = createPreview(
+            pendingImport.id,
+            pendingImport.fileName,
+            pendingImport.text,
+            nextOptions,
+          );
+          return {
+            ...pendingImport,
+            options: normalizeColumnNames(nextOptions, preview),
+            preview,
+            error,
+          };
+        }),
+      }));
+    },
+
+    confirmImport: async (importId) => {
+      const pendingImport = get().pendingImports.find((item) => item.id === importId);
+      if (!pendingImport) return undefined;
+
+      const path = uniquifyPath(normalizeVirtualPath(pendingImport.fileName), get().files);
+      let parseError: string | undefined;
+      let dataset: Dataset | undefined;
+      const result = executeScispaceCommand(
+        `import-confirm ${importId} path=${encodeURIComponent(path)} raw=${String(!canParseAsTable(pendingImport.fileName))}`,
+        { datasets: get().datasets, pendingImports: [pendingImport] },
+      );
+      if (result.kind === "import-confirm") {
+        dataset = result.dataset;
+        parseError = result.parseError;
+      } else {
+        parseError = result.output;
+      }
+
+      const file = makeFileRecord(path, pendingImport.text, dataset?.id, parseError);
+      await db.files.put(file);
+      if (dataset) await db.datasets.put(dataset);
+
+      set((state) => ({
+        files: [...state.files.filter((item) => item.id !== file.id), file],
+        datasets: dataset
+          ? [...state.datasets.filter((item) => item.id !== dataset.id), dataset]
+          : state.datasets,
+        activeDatasetId: dataset?.id ?? state.activeDatasetId,
+        pendingImports: state.pendingImports.filter((item) => item.id !== importId),
+        windows: state.windows.filter((window) => window.importId !== importId),
+        terminalEvents: [
+          ...state.terminalEvents,
+          dataset
+            ? `Imported ${file.path} as dataset ${dataset.name}`
+            : `Stored ${file.path}: ${parseError}`,
+        ],
+      }));
+      persistLayout(db, get());
+
+      return { file, dataset, parseError };
+    },
+
+    cancelImport: (importId) => {
+      set((state) => ({
+        pendingImports: state.pendingImports.filter((item) => item.id !== importId),
+        windows: state.windows.filter((window) => window.importId !== importId),
+      }));
+      persistLayout(db, get());
     },
 
     selectDataset: async (datasetId) => {
