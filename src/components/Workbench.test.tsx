@@ -224,6 +224,44 @@ describe("Workbench UI", () => {
     );
   });
 
+  it("stacks raw text and import preview virtual tables with resizable columns", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    const shell = document.querySelector(".canvas-shell");
+    const file = new File(["x,y\n1,2\n3,4\n5,6"], "imported.csv", { type: "text/csv" });
+    fireEvent.drop(shell as Element, { dataTransfer: { files: [file] } });
+
+    await waitFor(() => expect(screen.getByText("Import - imported.csv")).toBeInTheDocument());
+    const editorGrid = document.querySelector(".import-editor-grid") as HTMLElement;
+    const rawTable = document.querySelector(".raw-text-table") as HTMLElement;
+    const preview = document.querySelector(".import-preview") as HTMLElement;
+    const previewXHeader = preview.querySelectorAll("th")[0] as HTMLElement;
+    expect(editorGrid).toHaveClass("stacked");
+    expect(rawTable).toBeInTheDocument();
+    expect(preview.style.getPropertyValue("--table-width")).toBe("280px");
+    expect(previewXHeader).toHaveStyle({ width: "140px", minWidth: "96px" });
+    expect(screen.queryByRole("textbox", { name: "Raw text" })).not.toBeInTheDocument();
+
+    fireEvent.pointerDown(screen.getByRole("separator", { name: "Resize import column x" }), {
+      clientX: 120,
+    });
+    fireEvent.pointerMove(document, { clientX: 200 });
+    fireEvent.pointerUp(document);
+
+    expect(previewXHeader).toHaveStyle({ width: "220px" });
+    expect(preview.style.getPropertyValue("--table-width")).toBe("360px");
+
+    const secondLineInput = screen.getByRole("textbox", { name: "Raw line 2" });
+    fireEvent.change(secondLineInput, { target: { value: "10,20" } });
+    await waitFor(() =>
+      expect(useScispaceStore.getState().pendingImports[0]?.preview?.rows[0]).toEqual({
+        x: 10,
+        y: 20,
+      }),
+    );
+  });
+
   it("opens an import settings window from the data browser load field", async () => {
     render(<App />);
 

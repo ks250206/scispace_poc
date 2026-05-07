@@ -1,4 +1,12 @@
-import { useMemo, useRef, type CSSProperties } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { ImportDelimiter } from "../domain/types";
@@ -24,6 +32,12 @@ const formatCellValue = (value: unknown): string => {
   return JSON.stringify(value);
 };
 
+const rowHeight = 32;
+const defaultColumnWidth = 140;
+const minColumnWidth = 96;
+const rawLineNumberWidth = 76;
+const rawTextDefaultWidth = 520;
+
 export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   const pendingImport = useScispaceStore((state) =>
     state.pendingImports.find((item) => item.id === importId),
@@ -33,8 +47,12 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   const updateImportMode = useScispaceStore((state) => state.updateImportMode);
   const confirmImport = useScispaceStore((state) => state.confirmImport);
   const cancelImport = useScispaceStore((state) => state.cancelImport);
-  const parentRef = useRef<HTMLDivElement>(null);
+  const rawParentRef = useRef<HTMLDivElement>(null);
+  const previewParentRef = useRef<HTMLDivElement>(null);
+  const [previewColumnWidths, setPreviewColumnWidths] = useState<Record<string, number>>({});
+  const [rawColumnWidths, setRawColumnWidths] = useState<Record<string, number>>({});
   const preview = pendingImport?.preview;
+  const rawLines = useMemo(() => pendingImport?.text.split(/\r?\n/) ?? [], [pendingImport?.text]);
   const columns = useMemo(
     () =>
       (preview?.columns ?? []).map((column) => ({
@@ -49,12 +67,74 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   const rows = table.getRowModel().rows;
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 32,
+    getScrollElement: () => previewParentRef.current,
+    estimateSize: () => rowHeight,
+    initialRect: { width: 650, height: 260 },
     overscan: 8,
   });
+  const rawVirtualizer = useVirtualizer({
+    count: rawLines.length,
+    getScrollElement: () => rawParentRef.current,
+    estimateSize: () => rowHeight,
+    initialRect: { width: 650, height: 190 },
+    overscan: 12,
+  });
+  const getPreviewColumnWidth = useCallback(
+    (columnId: string) => previewColumnWidths[columnId] ?? defaultColumnWidth,
+    [previewColumnWidths],
+  );
+  const getRawColumnWidth = useCallback(
+    (columnId: string) =>
+      rawColumnWidths[columnId] ?? (columnId === "line" ? rawLineNumberWidth : rawTextDefaultWidth),
+    [rawColumnWidths],
+  );
+  const previewTableWidth = useMemo(
+    () =>
+      (preview?.columns ?? []).reduce(
+        (total, column) => total + getPreviewColumnWidth(column.id),
+        0,
+      ),
+    [getPreviewColumnWidth, preview],
+  );
+  const rawTableWidth = getRawColumnWidth("line") + getRawColumnWidth("text");
+  const visiblePreviewRows =
+    rowVirtualizer.getVirtualItems().length > 0
+      ? rowVirtualizer.getVirtualItems()
+      : rows.slice(0, 18).map((_, index) => ({ index, key: index, start: index * rowHeight }));
+  const visibleRawRows =
+    rawVirtualizer.getVirtualItems().length > 0
+      ? rawVirtualizer.getVirtualItems()
+      : rawLines.slice(0, 18).map((_, index) => ({
+          index,
+          key: index,
+          start: index * rowHeight,
+        }));
+
+  const startColumnResize = (
+    setter: Dispatch<SetStateAction<Record<string, number>>>,
+    columnId: string,
+    startX: number,
+    startWidth: number,
+  ) => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const nextWidth = Math.max(minColumnWidth, startWidth + event.clientX - startX);
+      setter((current) => ({ ...current, [columnId]: nextWidth }));
+    };
+    const handlePointerUp = () => {
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", handlePointerUp);
+    };
+    document.addEventListener("pointermove", handlePointerMove);
+    document.addEventListener("pointerup", handlePointerUp);
+  };
 
   if (!pendingImport) return <div className="empty-state">Import request not found.</div>;
+
+  const updateRawLine = (lineIndex: number, value: string) => {
+    const nextLines = [...rawLines];
+    nextLines[lineIndex] = value;
+    updateImportText(importId, nextLines.join("\n"));
+  };
 
   return (
     <div className="import-window">
@@ -160,40 +240,154 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
           ))}
         </div>
       ) : null}
-      <div className="import-editor-grid">
-        <label className="raw-text-editor">
-          <span>Raw text</span>
-          <textarea
-            spellCheck={false}
-            value={pendingImport.text}
-            onChange={(event) => updateImportText(importId, event.currentTarget.value)}
-          />
-        </label>
+      <div className="import-editor-grid stacked">
+        <section className="raw-text-editor">
+          <div className="virtual-table-title">Raw text</div>
+          <div
+            ref={rawParentRef}
+            className="table-scroll raw-text-table"
+            style={
+              {
+                "--table-visible-height": "190px",
+                "--table-width": `${rawTableWidth}px`,
+              } as CSSProperties
+            }
+          >
+            <table style={{ width: rawTableWidth, minWidth: rawTableWidth }}>
+              <thead>
+                <tr style={{ width: rawTableWidth }}>
+                  <th
+                    style={{
+                      width: getRawColumnWidth("line"),
+                      minWidth: minColumnWidth,
+                    }}
+                  >
+                    line
+                  </th>
+                  <th
+                    style={{
+                      width: getRawColumnWidth("text"),
+                      minWidth: minColumnWidth,
+                    }}
+                  >
+                    raw text
+                    <button
+                      type="button"
+                      role="separator"
+                      aria-label="Resize raw text column"
+                      className="column-resize-handle"
+                      onPointerDown={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        startColumnResize(
+                          setRawColumnWidths,
+                          "text",
+                          event.clientX,
+                          getRawColumnWidth("text"),
+                        );
+                      }}
+                    />
+                  </th>
+                </tr>
+              </thead>
+              <tbody style={{ height: rawVirtualizer.getTotalSize() }}>
+                {visibleRawRows.map((virtualRow) => (
+                  <tr
+                    key={virtualRow.key}
+                    style={{ width: rawTableWidth, transform: `translateY(${virtualRow.start}px)` }}
+                  >
+                    <td
+                      style={{
+                        width: getRawColumnWidth("line"),
+                        minWidth: minColumnWidth,
+                      }}
+                    >
+                      {virtualRow.index + 1}
+                    </td>
+                    <td
+                      style={{
+                        width: getRawColumnWidth("text"),
+                        minWidth: minColumnWidth,
+                      }}
+                    >
+                      <input
+                        aria-label={`Raw line ${virtualRow.index + 1}`}
+                        className="raw-line-input"
+                        spellCheck={false}
+                        value={rawLines[virtualRow.index] ?? ""}
+                        onChange={(event) => updateRawLine(virtualRow.index, event.target.value)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
         <div
-          ref={parentRef}
+          ref={previewParentRef}
           className="table-scroll import-preview"
-          style={{ "--table-visible-height": "320px" } as CSSProperties}
+          style={
+            {
+              "--table-visible-height": "260px",
+              "--table-width": `${previewTableWidth}px`,
+            } as CSSProperties
+          }
         >
-          <table>
+          <table style={{ width: previewTableWidth, minWidth: previewTableWidth }}>
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id}>
+                <tr key={headerGroup.id} style={{ width: previewTableWidth }}>
                   {headerGroup.headers.map((header) => (
-                    <th key={header.id}>
+                    <th
+                      key={header.id}
+                      style={{
+                        width: getPreviewColumnWidth(header.column.id),
+                        minWidth: minColumnWidth,
+                      }}
+                    >
                       {flexRender(header.column.columnDef.header, header.getContext())}
+                      <button
+                        type="button"
+                        role="separator"
+                        aria-label={`Resize import column ${header.column.id}`}
+                        className="column-resize-handle"
+                        onPointerDown={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          startColumnResize(
+                            setPreviewColumnWidths,
+                            header.column.id,
+                            event.clientX,
+                            getPreviewColumnWidth(header.column.id),
+                          );
+                        }}
+                      />
                     </th>
                   ))}
                 </tr>
               ))}
             </thead>
             <tbody style={{ height: rowVirtualizer.getTotalSize() }}>
-              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              {visiblePreviewRows.map((virtualRow) => {
                 const row = rows[virtualRow.index];
                 if (!row) return null;
                 return (
-                  <tr key={row.id} style={{ transform: `translateY(${virtualRow.start}px)` }}>
+                  <tr
+                    key={row.id}
+                    style={{
+                      width: previewTableWidth,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id}>
+                      <td
+                        key={cell.id}
+                        style={{
+                          width: getPreviewColumnWidth(cell.column.id),
+                          minWidth: minColumnWidth,
+                        }}
+                      >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}

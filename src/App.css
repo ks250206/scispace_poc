@@ -1128,15 +1128,21 @@
   grid-template-columns: minmax(220px, 0.42fr) minmax(0, 0.58fr);
 }
 
+.import-editor-grid.stacked {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(180px, 0.42fr) minmax(220px, 0.58fr);
+}
+
 .raw-text-editor {
   display: grid;
   min-height: 0;
-  border-right: 1px solid var(--border);
+  border-right: 0;
+  border-bottom: 1px solid var(--border);
   background: #fbfcfd;
   grid-template-rows: 28px minmax(0, 1fr);
 }
 
-.raw-text-editor span {
+.virtual-table-title {
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--border);
@@ -1145,15 +1151,20 @@
   font-size: 11px;
 }
 
-.raw-text-editor textarea {
-  min-height: 0;
-  resize: none;
+.raw-text-table {
+  flex: 1;
+}
+
+.raw-line-input {
+  width: 100%;
+  min-width: 0;
+  height: 22px;
   border: 0;
   outline: none;
   background: #fff;
   color: var(--text);
-  padding: 10px;
-  font: 12px/1.45 var(--mono);
+  padding: 0 6px;
+  font: 12px/1.2 var(--mono);
 }
 
 .import-preview {
