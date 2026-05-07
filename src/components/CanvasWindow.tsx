@@ -1,4 +1,5 @@
 import { Rnd } from "react-rnd";
+import type { MouseEvent } from "react";
 import { CommandHistoryWindow } from "./CommandHistoryWindow";
 import { DataBrowser } from "./DataBrowser";
 import { DataTableWindow } from "./DataTableWindow";
@@ -21,6 +22,10 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
   const closeWindow = useScispaceStore((state) => state.closeWindow);
   const canClose =
     window.kind === "table" || window.kind === "plot" || window.kind === "plot-config";
+  const handleClose = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    closeWindow(window.id);
+  };
 
   return (
     <Rnd
@@ -54,13 +59,8 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
               aria-label={`Close ${window.title}`}
               className="window-close"
               type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                closeWindow(window.id);
-              }}
-              onMouseDown={(event) => {
-                event.stopPropagation();
-              }}
+              onClick={handleClose}
+              onMouseDown={handleClose}
               onPointerDown={(event) => {
                 event.stopPropagation();
               }}

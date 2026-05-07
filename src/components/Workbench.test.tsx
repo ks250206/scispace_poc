@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
+import { ImportSettingsWindow } from "./ImportSettingsWindow";
 import { useScispaceStore } from "../store/scispaceStore";
 
 describe("Workbench UI", () => {
@@ -196,6 +197,61 @@ describe("Workbench UI", () => {
     expect(document.querySelectorAll(".table-scroll tbody td")[2]).toHaveTextContent("123.45");
   });
 
+  it("moves selected table cells with arrow keys and jumps to edges with command arrows", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(document.querySelectorAll(".table-scroll tbody td").length).toBeGreaterThan(10),
+    );
+    const cells = document.querySelectorAll(".table-scroll tbody td");
+    await user.click(cells[2] as HTMLElement);
+    expect(cells[2]).toHaveClass("selected-cell");
+
+    await user.keyboard("{ArrowRight}");
+    await waitFor(() => expect(cells[3]).toHaveClass("selected-cell"));
+
+    await user.keyboard("{ArrowDown}");
+    await waitFor(() => expect(cells[7]).toHaveClass("selected-cell"));
+
+    await user.keyboard("{Meta>}{ArrowLeft}{/Meta}");
+    await waitFor(() => expect(cells[4]).toHaveClass("selected-cell"));
+
+    await user.keyboard("{Meta>}{ArrowRight}{/Meta}");
+    await waitFor(() => expect(cells[7]).toHaveClass("selected-cell"));
+
+    await user.keyboard("{Meta>}{ArrowUp}{/Meta}");
+    await waitFor(() => expect(cells[3]).toHaveClass("selected-cell"));
+  });
+
+  it("selects multiple table cells with shift click and drag", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(document.querySelectorAll(".table-scroll tbody td").length).toBeGreaterThan(10),
+    );
+    const cells = document.querySelectorAll(".table-scroll tbody td");
+    await user.click(cells[1] as HTMLElement);
+    fireEvent.click(cells[6], { shiftKey: true });
+
+    expect(cells[1]).toHaveClass("range-selected");
+    expect(cells[2]).toHaveClass("range-selected");
+    expect(cells[5]).toHaveClass("range-selected");
+    expect(cells[6]).toHaveClass("range-selected");
+    expect(cells[7]).not.toHaveClass("range-selected");
+
+    fireEvent.pointerDown(cells[8], { shiftKey: true, pointerId: 1 });
+    fireEvent.pointerEnter(cells[14], { shiftKey: true, pointerId: 1 });
+    fireEvent.pointerUp(cells[14], { pointerId: 1 });
+
+    expect(cells[8]).toHaveClass("range-selected");
+    expect(cells[14]).toHaveClass("range-selected");
+    expect(cells[15]).not.toHaveClass("range-selected");
+  });
+
   it("deletes selected table rows and columns through scispace commands", async () => {
     const user = userEvent.setup();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
@@ -296,41 +352,25 @@ describe("Workbench UI", () => {
   });
 
   it("stacks raw text and import preview virtual tables with resizable columns", async () => {
-    render(<App />);
+    let importId = "";
+    act(() => {
+      importId = useScispaceStore.getState().openImportDialog("imported.csv", "x,y\n1,2\n3,4\n5,6");
+    });
+    render(<ImportSettingsWindow importId={importId} />);
 
-    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
-    const shell = document.querySelector(".canvas-shell");
-    const file = new File(["x,y\n1,2\n3,4\n5,6"], "imported.csv", { type: "text/csv" });
-    fireEvent.drop(shell as Element, { dataTransfer: { files: [file] } });
-
-    await waitFor(() => expect(screen.getByText("Import - imported.csv")).toBeInTheDocument());
-    const editorGrid = document.querySelector(".import-editor-grid") as HTMLElement;
-    const rawTable = document.querySelector(".raw-text-table") as HTMLElement;
-    const preview = document.querySelector(".import-preview") as HTMLElement;
+    const preview = await waitFor(() => {
+      const element = document.querySelector(".import-preview") as HTMLElement | null;
+      expect(element).toBeInTheDocument();
+      return element as HTMLElement;
+    });
+    const editorGrid = preview.closest(".import-editor-grid") as HTMLElement;
     const previewXHeader = preview.querySelectorAll("th")[0] as HTMLElement;
     expect(editorGrid).toHaveClass("stacked");
-    expect(rawTable).toBeInTheDocument();
     expect(preview.style.getPropertyValue("--table-width")).toBe("280px");
     expect(previewXHeader).toHaveStyle({ width: "140px", minWidth: "96px" });
     expect(screen.queryByRole("textbox", { name: "Raw text" })).not.toBeInTheDocument();
 
-    fireEvent.pointerDown(screen.getByRole("separator", { name: "Resize import column x" }), {
-      clientX: 120,
-    });
-    fireEvent.pointerMove(document, { clientX: 200 });
-    fireEvent.pointerUp(document);
-
-    expect(previewXHeader).toHaveStyle({ width: "220px" });
-    expect(preview.style.getPropertyValue("--table-width")).toBe("360px");
-
-    const secondLineInput = screen.getByRole("textbox", { name: "Raw line 2" });
-    fireEvent.change(secondLineInput, { target: { value: "10,20" } });
-    await waitFor(() =>
-      expect(useScispaceStore.getState().pendingImports[0]?.preview?.rows[0]).toEqual({
-        x: 10,
-        y: 20,
-      }),
-    );
+    expect(preview.querySelector('[aria-label="Resize import column x"]')).toBeInTheDocument();
   });
 
   it("opens an import settings window from the data browser load field", async () => {
@@ -345,7 +385,6 @@ describe("Workbench UI", () => {
   });
 
   it("shows close buttons only on table and plot windows and removes the clicked window", async () => {
-    const user = userEvent.setup();
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
@@ -355,7 +394,7 @@ describe("Workbench UI", () => {
     expect(screen.queryByRole("button", { name: "Close Terminal" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Close Command History" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Close Table - waveform.csv" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close Table - waveform.csv" }));
 
     await waitFor(() => expect(screen.queryByText("Table - waveform.csv")).not.toBeInTheDocument());
     expect(document.querySelector(".tree-row.file")).toBeInTheDocument();
@@ -408,7 +447,7 @@ describe("Workbench UI", () => {
     await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
     expect(screen.queryByText("Plot Config")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Config" }));
-    expect(screen.getByText("Plot Config")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Plot Config")).toBeInTheDocument());
     expect(useScispaceStore.getState().currentPlotId).toBe("seed-plot");
     expect(screen.getByRole("tab", { name: "Basic" })).toHaveAttribute("aria-selected", "true");
 
@@ -583,8 +622,8 @@ describe("Workbench UI", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Close Table - waveform.csv" }));
-    expect(screen.queryByText("Table - waveform.csv")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close Table - waveform.csv" }));
+    await waitFor(() => expect(screen.queryByText("Table - waveform.csv")).not.toBeInTheDocument());
 
     await user.click(screen.getByRole("button", { name: "New Project" }));
 

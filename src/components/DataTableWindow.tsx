@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -18,6 +19,16 @@ interface DataTableWindowProps {
 }
 
 export type TableVisibleRows = 10 | 20 | 50;
+
+interface TableCellPosition {
+  rowIndex: number;
+  column: string;
+}
+
+interface TableCellRange {
+  anchor: TableCellPosition;
+  focus: TableCellPosition;
+}
 
 const formatCellValue = (value: unknown): string => {
   if (value == null) return "";
@@ -50,7 +61,9 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   const runScispace = useScispaceStore((state) => state.runScispace);
   const [visibleRows, setVisibleRows] = useState<TableVisibleRows>(10);
   const [selectedColumn, setSelectedColumn] = useState<string>();
-  const [selectedCell, setSelectedCell] = useState<{ rowIndex: number; column: string }>();
+  const [selectedCell, setSelectedCell] = useState<TableCellPosition>();
+  const [selectedRange, setSelectedRange] = useState<TableCellRange>();
+  const [isRangeDragging, setIsRangeDragging] = useState(false);
   const [editingCell, setEditingCell] = useState<{
     rowIndex: number;
     column: string;
@@ -104,8 +117,6 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
           start: index * rowHeight,
         }));
 
-  if (!dataset) return <div className="empty-state">Dataset not found.</div>;
-
   const startColumnResize = (columnId: string, startX: number) => {
     const startWidth = getColumnWidth(columnId);
     const handlePointerMove = (event: PointerEvent) => {
@@ -120,17 +131,39 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     document.addEventListener("pointerup", handlePointerUp);
   };
 
+  const selectSingleCell = (position: TableCellPosition) => {
+    setSelectedColumn(undefined);
+    setSelectedCell(position);
+    setSelectedRange(undefined);
+  };
+
+  const extendRangeSelection = (position: TableCellPosition) => {
+    const anchor = selectedRange?.anchor ?? selectedCell ?? position;
+    setSelectedColumn(undefined);
+    setSelectedCell(position);
+    setSelectedRange({ anchor, focus: position });
+    setEditingCell(undefined);
+  };
+
+  const startRangeSelection = (position: TableCellPosition) => {
+    setSelectedColumn(undefined);
+    setSelectedCell(position);
+    setSelectedRange({ anchor: position, focus: position });
+    setEditingCell(undefined);
+  };
+
   const startEdit = (rowIndex: number, column: string, value: unknown) => {
     setSelectedColumn(undefined);
     setSelectedCell({ rowIndex, column });
+    setSelectedRange(undefined);
     setEditingCell({ rowIndex, column, value: formatCellValue(value) });
   };
 
-  const commitEdit = () => {
-    if (!editingCell) return;
+  const commitEdit = (nextValue?: string) => {
+    if (!dataset || !editingCell) return;
     const { rowIndex, column, value } = editingCell;
     setEditingCell(undefined);
-    void updateDatasetCell(dataset.id, rowIndex, column, value);
+    void updateDatasetCell(dataset.id, rowIndex, column, nextValue ?? value);
   };
 
   const cancelEdit = () => {
@@ -138,11 +171,12 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   };
 
   const deleteSelectedRow = () => {
-    if (!selectedCell) return;
+    if (!dataset || !selectedCell) return;
     const rowNumber = selectedCell.rowIndex + 1;
     if (!window.confirm(`Delete row ${rowNumber} from ${dataset.name}?`)) return;
     setSelectedCell(undefined);
     setSelectedColumn(undefined);
+    setSelectedRange(undefined);
     setEditingCell(undefined);
     void runScispace(
       `table-edit ${quoteCommandArg(dataset.name)} action=delete-row index=${rowNumber}`,
@@ -151,10 +185,11 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   };
 
   const deleteSelectedColumn = () => {
-    if (!selectedColumn) return;
+    if (!dataset || !selectedColumn) return;
     if (!window.confirm(`Delete column ${selectedColumn} from ${dataset.name}?`)) return;
     setSelectedCell(undefined);
     setSelectedColumn(undefined);
+    setSelectedRange(undefined);
     setEditingCell(undefined);
     void runScispace(
       `table-edit ${quoteCommandArg(dataset.name)} action=delete-column column=${quoteCommandArg(
@@ -173,8 +208,110 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     if (event.key === "Enter" || event.key === "F2") {
       event.preventDefault();
       startEdit(rowIndex, column, value);
+      return;
+    }
+    if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
+
+    event.preventDefault();
+    const currentPosition = selectedCell ?? { rowIndex, column };
+    const currentColumnIndex = visibleDatasetColumns.findIndex(
+      (item) => item.id === currentPosition.column,
+    );
+    if (currentColumnIndex < 0) return;
+    const jumpToEdge = event.metaKey || event.ctrlKey;
+    const nextRowIndex =
+      event.key === "ArrowUp"
+        ? jumpToEdge
+          ? 0
+          : Math.max(0, currentPosition.rowIndex - 1)
+        : event.key === "ArrowDown"
+          ? jumpToEdge
+            ? rows.length - 1
+            : Math.min(rows.length - 1, currentPosition.rowIndex + 1)
+          : currentPosition.rowIndex;
+    const nextColumnIndex =
+      event.key === "ArrowLeft"
+        ? jumpToEdge
+          ? 0
+          : Math.max(0, currentColumnIndex - 1)
+        : event.key === "ArrowRight"
+          ? jumpToEdge
+            ? visibleDatasetColumns.length - 1
+            : Math.min(visibleDatasetColumns.length - 1, currentColumnIndex + 1)
+          : currentColumnIndex;
+    const nextColumn = visibleDatasetColumns[nextColumnIndex]?.id;
+    if (!nextColumn) return;
+
+    const nextPosition = { rowIndex: nextRowIndex, column: nextColumn };
+    if (event.shiftKey) extendRangeSelection(nextPosition);
+    else {
+      selectSingleCell(nextPosition);
+      setEditingCell(undefined);
     }
   };
+
+  const cellColumnIndex = useCallback(
+    (column: string): number => visibleDatasetColumns.findIndex((item) => item.id === column),
+    [visibleDatasetColumns],
+  );
+
+  const isCellInRange = (rowIndex: number, column: string): boolean => {
+    if (!selectedRange) return false;
+    const anchorColumnIndex = cellColumnIndex(selectedRange.anchor.column);
+    const focusColumnIndex = cellColumnIndex(selectedRange.focus.column);
+    const currentColumnIndex = cellColumnIndex(column);
+    if (anchorColumnIndex < 0 || focusColumnIndex < 0 || currentColumnIndex < 0) return false;
+    const minRow = Math.min(selectedRange.anchor.rowIndex, selectedRange.focus.rowIndex);
+    const maxRow = Math.max(selectedRange.anchor.rowIndex, selectedRange.focus.rowIndex);
+    const minColumn = Math.min(anchorColumnIndex, focusColumnIndex);
+    const maxColumn = Math.max(anchorColumnIndex, focusColumnIndex);
+    return (
+      rowIndex >= minRow &&
+      rowIndex <= maxRow &&
+      currentColumnIndex >= minColumn &&
+      currentColumnIndex <= maxColumn
+    );
+  };
+
+  useEffect(() => {
+    if (!selectedCell || !parentRef.current) return;
+    if (
+      editingCell?.rowIndex === selectedCell.rowIndex &&
+      editingCell.column === selectedCell.column
+    ) {
+      return;
+    }
+    rowVirtualizer.scrollToIndex(selectedCell.rowIndex, { align: "auto" });
+    const selectedCellColumnIndex = cellColumnIndex(selectedCell.column);
+    if (selectedCellColumnIndex >= 0) {
+      const left = visibleDatasetColumns
+        .slice(0, selectedCellColumnIndex)
+        .reduce((total, column) => total + getColumnWidth(column.id), 0);
+      const width = getColumnWidth(selectedCell.column);
+      const scroll = parentRef.current;
+      if (left < scroll.scrollLeft) scroll.scrollLeft = left;
+      if (left + width > scroll.scrollLeft + scroll.clientWidth) {
+        scroll.scrollLeft = left + width - scroll.clientWidth;
+      }
+    }
+    const frame = requestAnimationFrame(() => {
+      parentRef.current
+        ?.querySelector<HTMLElement>(
+          `[data-row-index="${selectedCell.rowIndex}"][data-column-index="${selectedCellColumnIndex}"]`,
+        )
+        ?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [
+    cellColumnIndex,
+    editingCell,
+    getColumnWidth,
+    rowVirtualizer,
+    selectedCell,
+    visibleDatasetColumns,
+  ]);
+
+  if (!dataset) return <div className="empty-state">Dataset not found.</div>;
 
   return (
     <div className="table-window">
@@ -236,6 +373,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
                       onClick={() => {
                         setSelectedColumn(header.column.id);
                         setSelectedCell(undefined);
+                        setSelectedRange(undefined);
                         setEditingCell(undefined);
                       }}
                     >
@@ -266,15 +404,17 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
                   key={row.id}
                   style={{ width: tableWidth, transform: `translateY(${virtualRow.start}px)` }}
                 >
-                  {row.getVisibleCells().map((cell) => {
+                  {row.getVisibleCells().map((cell, columnIndex) => {
                     const column = cell.column.id;
                     const value = row.original[column];
                     const isSelectedCell =
                       selectedCell?.rowIndex === virtualRow.index && selectedCell.column === column;
+                    const isRangeSelected = isCellInRange(virtualRow.index, column);
                     const isEditingCell =
                       editingCell?.rowIndex === virtualRow.index && editingCell.column === column;
                     const className = [
                       selectedColumn === column ? "selected-column" : "",
+                      isRangeSelected ? "range-selected" : "",
                       isSelectedCell ? "selected-cell" : "",
                       isEditingCell ? "editing-cell" : "",
                     ]
@@ -285,12 +425,29 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
                       <td
                         key={cell.id}
                         className={className || undefined}
-                        aria-selected={isSelectedCell}
+                        aria-selected={isSelectedCell || isRangeSelected}
+                        data-column-id={column}
+                        data-column-index={columnIndex}
+                        data-row-index={virtualRow.index}
                         tabIndex={0}
                         style={{ width: getColumnWidth(column), minWidth: minColumnWidth }}
-                        onClick={() => {
-                          setSelectedColumn(undefined);
-                          setSelectedCell({ rowIndex: virtualRow.index, column });
+                        onClick={(event) => {
+                          const position = { rowIndex: virtualRow.index, column };
+                          if (event.shiftKey) extendRangeSelection(position);
+                          else selectSingleCell(position);
+                        }}
+                        onPointerDown={(event) => {
+                          if (!event.shiftKey) return;
+                          event.preventDefault();
+                          setIsRangeDragging(true);
+                          startRangeSelection({ rowIndex: virtualRow.index, column });
+                        }}
+                        onPointerEnter={() => {
+                          if (!isRangeDragging) return;
+                          extendRangeSelection({ rowIndex: virtualRow.index, column });
+                        }}
+                        onPointerUp={() => {
+                          setIsRangeDragging(false);
                         }}
                         onDoubleClick={() => startEdit(virtualRow.index, column, value)}
                         onKeyDown={(event) =>
@@ -306,12 +463,12 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
                             onChange={(event) =>
                               setEditingCell({ ...editingCell, value: event.target.value })
                             }
-                            onBlur={commitEdit}
+                            onBlur={(event) => commitEdit(event.currentTarget.value)}
                             onKeyDown={(event) => {
                               event.stopPropagation();
                               if (event.key === "Enter") {
                                 event.preventDefault();
-                                commitEdit();
+                                commitEdit(event.currentTarget.value);
                               }
                               if (event.key === "Escape") {
                                 event.preventDefault();

@@ -602,6 +602,16 @@
   box-shadow: inset 0 0 0 2px var(--blue);
 }
 
+.table-scroll .range-selected {
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.45);
+}
+
+.table-scroll .range-selected.selected-cell {
+  background: #fff;
+  box-shadow: inset 0 0 0 2px var(--blue);
+}
+
 .table-scroll .editing-cell {
   background: #fff;
   box-shadow: inset 0 0 0 2px var(--blue);
