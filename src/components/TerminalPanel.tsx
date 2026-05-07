@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Terminal, useTerminal } from "@wterm/react";
 import "@wterm/react/css";
+import type { WTerm } from "@wterm/dom";
 import { BashShell } from "@wterm/just-bash";
 import { defineCommand } from "just-bash";
 import { useScispaceStore } from "../store/scispaceStore";
@@ -8,9 +9,12 @@ import { useScispaceStore } from "../store/scispaceStore";
 const toBashPath = (path: string): string => path.replace(/^~\//, "/home/user/");
 
 export function TerminalPanel() {
-  const { ref, write } = useTerminal();
+  const { ref, write, resize } = useTerminal();
   const shellRef = useRef<BashShell | null>(null);
+  const terminalRef = useRef<WTerm | null>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const commandLineRequestIdRef = useRef<string | undefined>(undefined);
+  const [terminalSize, setTerminalSize] = useState<{ cols: number; rows: number }>();
   const files = useScispaceStore((state) => state.files);
   const runScispace = useScispaceStore((state) => state.runScispace);
   const terminalCommandLineRequest = useScispaceStore((state) => state.terminalCommandLineRequest);
@@ -26,27 +30,69 @@ export function TerminalPanel() {
     [files],
   );
 
-  const handleReady = useCallback(async () => {
-    if (shellRef.current) return;
-    const shell = new BashShell({
-      files: initialFiles,
-      cwd: "/home/user",
-      greeting: ["SciSpace shell", "Run `scispace help` or inspect ~/raw with `ls raw`."],
-      prompt: (cwd) => `scispace:${cwd.replace("/home/user", "~")}$ `,
-    });
-    shellRef.current = shell;
-    await shell.attach((data) => write(data));
-    shell.bash?.registerCommand(
-      defineCommand("scispace", async (args) => {
-        const result = await runScispace(args.join(" "), { source: "terminal" });
-        return {
-          stdout: `${result.output}\n`,
-          stderr: result.kind === "error" ? `${result.output}\n` : "",
-          exitCode: result.kind === "error" ? 1 : 0,
-        };
-      }),
+  const syncTerminalSize = useCallback(() => {
+    const viewport = viewportRef.current;
+    const terminalInstance = terminalRef.current ?? ref.current?.instance;
+    if (!viewport) return;
+
+    const terminal = terminalInstance?.element;
+    const terminalStyle = terminal ? getComputedStyle(terminal) : undefined;
+    const horizontalPadding = terminalStyle
+      ? (Number.parseFloat(terminalStyle.paddingLeft) || 0) +
+        (Number.parseFloat(terminalStyle.paddingRight) || 0)
+      : 24;
+    const verticalPadding = terminalStyle
+      ? (Number.parseFloat(terminalStyle.paddingTop) || 0) +
+        (Number.parseFloat(terminalStyle.paddingBottom) || 0)
+      : 16;
+    const probe = document.createElement("span");
+    probe.textContent = "M";
+    probe.style.visibility = "hidden";
+    probe.style.position = "absolute";
+    probe.style.font = terminalStyle?.font ?? "14px Menlo, Consolas, monospace";
+    viewport.append(probe);
+    const charWidth = probe.getBoundingClientRect().width || 8.4;
+    probe.remove();
+
+    const rowHeight = terminalStyle
+      ? Number.parseFloat(terminalStyle.getPropertyValue("--term-row-height")) || 17
+      : 17;
+    const { width, height } = viewport.getBoundingClientRect();
+    const cols = Math.max(1, Math.floor((width - horizontalPadding) / charWidth));
+    const rows = Math.max(1, Math.floor((height - verticalPadding) / rowHeight));
+    setTerminalSize((current) =>
+      current && current.cols === cols && current.rows === rows ? current : { cols, rows },
     );
-  }, [initialFiles, runScispace, write]);
+    terminalInstance?.resize(cols, rows);
+    resize(cols, rows);
+  }, [ref, resize]);
+
+  const handleReady = useCallback(
+    async (terminal: WTerm) => {
+      terminalRef.current = terminal;
+      if (shellRef.current) return;
+      syncTerminalSize();
+      const shell = new BashShell({
+        files: initialFiles,
+        cwd: "/home/user",
+        greeting: ["SciSpace shell", "Run `scispace help` or inspect ~/raw with `ls raw`."],
+        prompt: (cwd) => `scispace:${cwd.replace("/home/user", "~")}$ `,
+      });
+      shellRef.current = shell;
+      await shell.attach((data) => write(data));
+      shell.bash?.registerCommand(
+        defineCommand("scispace", async (args) => {
+          const result = await runScispace(args.join(" "), { source: "terminal" });
+          return {
+            stdout: `${result.output}\n`,
+            stderr: result.kind === "error" ? `${result.output}\n` : "",
+            exitCode: result.kind === "error" ? 1 : 0,
+          };
+        }),
+      );
+    },
+    [initialFiles, runScispace, syncTerminalSize, write],
+  );
 
   const handleData = useCallback((data: string) => {
     void shellRef.current?.handleInput(data);
@@ -79,19 +125,34 @@ export function TerminalPanel() {
     void shellRef.current.handleInput(`scispace ${terminalCommandLineRequest.command}`);
   }, [terminalCommandLineRequest]);
 
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return undefined;
+    const observer = new ResizeObserver(() => syncTerminalSize());
+    observer.observe(viewport);
+    syncTerminalSize();
+    return () => observer.disconnect();
+  }, [syncTerminalSize]);
+
   return (
     <section className="terminal-panel">
       <header className="terminal-header">
         <span>scispace shell</span>
         <span>wterm + just-bash</span>
       </header>
-      <Terminal
-        ref={ref}
-        className="terminal-host"
-        theme="light"
-        onReady={() => void handleReady()}
-        onData={handleData}
-      />
+      <div ref={viewportRef} className="terminal-viewport">
+        {terminalSize ? (
+          <Terminal
+            ref={ref}
+            className="terminal-host"
+            cols={terminalSize.cols}
+            rows={terminalSize.rows}
+            theme="light"
+            onReady={(terminal) => void handleReady(terminal)}
+            onData={handleData}
+          />
+        ) : null}
+      </div>
     </section>
   );
 }

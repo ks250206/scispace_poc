@@ -912,10 +912,20 @@
   font-size: 12px;
 }
 
-.terminal-host {
+.terminal-viewport {
   min-height: 0;
   flex: 1;
+}
+
+.terminal-host {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: auto;
   font-family: var(--mono);
+  padding: 8px 12px;
   --term-bg: #ffffff;
   --term-fg: #111827;
 }
