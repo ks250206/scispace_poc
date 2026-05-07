@@ -47,12 +47,11 @@ export function Workbench() {
         });
         return;
       }
-      const scale = Math.max(0.01, viewport.scale);
       const horizontalDelta = event.shiftKey ? event.deltaY || event.deltaX : event.deltaX;
       setViewport({
         ...viewport,
-        x: viewport.x - horizontalDelta / scale,
-        y: viewport.y - (event.shiftKey ? 0 : event.deltaY / scale),
+        x: viewport.x - horizontalDelta,
+        y: viewport.y - (event.shiftKey ? 0 : event.deltaY),
       });
     },
     [setViewport, viewport],

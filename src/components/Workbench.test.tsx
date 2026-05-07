@@ -72,6 +72,22 @@ describe("Workbench UI", () => {
     fireEvent.wheel(shell, { deltaX: 40 });
     expect(useScispaceStore.getState().viewport).toMatchObject({ x: -1960, y: -1080, scale: 1 });
 
+    act(() => useScispaceStore.getState().setViewport({ x: -1920, y: -1080, scale: 0.5 }));
+    fireEvent.wheel(shell, { deltaY: 120 });
+    expect(useScispaceStore.getState().viewport).toMatchObject({
+      x: -1920,
+      y: -1200,
+      scale: 0.5,
+    });
+
+    act(() => useScispaceStore.getState().setViewport({ x: -1920, y: -1080, scale: 2 }));
+    fireEvent.wheel(shell, { deltaY: 120, shiftKey: true });
+    expect(useScispaceStore.getState().viewport).toMatchObject({
+      x: -2040,
+      y: -1080,
+      scale: 2,
+    });
+
     await user.click(screen.getByRole("button", { name: "Reset View" }));
     fireEvent.wheel(shell, { clientX: 480, clientY: 320, deltaY: 100, ctrlKey: true });
     expect(useScispaceStore.getState().viewport).toMatchObject({
