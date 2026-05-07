@@ -1,0 +1,358 @@
+.loading-screen {
+  display: grid;
+  width: 100vw;
+  height: 100vh;
+  place-items: center;
+  color: var(--text-muted);
+  background: var(--bg);
+  font: 14px/1.4 var(--mono);
+}
+
+.workbench {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 1px 1px, rgba(91, 103, 122, 0.28) 1px, transparent 0) 0 0 / 24px 24px,
+    var(--bg);
+}
+
+.topbar {
+  position: absolute;
+  z-index: 1000;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.82);
+  padding: 0 12px;
+  backdrop-filter: blur(10px);
+}
+
+.brand {
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.toolbar-group button,
+.segmented button {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.toolbar-group button {
+  height: 26px;
+  padding: 0 10px;
+}
+
+.canvas-shell {
+  position: absolute;
+  inset: 40px 0 0;
+  overflow: hidden;
+  cursor: default;
+}
+
+.workspace-plane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px) 0 0 / 240px 240px,
+    linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px) 0 0 / 240px 240px;
+}
+
+.canvas-window {
+  border-radius: 7px;
+}
+
+.canvas-window.is-active .window-frame {
+  border-color: var(--blue);
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.16),
+    var(--shadow);
+}
+
+.window-frame {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.window-titlebar {
+  display: flex;
+  height: 34px;
+  flex: 0 0 34px;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  background: #fbfcfd;
+  padding: 0 10px;
+  cursor: grab;
+  user-select: none;
+}
+
+.window-titlebar strong {
+  overflow: hidden;
+  flex: 1;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.window-kind {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.window-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--blue);
+}
+
+.window-dot.browser {
+  background: var(--orange);
+}
+
+.window-dot.table {
+  background: var(--green);
+}
+
+.window-body {
+  min-height: 0;
+  flex: 1;
+  background: var(--panel);
+}
+
+.data-browser {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  padding: 10px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.tree-row {
+  display: grid;
+  min-height: 30px;
+  align-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  grid-template-columns: 18px 18px 1fr auto;
+  text-align: left;
+}
+
+.tree-row.root {
+  grid-template-columns: 18px 1fr;
+  color: var(--text-muted);
+  font-weight: 650;
+}
+
+.tree-row.file {
+  width: 100%;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.tree-row.file:hover,
+.tree-row.file.selected {
+  background: var(--blue-soft);
+}
+
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-meta {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.drop-hint {
+  margin-top: auto;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  padding: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.table-window,
+.plot-window {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.window-controls {
+  display: flex;
+  height: 38px;
+  flex: 0 0 38px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding: 0 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.segmented {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.segmented button {
+  height: 24px;
+  min-width: 34px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+  padding: 0 8px;
+}
+
+.segmented button:last-child {
+  border-right: 0;
+}
+
+.segmented button.active {
+  background: var(--blue);
+  color: #fff;
+}
+
+.table-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+}
+
+.table-scroll table {
+  width: 100%;
+  border-spacing: 0;
+  font-size: 12px;
+}
+
+.table-scroll thead {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  background: #f8fafc;
+}
+
+.table-scroll th,
+.table-scroll td {
+  min-width: 120px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 7px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table-scroll tbody {
+  position: relative;
+  display: block;
+}
+
+.table-scroll thead,
+.table-scroll tbody tr {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.table-scroll tbody tr {
+  position: absolute;
+  left: 0;
+}
+
+.plot-host {
+  min-height: 0;
+  flex: 1;
+  padding: 10px;
+}
+
+.plot-host .uplot {
+  max-width: 100%;
+}
+
+.empty-state {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.terminal-resizer {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 900;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.terminal-panel {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 850;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border-strong);
+  background: #ffffff;
+}
+
+.terminal-header {
+  display: flex;
+  height: 30px;
+  flex: 0 0 30px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding: 0 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.terminal-host {
+  min-height: 0;
+  flex: 1;
+  font-family: var(--mono);
+  --term-bg: #ffffff;
+  --term-fg: #111827;
+}
