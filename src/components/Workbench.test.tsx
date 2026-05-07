@@ -209,11 +209,17 @@ describe("Workbench UI", () => {
     expect(prompt).toHaveBeenCalledTimes(3);
   });
 
-  it("edits plot title, axes, series, colors, and zoom mode from the plot window", async () => {
+  it("opens shared plot config and edits the current plot", async () => {
     const user = userEvent.setup();
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    expect(screen.queryByText("Plot Config")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Config" }));
+    expect(screen.getByText("Plot Config")).toBeInTheDocument();
+    expect(useScispaceStore.getState().currentPlotId).toBe("seed-plot");
+    expect(screen.getByRole("tab", { name: "Basic" })).toHaveAttribute("aria-selected", "true");
+
     const titleInput = screen.getByLabelText("Plot title");
     await user.click(titleInput);
     await user.keyboard("{Control>}a{/Control}Custom plot");
@@ -222,10 +228,13 @@ describe("Workbench UI", () => {
     );
     await user.selectOptions(screen.getByLabelText("Plot x column"), "index");
     await user.click(screen.getByRole("button", { name: "x" }));
-    await user.selectOptions(screen.getByLabelText("Add series"), "background");
-    await user.click(screen.getByRole("button", { name: "Add" }));
     fireEvent.change(screen.getByLabelText("Plot width"), { target: { value: "720" } });
     fireEvent.change(screen.getByLabelText("Plot height"), { target: { value: "420" } });
+
+    await user.click(screen.getByRole("tab", { name: "Series" }));
+    expect(screen.getByRole("tab", { name: "Series" })).toHaveAttribute("aria-selected", "true");
+    await user.selectOptions(screen.getByLabelText("Add series"), "background");
+    await user.click(screen.getByRole("button", { name: "Add" }));
     fireEvent.change(screen.getByLabelText("Color background"), { target: { value: "#dc2626" } });
     const backgroundLabel = screen.getByLabelText("Label background");
     await user.click(backgroundLabel);

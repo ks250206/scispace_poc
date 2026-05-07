@@ -167,6 +167,10 @@
   background: var(--green);
 }
 
+.window-dot.plot-config {
+  background: #4f46e5;
+}
+
 .window-dot.terminal {
   background: #111827;
 }
@@ -524,8 +528,110 @@
   padding: 10px;
 }
 
+.plot-window-toolbar {
+  display: flex;
+  min-height: 44px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding: 7px 10px;
+  gap: 10px;
+}
+
+.plot-window-summary {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.plot-window-summary strong,
+.plot-window-summary span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plot-window-summary strong {
+  font-size: 12px;
+}
+
+.plot-window-summary span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.plot-window-toolbar button {
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+}
+
 .plot-host .uplot {
   max-width: 100%;
+}
+
+.plot-config-window {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.plot-config-current {
+  display: grid;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  background: #f8fafc;
+  padding: 8px 10px;
+}
+
+.plot-config-current span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.plot-config-current strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plot-config-tabs {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(3, 1fr);
+  border-bottom: 1px solid var(--border);
+  background: #fff;
+  padding: 6px;
+  gap: 4px;
+}
+
+.plot-config-tabs button {
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.plot-config-tabs button.active {
+  border-color: var(--border);
+  background: var(--blue-soft);
+  color: var(--text);
+  font-weight: 650;
+}
+
+.plot-config-section {
+  flex: 0 0 auto;
 }
 
 .plot-controls {
@@ -579,7 +685,6 @@
   display: grid;
   flex: 0 0 auto;
   gap: 6px;
-  border-bottom: 1px solid var(--border);
   padding: 8px 10px;
 }
 
@@ -588,7 +693,6 @@
   display: grid;
   flex: 0 0 auto;
   gap: 6px;
-  border-bottom: 1px solid var(--border);
   padding: 8px 10px;
   color: var(--text-muted);
   font-size: 12px;

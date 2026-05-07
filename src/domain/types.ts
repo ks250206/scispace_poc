@@ -1,4 +1,11 @@
-export type WindowKind = "browser" | "table" | "plot" | "terminal" | "import" | "history";
+export type WindowKind =
+  | "browser"
+  | "table"
+  | "plot"
+  | "plot-config"
+  | "terminal"
+  | "import"
+  | "history";
 
 export type ImportDelimiter = "auto" | "comma" | "tab" | "space" | "semicolon";
 

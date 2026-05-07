@@ -39,6 +39,7 @@ interface ScispaceState {
   terminalCommandLineRequest?: { id: string; command: string };
   activeDatasetId?: string;
   activeWindowId?: string;
+  currentPlotId?: string;
   viewport: ViewportState;
   initialize: () => Promise<void>;
   importTextFile: (name: string, text: string) => Promise<ImportFileResult>;
@@ -49,6 +50,7 @@ interface ScispaceState {
   selectDataset: (datasetId: string) => Promise<void>;
   openTable: (datasetId: string) => Promise<void>;
   openPlot: (spec: PlotSpec) => Promise<void>;
+  openPlotConfig: (plotId: string) => void;
   updateDatasetCell: (
     datasetId: string,
     rowIndex: number,
@@ -353,6 +355,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     terminalEvents: [],
     commandHistory: [],
     terminalCommandLineRequest: undefined,
+    currentPlotId: undefined,
     viewport: initialViewport(),
 
     initialize: async () => {
@@ -374,19 +377,29 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         nextFiles = initialProject.files;
       }
 
+      const nextPlotSpecs =
+        layout.plotSpecs && layout.plotSpecs.length > 0
+          ? layout.plotSpecs.map(normalizePlotSpec)
+          : [seedPlot()];
+      const nextWindows =
+        layout.windows.length > 0 ? ensureWorkspaceWindows(layout.windows) : initialWindows();
+      const persistedConfigPlotId = nextWindows.find(
+        (window) => window.kind === "plot-config" && window.plotId,
+      )?.plotId;
+
       set({
         initialized: true,
         files: nextFiles,
         datasets: nextDatasets,
-        windows:
-          layout.windows.length > 0 ? ensureWorkspaceWindows(layout.windows) : initialWindows(),
-        plotSpecs:
-          layout.plotSpecs && layout.plotSpecs.length > 0
-            ? layout.plotSpecs.map(normalizePlotSpec)
-            : [seedPlot()],
+        windows: nextWindows,
+        plotSpecs: nextPlotSpecs,
         commandHistory: layout.commandHistory ?? [],
         viewport: layout.viewport,
         activeDatasetId: nextDatasets[0]?.id,
+        currentPlotId:
+          persistedConfigPlotId && nextPlotSpecs.some((plot) => plot.id === persistedConfigPlotId)
+            ? persistedConfigPlotId
+            : nextPlotSpecs[0]?.id,
       });
     },
 
@@ -594,6 +607,38 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
             },
           ],
           activeWindowId: `plot-${normalizedSpec.id}`,
+          currentPlotId: normalizedSpec.id,
+        };
+      });
+      persistLayout(db, get());
+    },
+
+    openPlotConfig: (plotId) => {
+      const plot = get().plotSpecs.find((item) => item.id === plotId);
+      if (!plot) return;
+
+      set((state) => {
+        const existing = state.windows.find((window) => window.kind === "plot-config");
+        const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
+        const configWindow: WorkspaceWindow = {
+          id: "plot-config-main",
+          kind: "plot-config",
+          title: "Plot Config",
+          x: centerTileX + 1180,
+          y: centerTileY + 128,
+          width: 520,
+          height: 680,
+          zIndex,
+          plotId,
+        };
+        return {
+          currentPlotId: plotId,
+          activeWindowId: existing?.id ?? configWindow.id,
+          windows: existing
+            ? state.windows.map((window) =>
+                window.id === existing.id ? { ...window, zIndex, plotId } : window,
+              )
+            : [...state.windows, configWindow],
         };
       });
       persistLayout(db, get());
@@ -713,6 +758,10 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           windows,
           plotSpecs,
           activeWindowId: state.activeWindowId === id ? undefined : state.activeWindowId,
+          currentPlotId:
+            target.kind === "plot" && target.plotId === state.currentPlotId
+              ? plotSpecs[0]?.id
+              : state.currentPlotId,
         };
       });
       persistLayout(db, get());
@@ -749,6 +798,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         terminalCommandLineRequest: undefined,
         activeDatasetId: initialProject.datasets[0]?.id,
         activeWindowId: undefined,
+        currentPlotId: initialProject.plotSpecs[0]?.id,
         viewport: initialProject.viewport,
       });
       persistLayout(db, get());
@@ -922,6 +972,10 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         plotSpecs,
         windows,
         activeDatasetId: nextActiveDatasetId(datasets, state.activeDatasetId),
+        currentPlotId:
+          state.currentPlotId && plotSpecs.some((plot) => plot.id === state.currentPlotId)
+            ? state.currentPlotId
+            : plotSpecs[0]?.id,
         activeWindowId:
           state.activeWindowId && windows.some((window) => window.id === state.activeWindowId)
             ? state.activeWindowId
@@ -943,11 +997,14 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     focusWindow: (id) => {
       set((state) => {
         const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
+        const target = state.windows.find((window) => window.id === id);
         return {
           windows: state.windows.map((window) =>
             window.id === id ? { ...window, zIndex } : window,
           ),
           activeWindowId: id,
+          currentPlotId:
+            target?.kind === "plot" && target.plotId ? target.plotId : state.currentPlotId,
         };
       });
       persistLayout(db, get());

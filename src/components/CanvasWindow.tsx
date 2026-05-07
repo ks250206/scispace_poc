@@ -3,6 +3,7 @@ import { CommandHistoryWindow } from "./CommandHistoryWindow";
 import { DataBrowser } from "./DataBrowser";
 import { DataTableWindow } from "./DataTableWindow";
 import { ImportSettingsWindow } from "./ImportSettingsWindow";
+import { PlotConfigWindow } from "./PlotConfigWindow";
 import { PlotWindow } from "./PlotWindow";
 import { TerminalPanel } from "./TerminalPanel";
 import type { WorkspaceWindow } from "../domain/types";
@@ -18,7 +19,8 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
   const updateWindow = useScispaceStore((state) => state.updateWindow);
   const focusWindow = useScispaceStore((state) => state.focusWindow);
   const closeWindow = useScispaceStore((state) => state.closeWindow);
-  const canClose = window.kind === "table" || window.kind === "plot";
+  const canClose =
+    window.kind === "table" || window.kind === "plot" || window.kind === "plot-config";
 
   return (
     <Rnd
@@ -68,6 +70,7 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
             <DataTableWindow datasetId={window.datasetId} windowId={window.id} />
           ) : null}
           {window.kind === "plot" && window.plotId ? <PlotWindow plotId={window.plotId} /> : null}
+          {window.kind === "plot-config" ? <PlotConfigWindow /> : null}
           {window.kind === "terminal" ? <TerminalPanel /> : null}
           {window.kind === "history" ? <CommandHistoryWindow /> : null}
           {window.kind === "import" && window.importId ? (

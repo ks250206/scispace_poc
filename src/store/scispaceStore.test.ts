@@ -58,6 +58,7 @@ describe("scispace zustand store", () => {
       x: 3248,
       y: 1612,
     });
+    expect(state.currentPlotId).toBe("seed-plot");
     expect(state.viewport).toEqual({ x: -1920, y: -1080, scale: 1 });
   });
 
@@ -341,6 +342,21 @@ describe("scispace zustand store", () => {
     expect(store.getState().datasets.some((dataset) => dataset.id === "seed-waveform")).toBe(true);
   });
 
+  it("opens a singleton plot config window for the current plot", async () => {
+    const { db, store } = await makeStore();
+
+    store.getState().openPlotConfig("seed-plot");
+    store.getState().openPlotConfig("seed-plot");
+
+    expect(store.getState().currentPlotId).toBe("seed-plot");
+    expect(store.getState().windows.filter((window) => window.kind === "plot-config")).toHaveLength(
+      1,
+    );
+    expect((await db.layout.get("main"))?.value.windows).toContainEqual(
+      expect.objectContaining({ kind: "plot-config", plotId: "seed-plot" }),
+    );
+  });
+
   it("resets Zustand and Dexie to a fresh project", async () => {
     const { db, store } = await makeStore();
     store.getState().openImportDialog("pending.csv", "x,y\n1,2");
@@ -367,6 +383,7 @@ describe("scispace zustand store", () => {
     expect(state.commandHistory).toHaveLength(0);
     expect(state.activeDatasetId).toBe("seed-waveform");
     expect(state.activeWindowId).toBeUndefined();
+    expect(state.currentPlotId).toBe("seed-plot");
     expect(state.viewport).toEqual({ x: -1920, y: -1080, scale: 1 });
     expect(await db.files.get("~/raw/sample.csv")).toBeUndefined();
     expect((await db.datasets.toArray()).some((dataset) => dataset.name === "derived.csv")).toBe(
