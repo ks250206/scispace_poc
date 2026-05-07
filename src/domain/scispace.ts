@@ -2,11 +2,14 @@ import { normalizeVirtualPath, parseDelimitedText } from "./csv";
 import type {
   Dataset,
   PendingImport,
+  PlotAnnotation,
   PlotAxisSpec,
   PlotMarkerShape,
+  PlotPaddingSpec,
   PlotSeries,
   PlotSizeSpec,
   PlotSpec,
+  PlotTextStyle,
   PlotTickDirection,
   PlotType,
   ScispaceCommandResult,
@@ -64,8 +67,19 @@ const parseOptionalBoolean = (value: string | undefined): boolean | undefined =>
 const plotColors = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2"];
 const plotTypes = new Set<PlotType>(["line", "line-marker", "marker"]);
 const tickDirections = new Set<PlotTickDirection>(["out", "in", "none"]);
-const markerShapes = new Set<PlotMarkerShape>(["circle", "square"]);
+const markerShapes = new Set<PlotMarkerShape>([
+  "circle",
+  "square",
+  "triangle",
+  "diamond",
+  "cross",
+  "plus",
+]);
 const defaultPlotSize: PlotSizeSpec = { width: 640, height: 360 };
+const defaultPlotFont: PlotTextStyle = { family: "Inter, system-ui, sans-serif", size: 12 };
+const defaultAxisLabelFont: PlotTextStyle = { family: "Inter, system-ui, sans-serif", size: 12 };
+const defaultAxisValueFont: PlotTextStyle = { family: "Inter, system-ui, sans-serif", size: 11 };
+const defaultPlotPadding: PlotPaddingSpec = { top: 12, right: 12, bottom: 12, left: 12 };
 const isVirtualRawPath = (path: string | undefined): path is string =>
   path === "~/raw" || Boolean(path?.startsWith("~/raw/"));
 const isSafeFileName = (name: string | undefined): name is string => {
@@ -103,19 +117,41 @@ const plotSpecSchema = {
   y: "primary y column name",
   title: "string",
   size: { width: "number", height: "number" },
+  font: { family: "string", size: "number" },
+  padding: { top: "number", right: "number", bottom: "number", left: "number" },
   zoomMode: '"x" | "y" | "xy"',
   axes: {
     x: {
       label: "string",
+      scale: '"linear" | "log"',
+      labelStyle: { family: "string", size: "number" },
+      valueStyle: { family: "string", size: "number" },
+      size: "number",
+      gap: "number",
+      labelGap: "number",
+      labelSize: "number",
+      color: "#rrggbb",
+      gridColor: "#rrggbb",
+      tickColor: "#rrggbb",
       range: '{ mode: "auto" } | { mode: "manual", min: number, max: number }',
       ticks:
-        '{ mode: "auto", orientation: "out" | "in" | "none" } | { mode: "manual", interval: number, orientation: "out" | "in" | "none" }',
+        '{ mode: "auto", orientation: "out" | "in" | "none", length: number, minor: boolean } | { mode: "manual", interval: number, orientation: "out" | "in" | "none", length: number, minor: boolean }',
     },
     y: {
       label: "string",
+      scale: '"linear" | "log"',
+      labelStyle: { family: "string", size: "number" },
+      valueStyle: { family: "string", size: "number" },
+      size: "number",
+      gap: "number",
+      labelGap: "number",
+      labelSize: "number",
+      color: "#rrggbb",
+      gridColor: "#rrggbb",
+      tickColor: "#rrggbb",
       range: '{ mode: "auto" } | { mode: "manual", min: number, max: number }',
       ticks:
-        '{ mode: "auto", orientation: "out" | "in" | "none" } | { mode: "manual", interval: number, orientation: "out" | "in" | "none" }',
+        '{ mode: "auto", orientation: "out" | "in" | "none", length: number, minor: boolean } | { mode: "manual", interval: number, orientation: "out" | "in" | "none", length: number, minor: boolean }',
     },
   },
   grid: { x: "boolean", y: "boolean" },
@@ -127,7 +163,21 @@ const plotSpecSchema = {
       color: "#rrggbb",
       lineWidth: "number",
       markerSize: "number",
-      markerShape: '"circle" | "square"',
+      markerShape: '"circle" | "square" | "triangle" | "diamond" | "cross" | "plus"',
+      drawOrder: "number",
+    },
+  ],
+  annotations: [
+    {
+      id: "string",
+      type: '"text-arrow"',
+      text: "string",
+      x: "number",
+      y: "number",
+      dx: "number",
+      dy: "number",
+      color: "#rrggbb",
+      font: { family: "string", size: "number" },
     },
   ],
 } as const;
@@ -135,7 +185,17 @@ const plotSpecSchema = {
 export const defaultPlotAxis = (label: string): PlotAxisSpec => ({
   label,
   range: { mode: "auto" },
-  ticks: { mode: "auto", orientation: "out" },
+  ticks: { mode: "auto", orientation: "out", length: 6, minor: false },
+  scale: "linear",
+  labelStyle: defaultAxisLabelFont,
+  valueStyle: defaultAxisValueFont,
+  size: 48,
+  gap: 6,
+  labelGap: 8,
+  labelSize: 24,
+  color: "#374151",
+  gridColor: "#e5e7eb",
+  tickColor: "#6b7280",
 });
 
 const createPlotSeries = (columns: string[]): PlotSeries[] =>
@@ -146,6 +206,7 @@ const createPlotSeries = (columns: string[]): PlotSeries[] =>
     lineWidth: 2,
     markerSize: 6,
     markerShape: "circle",
+    drawOrder: index,
   }));
 
 const normalizeSeriesStyle = (series: PlotSeries, index: number): PlotSeries => ({
@@ -155,7 +216,37 @@ const normalizeSeriesStyle = (series: PlotSeries, index: number): PlotSeries => 
   lineWidth: Number.isFinite(series.lineWidth) ? series.lineWidth : 2,
   markerSize: Number.isFinite(series.markerSize) ? series.markerSize : 6,
   markerShape: markerShapes.has(series.markerShape) ? series.markerShape : "circle",
+  drawOrder: Number.isFinite(series.drawOrder) ? series.drawOrder : index,
 });
+
+const normalizeAxis = (axis: PlotAxisSpec | undefined, label: string): PlotAxisSpec => {
+  const fallback = defaultPlotAxis(label);
+  return {
+    ...fallback,
+    ...axis,
+    label: axis?.label ?? label,
+    range: axis?.range ?? fallback.range,
+    scale: axis?.scale === "log" ? "log" : "linear",
+    ticks: {
+      ...fallback.ticks,
+      ...axis?.ticks,
+      length:
+        Number.isFinite(axis?.ticks.length) && Number(axis?.ticks.length) >= 0
+          ? Number(axis?.ticks.length)
+          : fallback.ticks.length,
+      minor: Boolean(axis?.ticks.minor),
+    },
+    labelStyle: normalizeTextStyle(axis?.labelStyle, fallback.labelStyle),
+    valueStyle: normalizeTextStyle(axis?.valueStyle, fallback.valueStyle),
+    size: Number.isFinite(axis?.size) ? Number(axis?.size) : fallback.size,
+    gap: Number.isFinite(axis?.gap) ? Number(axis?.gap) : fallback.gap,
+    labelGap: Number.isFinite(axis?.labelGap) ? Number(axis?.labelGap) : fallback.labelGap,
+    labelSize: Number.isFinite(axis?.labelSize) ? Number(axis?.labelSize) : fallback.labelSize,
+    color: parseColor(axis?.color) ?? fallback.color,
+    gridColor: parseColor(axis?.gridColor) ?? fallback.gridColor,
+    tickColor: parseColor(axis?.tickColor) ?? fallback.tickColor,
+  };
+};
 
 export const normalizePlotSpecForCommand = (spec: PlotSpec): PlotSpec => {
   const existingSeries = spec.series ?? [];
@@ -173,8 +264,8 @@ export const normalizePlotSpecForCommand = (spec: PlotSpec): PlotSpec => {
     series,
     zoomMode: spec.zoomMode ?? "xy",
     axes: {
-      x: spec.axes?.x ?? defaultPlotAxis(xLabel),
-      y: spec.axes?.y ?? defaultPlotAxis(yLabel),
+      x: normalizeAxis(spec.axes?.x, xLabel),
+      y: normalizeAxis(spec.axes?.y, yLabel),
     },
     grid: spec.grid ?? { x: true, y: true },
     border: spec.border ?? true,
@@ -182,6 +273,9 @@ export const normalizePlotSpecForCommand = (spec: PlotSpec): PlotSpec => {
       width: parsePlotDimension(String(spec.size?.width)) ?? defaultPlotSize.width,
       height: parsePlotDimension(String(spec.size?.height)) ?? defaultPlotSize.height,
     },
+    font: normalizeTextStyle(spec.font, defaultPlotFont),
+    padding: spec.padding ?? defaultPlotPadding,
+    annotations: spec.annotations ?? [],
     axisLabels: { x: xLabel, y: yLabel },
   };
 };
@@ -214,6 +308,61 @@ const parsePlotDimension = (value: string | undefined): number | undefined => {
   return Math.round(dimension);
 };
 
+const parsePositiveNumber = (value: string | undefined): number | undefined => {
+  if (value === undefined) return undefined;
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : undefined;
+};
+
+const parseNonNegativeNumber = (value: string | undefined): number | undefined => {
+  if (value === undefined) return undefined;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : undefined;
+};
+
+const parseInteger = (value: string | undefined): number | undefined => {
+  if (value === undefined) return undefined;
+  const number = Number(value);
+  return Number.isInteger(number) ? number : undefined;
+};
+
+const parseColor = (value: string | undefined): string | undefined => {
+  if (value === undefined) return undefined;
+  return /^#[\da-f]{6}$/i.test(value) ? value : undefined;
+};
+
+const parsePadding = (value: string | undefined): PlotPaddingSpec | undefined => {
+  if (value === undefined) return undefined;
+  const parts = value.split(":").map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part) || part < 0)) {
+    return undefined;
+  }
+  const [top, right, bottom, left] = parts;
+  return { top: top ?? 0, right: right ?? 0, bottom: bottom ?? 0, left: left ?? 0 };
+};
+
+const normalizeTextStyle = (
+  style: Partial<PlotTextStyle> | undefined,
+  fallback: PlotTextStyle,
+): PlotTextStyle => ({
+  family: style?.family?.trim() || fallback.family,
+  size:
+    Number.isFinite(style?.size) && Number(style?.size) > 0 ? Number(style?.size) : fallback.size,
+});
+
+const axisDataHasNonPositiveValues = (
+  axis: "x" | "y",
+  dataset: Dataset | undefined,
+  plot: PlotSpec,
+  nextX = plot.x,
+): boolean => {
+  if (!dataset) return true;
+  if (axis === "x") {
+    return dataset.rows.some((row, index) => Number(row[nextX] ?? index) <= 0);
+  }
+  return plot.series.some((series) => dataset.rows.some((row) => Number(row[series.y] ?? 0) <= 0));
+};
+
 export const executeScispaceCommand = (
   input: string,
   context: CommandContext,
@@ -229,10 +378,11 @@ export const executeScispaceCommand = (
         "  lsdata",
         "  table <dataset>",
         "  plot <dataset> x=<column> y=<column[,column...]> type=<line|line-marker|marker>",
-        "  plot-set <plotId> title=<title> type=<line|line-marker|marker> border=<true|false> width=<n> height=<n>",
-        "  plot-axis <plotId> axis=<x|y> range=<auto|min:max> tick=<auto|interval> tickDir=<out|in|none>",
+        "  plot-set <plotId> title=<title> type=<line|line-marker|marker> border=<true|false> width=<n> height=<n> fontFamily=<name> fontSize=<n> padding=<t:r:b:l>",
+        "  plot-axis <plotId> axis=<x|y> range=<auto|min:max> tick=<auto|interval> tickDir=<out|in|none> scale=<linear|log>",
         "  plot-grid <plotId> x=<true|false> y=<true|false>",
-        "  plot-series <plotId> y=<column> action=<add|remove>",
+        "  plot-series <plotId> y=<column> action=<add|remove> markerShape=<circle|square|triangle|diamond|cross|plus> order=<n>",
+        "  plot-annotation <plotId> action=<add|update|remove>",
         "  plot-schema [plotId]",
         "  file-list [path]",
         "  file-mkdir <path>",
@@ -364,6 +514,9 @@ export const executeScispaceCommand = (
         width: width ?? defaultPlotSize.width,
         height: height ?? defaultPlotSize.height,
       },
+      font: defaultPlotFont,
+      padding: defaultPlotPadding,
+      annotations: [],
     });
 
     return { kind: "plot-created", spec, output: `Plot opened: ${spec.title}` };
@@ -384,6 +537,11 @@ export const executeScispaceCommand = (
     const heightValue = readOption(args, "height");
     const width = parsePlotDimension(widthValue);
     const height = parsePlotDimension(heightValue);
+    const fontFamily = readOption(args, "fontFamily");
+    const fontSizeValue = readOption(args, "fontSize");
+    const fontSize = parsePositiveNumber(fontSizeValue);
+    const paddingValue = readOption(args, "padding");
+    const padding = parsePadding(paddingValue);
     const dataset = findDataset(context.datasets, plot.source);
     if (title !== undefined) {
       patch.title = title;
@@ -410,6 +568,10 @@ export const executeScispaceCommand = (
       return { kind: "error", output: `Invalid plot width: ${widthValue}` };
     if (heightValue !== undefined && height === undefined)
       return { kind: "error", output: `Invalid plot height: ${heightValue}` };
+    if (fontSizeValue !== undefined && fontSize === undefined)
+      return { kind: "error", output: `Invalid font size: ${fontSizeValue}` };
+    if (paddingValue !== undefined && padding === undefined)
+      return { kind: "error", output: `Invalid padding: ${paddingValue}` };
     if (width !== undefined || height !== undefined) {
       const currentSize = normalizePlotSpecForCommand(plot).size;
       patch.size = {
@@ -417,6 +579,14 @@ export const executeScispaceCommand = (
         height: height ?? currentSize.height,
       };
     }
+    if (fontFamily !== undefined || fontSize !== undefined) {
+      const currentFont = normalizePlotSpecForCommand(plot).font;
+      patch.font = {
+        family: fontFamily ?? currentFont.family,
+        size: fontSize ?? currentFont.size,
+      };
+    }
+    if (padding) patch.padding = padding;
     const current = normalizePlotSpecForCommand({ ...plot, ...patch });
     const spec = normalizePlotSpecForCommand({
       ...current,
@@ -454,15 +624,89 @@ export const executeScispaceCommand = (
     if (tickDir && !tickDirections.has(tickDir as PlotTickDirection)) {
       return { kind: "error", output: `Invalid tick direction: ${tickDir}` };
     }
+    const scale = readOption(args, "scale");
+    if (scale !== undefined && scale !== "linear" && scale !== "log") {
+      return { kind: "error", output: `Invalid axis scale: ${scale}` };
+    }
+    const dataset = findDataset(context.datasets, current.source);
+    if (scale === "log" && axisDataHasNonPositiveValues(axisKey, dataset, current)) {
+      return { kind: "error", output: `Log scale requires positive ${axisKey} values` };
+    }
     const label = readOption(args, "label");
+    const labelFontFamily = readOption(args, "labelFontFamily");
+    const labelFontSizeValue = readOption(args, "labelFontSize");
+    const labelFontSize = parsePositiveNumber(labelFontSizeValue);
+    const valueFontFamily = readOption(args, "valueFontFamily");
+    const valueFontSizeValue = readOption(args, "valueFontSize");
+    const valueFontSize = parsePositiveNumber(valueFontSizeValue);
+    const sizeValue = readOption(args, "size");
+    const size = parsePositiveNumber(sizeValue);
+    const gapValue = readOption(args, "gap");
+    const gap = parseNonNegativeNumber(gapValue);
+    const labelGapValue = readOption(args, "labelGap");
+    const labelGap = parseNonNegativeNumber(labelGapValue);
+    const labelSizeValue = readOption(args, "labelSize");
+    const labelSize = parsePositiveNumber(labelSizeValue);
+    const colorValue = readOption(args, "color");
+    const color = parseColor(colorValue);
+    const gridColorValue = readOption(args, "gridColor");
+    const gridColor = parseColor(gridColorValue);
+    const tickColorValue = readOption(args, "tickColor");
+    const tickColor = parseColor(tickColorValue);
+    const tickLengthValue = readOption(args, "tickLength");
+    const tickLength = parseNonNegativeNumber(tickLengthValue);
+    const minorTickValue = readOption(args, "minorTick");
+    const minorTick = parseOptionalBoolean(minorTickValue);
+    if (labelFontSizeValue !== undefined && labelFontSize === undefined)
+      return { kind: "error", output: `Invalid label font size: ${labelFontSizeValue}` };
+    if (valueFontSizeValue !== undefined && valueFontSize === undefined)
+      return { kind: "error", output: `Invalid value font size: ${valueFontSizeValue}` };
+    if (sizeValue !== undefined && size === undefined)
+      return { kind: "error", output: `Invalid axis size: ${sizeValue}` };
+    if (gapValue !== undefined && gap === undefined)
+      return { kind: "error", output: `Invalid axis gap: ${gapValue}` };
+    if (labelGapValue !== undefined && labelGap === undefined)
+      return { kind: "error", output: `Invalid label gap: ${labelGapValue}` };
+    if (labelSizeValue !== undefined && labelSize === undefined)
+      return { kind: "error", output: `Invalid label size: ${labelSizeValue}` };
+    if (colorValue !== undefined && color === undefined)
+      return { kind: "error", output: `Invalid axis color: ${colorValue}` };
+    if (gridColorValue !== undefined && gridColor === undefined)
+      return { kind: "error", output: `Invalid grid color: ${gridColorValue}` };
+    if (tickColorValue !== undefined && tickColor === undefined)
+      return { kind: "error", output: `Invalid tick color: ${tickColorValue}` };
+    if (tickLengthValue !== undefined && tickLength === undefined)
+      return { kind: "error", output: `Invalid tick length: ${tickLengthValue}` };
+    if (minorTickValue !== undefined && minorTick === undefined)
+      return { kind: "error", output: `Invalid minor tick: ${minorTickValue}` };
     const axis = {
       ...current.axes[axisKey],
       ...(label !== undefined ? { label } : {}),
       ...(range ? { range } : {}),
+      ...(scale !== undefined ? { scale } : {}),
+      ...(size !== undefined ? { size } : {}),
+      ...(gap !== undefined ? { gap } : {}),
+      ...(labelGap !== undefined ? { labelGap } : {}),
+      ...(labelSize !== undefined ? { labelSize } : {}),
+      ...(color !== undefined ? { color } : {}),
+      ...(gridColor !== undefined ? { gridColor } : {}),
+      ...(tickColor !== undefined ? { tickColor } : {}),
+      labelStyle: {
+        ...current.axes[axisKey].labelStyle,
+        ...(labelFontFamily !== undefined ? { family: labelFontFamily } : {}),
+        ...(labelFontSize !== undefined ? { size: labelFontSize } : {}),
+      },
+      valueStyle: {
+        ...current.axes[axisKey].valueStyle,
+        ...(valueFontFamily !== undefined ? { family: valueFontFamily } : {}),
+        ...(valueFontSize !== undefined ? { size: valueFontSize } : {}),
+      },
       ticks: {
         ...current.axes[axisKey].ticks,
         ...tick,
         ...(tickDir ? { orientation: tickDir as PlotTickDirection } : {}),
+        ...(tickLength !== undefined ? { length: tickLength } : {}),
+        ...(minorTick !== undefined ? { minor: minorTick } : {}),
       },
     };
     const spec = normalizePlotSpecForCommand({
@@ -523,6 +767,10 @@ export const executeScispaceCommand = (
       const markerSize = readOption(args, "markerSize");
       if (markerSize !== undefined && !Number.isFinite(Number(markerSize)))
         return { kind: "error", output: `Invalid marker size: ${markerSize}` };
+      const orderValue = readOption(args, "order");
+      const drawOrder = parseInteger(orderValue);
+      if (orderValue !== undefined && drawOrder === undefined)
+        return { kind: "error", output: `Invalid draw order: ${orderValue}` };
       series = series.map((item) => {
         if (item.y !== y) return item;
         return normalizeSeriesStyle(
@@ -533,6 +781,7 @@ export const executeScispaceCommand = (
             lineWidth: Number(lineWidth ?? item.lineWidth),
             markerSize: Number(markerSize ?? item.markerSize),
             markerShape: (markerShape as PlotMarkerShape | undefined) ?? item.markerShape,
+            drawOrder: drawOrder ?? item.drawOrder,
           },
           series.findIndex((candidate) => candidate.y === y),
         );
@@ -540,6 +789,119 @@ export const executeScispaceCommand = (
     }
     const spec = normalizePlotSpecForCommand({ ...current, series });
     return { kind: "plot-series-updated", spec, output: `Plot series updated: ${spec.title}` };
+  }
+
+  if (command === "plot-annotation") {
+    const plot = findPlot(context.plotSpecs, args[0] ?? "");
+    if (!plot) return { kind: "error", output: `Plot not found: ${args[0] ?? ""}` };
+    const current = normalizePlotSpecForCommand(plot);
+    const action = readOption(args, "action");
+    const id = readOption(args, "id");
+    if (action !== "add" && action !== "update" && action !== "remove") {
+      return {
+        kind: "error",
+        output: "Usage: plot-annotation <plotId> action=<add|update|remove>",
+      };
+    }
+
+    if (action === "remove") {
+      if (!id || !current.annotations.some((annotation) => annotation.id === id)) {
+        return { kind: "error", output: `Annotation not found: ${id ?? ""}` };
+      }
+      const spec = normalizePlotSpecForCommand({
+        ...current,
+        annotations: current.annotations.filter((annotation) => annotation.id !== id),
+      });
+      return {
+        kind: "plot-annotation-updated",
+        spec,
+        output: `Plot annotation removed: ${spec.title}`,
+      };
+    }
+
+    const xValue = readOption(args, "x");
+    const yValue = readOption(args, "y");
+    const dxValue = readOption(args, "dx");
+    const dyValue = readOption(args, "dy");
+    const fontSizeValue = readOption(args, "fontSize");
+    const x = xValue === undefined ? undefined : Number(xValue);
+    const y = yValue === undefined ? undefined : Number(yValue);
+    const dx = dxValue === undefined ? undefined : Number(dxValue);
+    const dy = dyValue === undefined ? undefined : Number(dyValue);
+    const fontSize = parsePositiveNumber(fontSizeValue);
+    const colorValue = readOption(args, "color");
+    const color = parseColor(colorValue);
+    if (xValue !== undefined && !Number.isFinite(x))
+      return { kind: "error", output: `Invalid annotation x: ${xValue}` };
+    if (yValue !== undefined && !Number.isFinite(y))
+      return { kind: "error", output: `Invalid annotation y: ${yValue}` };
+    if (dxValue !== undefined && !Number.isFinite(dx))
+      return { kind: "error", output: `Invalid annotation dx: ${dxValue}` };
+    if (dyValue !== undefined && !Number.isFinite(dy))
+      return { kind: "error", output: `Invalid annotation dy: ${dyValue}` };
+    if (fontSizeValue !== undefined && fontSize === undefined)
+      return { kind: "error", output: `Invalid annotation font size: ${fontSizeValue}` };
+    if (colorValue !== undefined && color === undefined)
+      return { kind: "error", output: `Invalid annotation color: ${colorValue}` };
+
+    if (action === "add") {
+      if (readOption(args, "type") !== "text-arrow" || x === undefined || y === undefined) {
+        return {
+          kind: "error",
+          output: "Usage: plot-annotation <plotId> action=add type=text-arrow x=<n> y=<n>",
+        };
+      }
+      const annotation: PlotAnnotation = {
+        id: crypto.randomUUID(),
+        type: "text-arrow",
+        text: readOption(args, "text") ?? "Annotation",
+        x,
+        y,
+        dx: dx ?? 24,
+        dy: dy ?? -24,
+        color: color ?? "#111827",
+        font: {
+          family: readOption(args, "fontFamily") ?? current.font.family,
+          size: fontSize ?? current.font.size,
+        },
+      };
+      const spec = normalizePlotSpecForCommand({
+        ...current,
+        annotations: [...current.annotations, annotation],
+      });
+      return {
+        kind: "plot-annotation-updated",
+        spec,
+        output: `Plot annotation added: ${spec.title}`,
+      };
+    }
+
+    if (!id) return { kind: "error", output: "Annotation id is required" };
+    let found = false;
+    const annotations = current.annotations.map((annotation) => {
+      if (annotation.id !== id) return annotation;
+      found = true;
+      return {
+        ...annotation,
+        text: readOption(args, "text") ?? annotation.text,
+        x: x ?? annotation.x,
+        y: y ?? annotation.y,
+        dx: dx ?? annotation.dx,
+        dy: dy ?? annotation.dy,
+        color: color ?? annotation.color,
+        font: {
+          family: readOption(args, "fontFamily") ?? annotation.font.family,
+          size: fontSize ?? annotation.font.size,
+        },
+      };
+    });
+    if (!found) return { kind: "error", output: `Annotation not found: ${id}` };
+    const spec = normalizePlotSpecForCommand({ ...current, annotations });
+    return {
+      kind: "plot-annotation-updated",
+      spec,
+      output: `Plot annotation updated: ${spec.title}`,
+    };
   }
 
   if (command === "import-preview") {

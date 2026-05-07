@@ -44,12 +44,15 @@ describe("scispace pseudo command interpreter", () => {
             lineWidth: 2,
             markerSize: 6,
             markerShape: "circle",
+            drawOrder: 0,
           },
         ],
         zoomMode: "xy",
         grid: { x: true, y: true },
         border: true,
         size: { width: 640, height: 360 },
+        font: { family: "Inter, system-ui, sans-serif", size: 12 },
+        padding: { top: 12, right: 12, bottom: 12, left: 12 },
       });
     }
   });
@@ -69,6 +72,7 @@ describe("scispace pseudo command interpreter", () => {
           lineWidth: 2,
           markerSize: 6,
           markerShape: "circle",
+          drawOrder: 0,
         },
         {
           y: "background",
@@ -77,6 +81,7 @@ describe("scispace pseudo command interpreter", () => {
           lineWidth: 2,
           markerSize: 6,
           markerShape: "circle",
+          drawOrder: 1,
         },
       ]);
       expect(result.spec.title).toBe("waveform.csv: signal, background vs time");
@@ -92,7 +97,7 @@ describe("scispace pseudo command interpreter", () => {
 
     const plotSpecs = [{ ...created.spec, id: "plot-1" }];
     const set = executeScispaceCommand(
-      'plot-set plot-1 title="Edited Plot" type=marker border=false zoom=x width=800 height=480',
+      'plot-set plot-1 title="Edited Plot" type=marker border=false zoom=x width=800 height=480 fontFamily=Arial fontSize=14 padding=8:16:24:32',
       {
         datasets: [dataset],
         plotSpecs,
@@ -106,21 +111,39 @@ describe("scispace pseudo command interpreter", () => {
         border: false,
         zoomMode: "x",
         size: { width: 800, height: 480 },
+        font: { family: "Arial", size: 14 },
+        padding: { top: 8, right: 16, bottom: 24, left: 32 },
       },
     });
 
     const axis = executeScispaceCommand(
-      'plot-axis plot-1 axis=x label="Time axis" range=0:10 tick=2 tickDir=in',
+      'plot-axis plot-1 axis=y label="Signal axis" range=0.1:10 tick=2 tickDir=in scale=linear labelFontFamily=Helvetica labelFontSize=16 valueFontFamily=Menlo valueFontSize=11 size=56 gap=8 labelGap=12 labelSize=28 color=#111827 gridColor=#d1d5db tickColor=#6b7280 tickLength=10 minorTick=true',
       { datasets: [dataset], plotSpecs },
     );
     expect(axis).toMatchObject({
       kind: "plot-axis-updated",
       spec: {
         axes: {
-          x: {
-            label: "Time axis",
-            range: { mode: "manual", min: 0, max: 10 },
-            ticks: { mode: "manual", interval: 2, orientation: "in" },
+          y: {
+            label: "Signal axis",
+            range: { mode: "manual", min: 0.1, max: 10 },
+            ticks: {
+              mode: "manual",
+              interval: 2,
+              orientation: "in",
+              length: 10,
+              minor: true,
+            },
+            scale: "linear",
+            labelStyle: { family: "Helvetica", size: 16 },
+            valueStyle: { family: "Menlo", size: 11 },
+            size: 56,
+            gap: 8,
+            labelGap: 12,
+            labelSize: 28,
+            color: "#111827",
+            gridColor: "#d1d5db",
+            tickColor: "#6b7280",
           },
         },
       },
@@ -133,7 +156,7 @@ describe("scispace pseudo command interpreter", () => {
     expect(grid).toMatchObject({ kind: "plot-updated", spec: { grid: { x: false, y: true } } });
 
     const series = executeScispaceCommand(
-      "plot-series plot-1 y=signal label=Signal color=#dc2626 lineWidth=3 markerSize=8 markerShape=square",
+      "plot-series plot-1 y=signal label=Signal color=#dc2626 lineWidth=3 markerSize=8 markerShape=diamond order=4",
       { datasets: [dataset], plotSpecs },
     );
     expect(series).toMatchObject({
@@ -146,10 +169,83 @@ describe("scispace pseudo command interpreter", () => {
             color: "#dc2626",
             lineWidth: 3,
             markerSize: 8,
-            markerShape: "square",
+            markerShape: "diamond",
+            drawOrder: 4,
           },
         ],
       },
+    });
+  });
+
+  it("updates text-arrow plot annotations through scispace commands", () => {
+    const created = executeScispaceCommand("plot waveform.csv x=time y=signal", {
+      datasets: [dataset],
+    });
+    expect(created.kind).toBe("plot-created");
+    if (created.kind !== "plot-created") return;
+
+    const plotSpecs = [{ ...created.spec, id: "plot-1" }];
+    const added = executeScispaceCommand(
+      'plot-annotation plot-1 action=add type=text-arrow text="Peak A" x=1.5 y=0.5 dx=24 dy=-32 color=#111827 fontFamily=Arial fontSize=13',
+      { datasets: [dataset], plotSpecs },
+    );
+    expect(added.kind).toBe("plot-annotation-updated");
+    if (added.kind !== "plot-annotation-updated") return;
+    expect(added.spec.annotations).toHaveLength(1);
+    expect(added.spec.annotations[0]).toMatchObject({
+      type: "text-arrow",
+      text: "Peak A",
+      x: 1.5,
+      y: 0.5,
+      dx: 24,
+      dy: -32,
+      color: "#111827",
+      font: { family: "Arial", size: 13 },
+    });
+
+    const annotationId = added.spec.annotations[0]?.id ?? "";
+    const updated = executeScispaceCommand(
+      `plot-annotation plot-1 action=update id=${annotationId} text=PeakB dx=12`,
+      { datasets: [dataset], plotSpecs: [added.spec] },
+    );
+    expect(updated).toMatchObject({
+      kind: "plot-annotation-updated",
+      spec: { annotations: [{ id: annotationId, text: "PeakB", dx: 12 }] },
+    });
+
+    const removed = executeScispaceCommand(
+      `plot-annotation plot-1 action=remove id=${annotationId}`,
+      { datasets: [dataset], plotSpecs: [added.spec] },
+    );
+    expect(removed).toMatchObject({
+      kind: "plot-annotation-updated",
+      spec: { annotations: [] },
+    });
+  });
+
+  it("allows log scale only for positive axis data", () => {
+    const positiveDataset = {
+      ...dataset,
+      id: "positive",
+      name: "positive.csv",
+      rows: [
+        { time: 1, signal: 2 },
+        { time: 2, signal: 4 },
+      ],
+    };
+    const created = executeScispaceCommand("plot positive.csv x=time y=signal", {
+      datasets: [positiveDataset],
+    });
+    expect(created.kind).toBe("plot-created");
+    if (created.kind !== "plot-created") return;
+
+    const result = executeScispaceCommand("plot-axis plot-positive axis=x scale=log", {
+      datasets: [positiveDataset],
+      plotSpecs: [{ ...created.spec, id: "plot-positive" }],
+    });
+    expect(result).toMatchObject({
+      kind: "plot-axis-updated",
+      spec: { axes: { x: { scale: "log" } } },
     });
   });
 
@@ -158,6 +254,7 @@ describe("scispace pseudo command interpreter", () => {
     expect(schema.kind).toBe("text");
     expect(schema.output).toContain('"plotType"');
     expect(schema.output).toContain('"size"');
+    expect(schema.output).toContain('"annotations"');
 
     const created = executeScispaceCommand(
       "plot waveform.csv x=time y=signal width=700 height=420",
@@ -240,6 +337,18 @@ describe("scispace pseudo command interpreter", () => {
       }).kind,
     ).toBe("error");
     expect(
+      executeScispaceCommand("plot-axis plot-1 axis=x scale=log", {
+        datasets: [dataset],
+        plotSpecs,
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("plot-axis plot-1 axis=x tickLength=-1", {
+        datasets: [dataset],
+        plotSpecs,
+      }).kind,
+    ).toBe("error");
+    expect(
       executeScispaceCommand("plot-grid plot-1 x=maybe", {
         datasets: [dataset],
         plotSpecs,
@@ -256,9 +365,21 @@ describe("scispace pseudo command interpreter", () => {
         datasets: [dataset],
         plotSpecs,
       }).kind,
-    ).toBe("error");
+    ).toBe("plot-series-updated");
     expect(
       executeScispaceCommand("plot-series plot-1 y=signal lineWidth=wide", {
+        datasets: [dataset],
+        plotSpecs,
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("plot-series plot-1 y=signal order=bad", {
+        datasets: [dataset],
+        plotSpecs,
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("plot-annotation plot-1 action=add x=1 y=2", {
         datasets: [dataset],
         plotSpecs,
       }).kind,

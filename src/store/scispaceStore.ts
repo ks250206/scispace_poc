@@ -190,6 +190,7 @@ const seedPlot = (): PlotSpec => ({
       lineWidth: 2,
       markerSize: 6,
       markerShape: "circle",
+      drawOrder: 0,
     },
   ],
   zoomMode: "xy",
@@ -197,6 +198,9 @@ const seedPlot = (): PlotSpec => ({
   grid: { x: true, y: true },
   border: true,
   size: { width: 640, height: 360 },
+  font: { family: "Inter, system-ui, sans-serif", size: 12 },
+  padding: { top: 12, right: 12, bottom: 12, left: 12 },
+  annotations: [],
   axisLabels: { x: "time", y: "signal" },
 });
 
@@ -688,7 +692,8 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       if (
         result.kind === "plot-updated" ||
         result.kind === "plot-series-updated" ||
-        result.kind === "plot-axis-updated"
+        result.kind === "plot-axis-updated" ||
+        result.kind === "plot-annotation-updated"
       ) {
         const spec = normalizePlotSpec(result.spec);
         set((state) => {

@@ -76,12 +76,41 @@ export interface Dataset {
 export type PlotZoomMode = "x" | "y" | "xy";
 export type PlotType = "line" | "line-marker" | "marker";
 export type PlotTickDirection = "out" | "in" | "none";
-export type PlotMarkerShape = "circle" | "square";
+export type PlotScale = "linear" | "log";
+export type PlotMarkerShape = "circle" | "square" | "triangle" | "diamond" | "cross" | "plus";
+
+export interface PlotTextStyle {
+  family: string;
+  size: number;
+}
+
+export interface PlotPaddingSpec {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
 
 export interface PlotAxisSpec {
   label: string;
   range: { mode: "auto" | "manual"; min?: number; max?: number };
-  ticks: { mode: "auto" | "manual"; interval?: number; orientation: PlotTickDirection };
+  ticks: {
+    mode: "auto" | "manual";
+    interval?: number;
+    orientation: PlotTickDirection;
+    length: number;
+    minor: boolean;
+  };
+  scale: PlotScale;
+  labelStyle: PlotTextStyle;
+  valueStyle: PlotTextStyle;
+  size: number;
+  gap: number;
+  labelGap: number;
+  labelSize: number;
+  color: string;
+  gridColor: string;
+  tickColor: string;
 }
 
 export interface PlotSizeSpec {
@@ -96,6 +125,19 @@ export interface PlotSeries {
   lineWidth: number;
   markerSize: number;
   markerShape: PlotMarkerShape;
+  drawOrder: number;
+}
+
+export interface PlotAnnotation {
+  id: string;
+  type: "text-arrow";
+  text: string;
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  color: string;
+  font: PlotTextStyle;
 }
 
 export interface PlotSpec {
@@ -111,6 +153,9 @@ export interface PlotSpec {
   grid: { x: boolean; y: boolean };
   border: boolean;
   size: PlotSizeSpec;
+  font: PlotTextStyle;
+  padding: PlotPaddingSpec;
+  annotations: PlotAnnotation[];
   axisLabels?: { x?: string; y?: string };
   titleEdited?: boolean;
   y?: string;
@@ -124,6 +169,7 @@ export type ScispaceCommandResult =
   | { kind: "plot-updated"; spec: PlotSpec; output: string }
   | { kind: "plot-series-updated"; spec: PlotSpec; output: string }
   | { kind: "plot-axis-updated"; spec: PlotSpec; output: string }
+  | { kind: "plot-annotation-updated"; spec: PlotSpec; output: string }
   | {
       kind: "file-command";
       action: "mkdir" | "rename" | "move" | "delete" | "list";
