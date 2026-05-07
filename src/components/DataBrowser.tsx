@@ -89,7 +89,7 @@ export function DataBrowser() {
   const handleOpenTable = (datasetId: string, datasetName: string) => {
     const dataset = datasets.find((item) => item.id === datasetId);
     if (!dataset) return;
-    const selectedColumns = columnSelections[datasetId] ?? [];
+    const selectedColumns = useScispaceStore.getState().columnSelections[datasetId] ?? [];
     const columns = selectedColumns.length > 0 ? selectedColumns : datasetColumnIds(dataset);
     void runScispace(
       `table ${quoteCommandArg(datasetName)} columns=${columns.map(quoteCommandArg).join(",")}`,

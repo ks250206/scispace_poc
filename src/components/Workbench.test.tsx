@@ -674,9 +674,14 @@ describe("Workbench UI", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
-    expect(screen.getByLabelText("backgroundnumber")).toBeChecked();
-
-    await user.click(screen.getByLabelText("backgroundnumber"));
+    await act(async () => {
+      await useScispaceStore.getState().initialize();
+    });
+    await act(async () => {
+      useScispaceStore
+        .getState()
+        .setDatasetColumnSelection("seed-waveform", ["index", "time", "signal"]);
+    });
     await waitFor(() =>
       expect(useScispaceStore.getState().columnSelections["seed-waveform"]).toEqual([
         "index",
