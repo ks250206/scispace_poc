@@ -453,6 +453,28 @@ describe("Workbench UI", () => {
     expect(useScispaceStore.getState().pendingImports[0]?.fileName).toBe("clicked.csv");
   });
 
+  it("cancels import windows through scispace commands", async () => {
+    let importId = "";
+    act(() => {
+      importId = useScispaceStore.getState().openImportDialog("cancel-ui.csv", "x,y\n1,2");
+    });
+    render(<ImportSettingsWindow importId={importId} />);
+
+    await waitFor(() => expect(screen.getByText("cancel-ui.csv")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() =>
+      expect(useScispaceStore.getState().pendingImports.some((item) => item.id === importId)).toBe(
+        false,
+      ),
+    );
+    expect(useScispaceStore.getState().commandHistory.at(-1)).toMatchObject({
+      command: `import-cancel ${importId}`,
+      source: "gui",
+      status: "success",
+    });
+  });
+
   it("opens raw file parsing from data browser through scispace commands", async () => {
     await act(async () => {
       await useScispaceStore.getState().importTextFile("notes.txt", "raw notes");

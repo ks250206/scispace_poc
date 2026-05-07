@@ -353,6 +353,21 @@ describe("scispace zustand store", () => {
     await expect(store.getState().confirmImport("missing")).resolves.toBeUndefined();
   });
 
+  it("cancels pending imports through scispace commands", async () => {
+    const { store } = await makeStore();
+    const importId = store.getState().openImportDialog("cancel-me.csv", "x,y\n1,2");
+
+    await store.getState().runScispace(`import-cancel ${importId}`, { source: "gui" });
+
+    expect(store.getState().pendingImports.some((item) => item.id === importId)).toBe(false);
+    expect(store.getState().windows.some((window) => window.importId === importId)).toBe(false);
+    expect(store.getState().commandHistory.at(-1)).toMatchObject({
+      command: `import-cancel ${importId}`,
+      source: "gui",
+      status: "success",
+    });
+  });
+
   it("runs pseudo commands and mutates real store state", async () => {
     const { store } = await makeStore();
     const plot = await store.getState().runScispace("plot waveform.csv x=time y=signal,background");

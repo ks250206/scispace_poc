@@ -46,7 +46,6 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   );
   const runScispace = useScispaceStore((state) => state.runScispace);
   const confirmImport = useScispaceStore((state) => state.confirmImport);
-  const cancelImport = useScispaceStore((state) => state.cancelImport);
   const rawParentRef = useRef<HTMLDivElement>(null);
   const previewParentRef = useRef<HTMLDivElement>(null);
   const [previewColumnWidths, setPreviewColumnWidths] = useState<Record<string, number>>({});
@@ -216,7 +215,10 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
           </select>
         </label>
         <div className="import-actions">
-          <button type="button" onClick={() => cancelImport(importId)}>
+          <button
+            type="button"
+            onClick={() => void runScispace(`import-cancel ${importId}`, { source: "gui" })}
+          >
             Cancel
           </button>
           <button type="button" className="primary" onClick={() => void confirmImport(importId)}>

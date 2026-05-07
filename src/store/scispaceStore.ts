@@ -957,6 +957,13 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           }));
         }
       }
+      if (result.kind === "import-cancel") {
+        const importId = result.importId;
+        set((state) => ({
+          pendingImports: state.pendingImports.filter((item) => item.id !== importId),
+          windows: state.windows.filter((window) => window.importId !== importId),
+        }));
+      }
       if (result.kind === "file-command") {
         const fileCommand = result;
         const target = get().files.find((file) => file.path === fileCommand.path);

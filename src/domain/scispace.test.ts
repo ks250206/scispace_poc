@@ -710,6 +710,39 @@ describe("scispace pseudo command interpreter", () => {
     expect(invalid).toMatchObject({ kind: "error" });
   });
 
+  it("cancels pending imports through commands", () => {
+    const pendingImport = {
+      id: "import-1",
+      fileName: "configured.csv",
+      text: "x,y\n1,2",
+      mode: "tabular" as const,
+      options: {
+        skipRows: 0,
+        delimiter: "comma" as const,
+        commentPrefix: "",
+        hasHeader: true,
+        columnNames: [],
+        excludedColumnIds: [],
+      },
+    };
+
+    const cancelled = executeScispaceCommand("import-cancel import-1", {
+      datasets: [],
+      pendingImports: [pendingImport],
+    });
+    const missing = executeScispaceCommand("import-cancel missing", {
+      datasets: [],
+      pendingImports: [pendingImport],
+    });
+
+    expect(cancelled).toMatchObject({
+      kind: "import-cancel",
+      importId: "import-1",
+      output: "Import cancelled: configured.csv",
+    });
+    expect(missing).toMatchObject({ kind: "error" });
+  });
+
   it("reports import command failures and raw confirmations", () => {
     const pendingImport = {
       id: "import-raw",

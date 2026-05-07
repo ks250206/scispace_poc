@@ -406,6 +406,7 @@ export const executeScispaceCommand = (
         "  import-set <importId> skipRows=<n> delimiter=<auto|comma|tab|space|semicolon> hasHeader=<true|false> mode=<tabular|raw>",
         "  import-column <importId> column=<col> action=<include|exclude>",
         "  import-line <importId> line=<n> value=<text>",
+        "  import-cancel <importId>",
         "  import-confirm <importId> mode=<tabular|raw> path=<virtualPath>",
         "  elt <dataset> as <newName>",
       ].join("\n"),
@@ -1187,6 +1188,17 @@ export const executeScispaceCommand = (
       importId,
       pendingImport: pendingImportUpdate,
       output: `Import line updated: ${lineNumber}`,
+    };
+  }
+
+  if (command === "import-cancel") {
+    const importId = args[0] ?? "";
+    const pendingImport = context.pendingImports?.find((item) => item.id === importId);
+    if (!pendingImport) return { kind: "error", output: `Pending import not found: ${importId}` };
+    return {
+      kind: "import-cancel",
+      importId,
+      output: `Import cancelled: ${pendingImport.fileName}`,
     };
   }
 
