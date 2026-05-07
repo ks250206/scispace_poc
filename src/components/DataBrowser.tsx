@@ -30,7 +30,6 @@ export function DataBrowser() {
   const activeDatasetId = useScispaceStore((state) => state.activeDatasetId);
   const columnSelections = useScispaceStore((state) => state.columnSelections);
   const toggleDatasetColumn = useScispaceStore((state) => state.toggleDatasetColumn);
-  const openImportDialog = useScispaceStore((state) => state.openImportDialog);
   const runScispace = useScispaceStore((state) => state.runScispace);
 
   const rawFiles = useMemo(
@@ -42,13 +41,15 @@ export function DataBrowser() {
     for (const file of loadedFiles) {
       const importId = crypto.randomUUID();
       const text = await file.text();
-      void runScispace(
-        `import-open ${importId} name=${quoteCommandArg(file.name)} text=${encodeURIComponent(
-          text,
-        )}`,
-        { source: "gui" },
-      );
+      openImportThroughCommand(importId, file.name, text);
     }
+  };
+
+  const openImportThroughCommand = (importId: string, fileName: string, text: string) => {
+    void runScispace(
+      `import-open ${importId} name=${quoteCommandArg(fileName)} text=${encodeURIComponent(text)}`,
+      { source: "gui" },
+    );
   };
 
   const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
@@ -172,7 +173,9 @@ export function DataBrowser() {
                       type="button"
                       aria-label={`Parse ${file.name}`}
                       className="tree-action"
-                      onClick={() => openImportDialog(file.name, file.text ?? "")}
+                      onClick={() =>
+                        openImportThroughCommand(crypto.randomUUID(), file.name, file.text ?? "")
+                      }
                     >
                       ⇄
                     </button>

@@ -453,6 +453,18 @@ describe("Workbench UI", () => {
     expect(useScispaceStore.getState().pendingImports[0]?.fileName).toBe("clicked.csv");
   });
 
+  it("opens raw file parsing from data browser through scispace commands", async () => {
+    await act(async () => {
+      await useScispaceStore.getState().importTextFile("notes.txt", "raw notes");
+    });
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Parse notes.txt" }));
+
+    await waitFor(() => expect(screen.getByText("Import - notes.txt")).toBeInTheDocument());
+  });
+
   it("shows close buttons only on table and plot windows and removes the clicked window", async () => {
     render(<App />);
 
