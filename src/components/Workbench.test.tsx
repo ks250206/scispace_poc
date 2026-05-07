@@ -669,6 +669,36 @@ describe("Workbench UI", () => {
     );
   });
 
+  it("opens tables with the checked data browser columns", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    expect(screen.getByLabelText("backgroundnumber")).toBeChecked();
+
+    await user.click(screen.getByLabelText("backgroundnumber"));
+    await waitFor(() =>
+      expect(useScispaceStore.getState().columnSelections["seed-waveform"]).toEqual([
+        "index",
+        "time",
+        "signal",
+      ]),
+    );
+
+    await user.click(screen.getByRole("button", { name: "▦waveform.csv" }));
+    await waitFor(() =>
+      expect(useScispaceStore.getState().commandHistory.at(-1)).toMatchObject({
+        command: "table waveform.csv columns=index,time,signal",
+        source: "gui",
+      }),
+    );
+    expect(
+      useScispaceStore.getState().windows.find((window) => window.id === "table-seed"),
+    ).toMatchObject({
+      columnIds: ["index", "time", "signal"],
+    });
+  });
+
   it("undoes and redoes destructive commands from the topbar", async () => {
     const user = userEvent.setup();
     render(<App />);

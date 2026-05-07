@@ -305,7 +305,7 @@ const createInitialProject = () => {
     plotSpecs: [seedPlot()],
     viewport: initialViewport(),
     commandHistory: [],
-    columnSelections: {},
+    columnSelections: { [seed.id]: datasetColumnIds(seed) },
   };
 };
 
@@ -397,6 +397,20 @@ const descendantPaths = (path: string, files: VirtualFile[]): Set<string> => {
 
 const nextActiveDatasetId = (datasets: Dataset[], current?: string): string | undefined =>
   current && datasets.some((dataset) => dataset.id === current) ? current : datasets[0]?.id;
+
+const normalizeColumnSelections = (
+  datasets: Dataset[],
+  selections: Record<string, string[]>,
+): Record<string, string[]> =>
+  Object.fromEntries(
+    datasets.map((dataset) => {
+      const validColumnIds = datasetColumnIds(dataset);
+      const selected = (selections[dataset.id] ?? validColumnIds).filter((columnId) =>
+        validColumnIds.includes(columnId),
+      );
+      return [dataset.id, selected.length > 0 ? selected : validColumnIds];
+    }),
+  );
 
 const retitleWindow = (window: WorkspaceWindow, datasets: Dataset[], plotSpecs: PlotSpec[]) => {
   if (window.kind === "table" && window.datasetId) {
@@ -523,7 +537,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         windows: nextWindows,
         plotSpecs: nextPlotSpecs,
         commandHistory: layout.commandHistory ?? [],
-        columnSelections: layout.columnSelections ?? {},
+        columnSelections: normalizeColumnSelections(nextDatasets, layout.columnSelections ?? {}),
         viewport: layout.viewport,
         activeDatasetId: nextDatasets[0]?.id,
         currentPlotId:
@@ -563,6 +577,9 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         datasets: dataset
           ? [...state.datasets.filter((item) => item.id !== dataset.id), dataset]
           : state.datasets,
+        columnSelections: dataset
+          ? { ...state.columnSelections, [dataset.id]: datasetColumnIds(dataset) }
+          : state.columnSelections,
         activeDatasetId: dataset?.id ?? state.activeDatasetId,
         terminalEvents: [
           ...state.terminalEvents,
@@ -910,13 +927,21 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
               validColumnIds.has(columnId),
             );
             if (nextColumnIds.length > 0) columnSelections[dataset.id] = nextColumnIds;
-            else delete columnSelections[dataset.id];
+            else columnSelections[dataset.id] = datasetColumnIds(dataset);
+          } else {
+            columnSelections[dataset.id] = datasetColumnIds(dataset);
           }
+          const visibleColumnIds = columnSelections[dataset.id] ?? datasetColumnIds(dataset);
+          const retitledWindows = windows.map((window) =>
+            window.kind === "table" && window.datasetId === dataset.id
+              ? { ...window, columnIds: visibleColumnIds }
+              : window,
+          );
 
           return {
             datasets,
             files,
-            windows,
+            windows: retitledWindows,
             plotSpecs,
             columnSelections,
             activeDatasetId: nextActiveDatasetId(datasets, state.activeDatasetId),
@@ -925,7 +950,8 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
                 ? state.currentPlotId
                 : plotSpecs[0]?.id,
             activeWindowId:
-              state.activeWindowId && windows.some((window) => window.id === state.activeWindowId)
+              state.activeWindowId &&
+              retitledWindows.some((window) => window.id === state.activeWindowId)
                 ? state.activeWindowId
                 : undefined,
           };
@@ -944,6 +970,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
             ...state.files,
             makeFileRecord(dataset.sourcePath, datasetToDelimitedText(dataset), dataset.id),
           ],
+          columnSelections: { ...state.columnSelections, [dataset.id]: datasetColumnIds(dataset) },
           activeDatasetId: dataset.id,
         }));
       }
@@ -994,6 +1021,9 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
             datasets: dataset
               ? [...state.datasets.filter((item) => item.id !== dataset.id), dataset]
               : state.datasets,
+            columnSelections: dataset
+              ? { ...state.columnSelections, [dataset.id]: datasetColumnIds(dataset) }
+              : state.columnSelections,
             activeDatasetId: dataset?.id ?? state.activeDatasetId,
             pendingImports: state.pendingImports.filter((item) => item.id !== importId),
             windows: state.windows.filter((window) => window.importId !== importId),

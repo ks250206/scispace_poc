@@ -34,6 +34,12 @@ describe("scispace zustand store", () => {
 
     expect(state.datasets[0]?.id).toBe("seed-waveform");
     expect(state.files[0]?.path).toBe("~/raw/waveform.csv");
+    expect(state.columnSelections["seed-waveform"]).toEqual([
+      "index",
+      "time",
+      "signal",
+      "background",
+    ]);
     expect(state.windows.map((window) => window.kind)).toEqual([
       "browser",
       "table",
@@ -526,6 +532,23 @@ describe("scispace zustand store", () => {
     expect((await db.layout.get("main"))?.value.columnSelections).toEqual({
       "seed-waveform": ["time", "signal"],
     });
+  });
+
+  it("initializes visible columns for imported datasets", async () => {
+    const { db, store } = await makeStore();
+    const importId = store.getState().openImportDialog("drop-cols.csv", "x,empty,y\n1,,2\n3,,4");
+    expect(store.getState().pendingImports[0]?.options.excludedColumnIds).toEqual(["empty"]);
+
+    await store.getState().runScispace(`import-column ${importId} column=y action=exclude`, {
+      source: "gui",
+    });
+    const result = await store.getState().confirmImport(importId);
+
+    expect(result?.dataset?.columns.map((column) => column.id)).toEqual(["x"]);
+    expect(store.getState().columnSelections[result?.dataset?.id ?? ""]).toEqual(["x"]);
+    expect(
+      (await db.layout.get("main"))?.value.columnSelections?.[result?.dataset?.id ?? ""],
+    ).toEqual(["x"]);
   });
 
   it("lets raw text imports become tabular datasets after switching mode", async () => {

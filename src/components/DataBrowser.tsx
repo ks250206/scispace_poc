@@ -130,7 +130,9 @@ export function DataBrowser() {
           const dataset = datasets.find((item) => item.id === file.datasetId);
           const selected = dataset?.id === activeDatasetId;
           const isDirectory = file.kind === "directory";
-          const selectedColumns = dataset ? (columnSelections[dataset.id] ?? []) : [];
+          const selectedColumns = dataset
+            ? (columnSelections[dataset.id] ?? datasetColumnIds(dataset))
+            : [];
           const isCollapsed = dataset ? collapsedDatasetIds.has(dataset.id) : true;
           return (
             <div key={file.id} className="tree-node">
@@ -217,6 +219,9 @@ export function DataBrowser() {
                       <input
                         type="checkbox"
                         checked={selectedColumns.includes(column.id)}
+                        disabled={
+                          selectedColumns.includes(column.id) && selectedColumns.length === 1
+                        }
                         onChange={() => toggleDatasetColumn(dataset.id, column.id)}
                       />
                       <span className="file-name">{column.name}</span>
