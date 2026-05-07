@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, type PointerEvent, type WheelEvent } from "react";
+import { useCallback, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import { CanvasWindow } from "./CanvasWindow";
 import { useScispaceStore } from "../store/scispaceStore";
 
@@ -11,6 +11,7 @@ export function Workbench() {
   const windows = useScispaceStore((state) => state.windows);
   const openImportDialog = useScispaceStore((state) => state.openImportDialog);
   const createNewProject = useScispaceStore((state) => state.createNewProject);
+  const [isPanning, setIsPanning] = useState(false);
   const canvasDrag = useRef<{ x: number; y: number; originX: number; originY: number } | null>(
     null,
   );
@@ -35,14 +36,18 @@ export function Workbench() {
   );
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 1 && !event.altKey) return;
+    const target = event.target as HTMLElement;
+    const isBackground =
+      target.classList.contains("canvas-shell") || target.classList.contains("workspace-plane");
+    if (event.button !== 1 && !event.altKey && !(event.button === 0 && isBackground)) return;
     canvasDrag.current = {
       x: event.clientX,
       y: event.clientY,
       originX: viewport.x,
       originY: viewport.y,
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsPanning(true);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
   };
 
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
@@ -58,6 +63,7 @@ export function Workbench() {
 
   const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
     canvasDrag.current = null;
+    setIsPanning(false);
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -92,6 +98,7 @@ export function Workbench() {
       </div>
       <section
         className="canvas-shell"
+        data-panning={isPanning}
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onDragOver={(event) => event.preventDefault()}

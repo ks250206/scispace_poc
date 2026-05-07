@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
@@ -19,6 +19,35 @@ describe("Workbench UI", () => {
     expect(screen.getByText("160 rows · virtualized")).toBeInTheDocument();
     expect(screen.getByText("Plot - waveform.csv")).toBeInTheDocument();
     expect(screen.getByText("Terminal")).toBeInTheDocument();
+    expect(screen.getByText("Command History")).toBeInTheDocument();
+    expect(screen.getByText("No scispace commands yet.")).toBeInTheDocument();
+  });
+
+  it("pans the workspace from empty background drag without panning from windows", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    const plane = document.querySelector(".workspace-plane") as HTMLElement;
+    const windowFrame = document.querySelector(".canvas-window") as HTMLElement;
+
+    fireEvent.pointerDown(plane, { button: 0, clientX: 10, clientY: 10, pointerId: 1 });
+    fireEvent.pointerMove(document.querySelector(".workbench") as HTMLElement, {
+      clientX: 42,
+      clientY: 55,
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(document.querySelector(".workbench") as HTMLElement, { pointerId: 1 });
+    expect(useScispaceStore.getState().viewport).toMatchObject({ x: 32, y: 45 });
+
+    useScispaceStore.getState().setViewport({ x: 0, y: 0, scale: 1 });
+    fireEvent.pointerDown(windowFrame, { button: 0, clientX: 10, clientY: 10, pointerId: 2 });
+    fireEvent.pointerMove(document.querySelector(".workbench") as HTMLElement, {
+      clientX: 42,
+      clientY: 55,
+      pointerId: 2,
+    });
+    fireEvent.pointerUp(document.querySelector(".workbench") as HTMLElement, { pointerId: 2 });
+    expect(useScispaceStore.getState().viewport).toMatchObject({ x: 0, y: 0 });
   });
 
   it("opens the table path from the data browser selection", async () => {
@@ -56,6 +85,7 @@ describe("Workbench UI", () => {
     expect(screen.getByRole("button", { name: "Close Plot - waveform.csv" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Close Data Browser" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Close Terminal" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Close Command History" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Close Table - waveform.csv" }));
 
@@ -145,6 +175,49 @@ describe("Workbench UI", () => {
 
     await user.click(screen.getByRole("button", { name: "Remove background" }));
     expect(useScispaceStore.getState().plotSpecs[0]?.series).toHaveLength(1);
+    expect(useScispaceStore.getState().commandHistory.some((entry) => entry.source === "gui")).toBe(
+      true,
+    );
+    expect(screen.getAllByText(/plot-/).length).toBeGreaterThan(0);
+  });
+
+  it("replays and copies commands from the command history window", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    await act(async () => {
+      await useScispaceStore.getState().initialize();
+    });
+    await act(async () => {
+      await useScispaceStore.getState().runScispace("table waveform.csv");
+    });
+
+    await waitFor(() =>
+      expect(useScispaceStore.getState().commandHistory.at(-1)?.command).toBe("table waveform.csv"),
+    );
+    const historyEntry = document.querySelector(".history-entry");
+    expect(historyEntry).toHaveTextContent("table waveform.csv");
+    const [runButton, copyButton] = Array.from(
+      historyEntry?.querySelectorAll("button") ?? [],
+    ) as HTMLButtonElement[];
+    expect(runButton).toHaveTextContent("Run");
+    expect(copyButton).toHaveTextContent("Copy");
+    await user.click(copyButton);
+    expect(writeText).toHaveBeenCalledWith("table waveform.csv");
+
+    await user.click(runButton);
+    await waitFor(() =>
+      expect(useScispaceStore.getState().commandHistory.at(-1)).toMatchObject({
+        command: "table waveform.csv",
+        source: "history",
+      }),
+    );
   });
 
   it("resets the workspace after confirming New Project", async () => {
@@ -162,5 +235,6 @@ describe("Workbench UI", () => {
     await waitFor(() => expect(screen.getByText("Table - waveform.csv")).toBeInTheDocument());
     expect(screen.getByText("Plot - waveform.csv")).toBeInTheDocument();
     expect(screen.getByText("Terminal")).toBeInTheDocument();
+    expect(screen.getByText("Command History")).toBeInTheDocument();
   });
 });

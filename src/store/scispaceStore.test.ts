@@ -39,11 +39,15 @@ describe("scispace zustand store", () => {
       "table",
       "plot",
       "terminal",
+      "history",
     ]);
     expect(state.windows.find((window) => window.kind === "terminal")).toMatchObject({
       x: 64,
       y: 612,
       height: 300,
+    });
+    expect(state.windows.find((window) => window.kind === "history")).toMatchObject({
+      title: "Command History",
     });
   });
 
@@ -181,6 +185,42 @@ describe("scispace zustand store", () => {
         .windows.some((window) => window.kind === "plot" && window.title.includes("signal")),
     ).toBe(true);
     expect(store.getState().terminalEvents.at(-1)).toContain("Table opened");
+    expect(store.getState().commandHistory.map((entry) => entry.command)).toEqual([
+      "plot waveform.csv x=time y=signal,background",
+      "table waveform.csv",
+    ]);
+    expect(store.getState().commandHistory[0]).toMatchObject({
+      kind: "plot-created",
+      status: "success",
+      source: "terminal",
+    });
+  });
+
+  it("records command history errors, sources, replay, and layout persistence", async () => {
+    const { db, store } = await makeStore();
+
+    const error = await store.getState().runScispace("plot missing.csv", { source: "gui" });
+    expect(error.kind).toBe("error");
+    expect(store.getState().commandHistory[0]).toMatchObject({
+      command: "plot missing.csv",
+      status: "error",
+      source: "gui",
+    });
+
+    await store.getState().runScispace("table waveform.csv", { source: "history" });
+    expect(store.getState().commandHistory.at(-1)).toMatchObject({
+      command: "table waveform.csv",
+      status: "success",
+      source: "history",
+    });
+
+    const restoredStore = createScispaceStore(db);
+    await restoredStore.getState().initialize();
+    expect(restoredStore.getState().commandHistory.map((entry) => entry.command)).toEqual([
+      "plot missing.csv",
+      "table waveform.csv",
+    ]);
+    expect(restoredStore.getState().windows.some((window) => window.kind === "history")).toBe(true);
   });
 
   it("handles layout actions and existing table focus", async () => {
@@ -299,10 +339,12 @@ describe("scispace zustand store", () => {
       "table",
       "plot",
       "terminal",
+      "history",
     ]);
     expect(state.plotSpecs.map((plot) => plot.id)).toEqual(["seed-plot"]);
     expect(state.pendingImports).toHaveLength(0);
     expect(state.terminalEvents).toHaveLength(0);
+    expect(state.commandHistory).toHaveLength(0);
     expect(state.activeDatasetId).toBe("seed-waveform");
     expect(state.activeWindowId).toBeUndefined();
     expect(state.viewport).toEqual({ x: 0, y: 0, scale: 1 });
@@ -315,6 +357,7 @@ describe("scispace zustand store", () => {
       "table",
       "plot",
       "terminal",
+      "history",
     ]);
   });
 
@@ -430,6 +473,7 @@ describe("scispace zustand store", () => {
     await store.getState().initialize();
 
     expect(store.getState().windows.some((window) => window.kind === "terminal")).toBe(true);
+    expect(store.getState().windows.some((window) => window.kind === "history")).toBe(true);
   });
 
   it("restores legacy persisted plot specs without series fields", async () => {

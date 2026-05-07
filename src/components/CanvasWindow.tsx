@@ -1,4 +1,5 @@
 import { Rnd } from "react-rnd";
+import { CommandHistoryWindow } from "./CommandHistoryWindow";
 import { DataBrowser } from "./DataBrowser";
 import { DataTableWindow } from "./DataTableWindow";
 import { ImportSettingsWindow } from "./ImportSettingsWindow";
@@ -66,6 +67,7 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
           ) : null}
           {window.kind === "plot" && window.plotId ? <PlotWindow plotId={window.plotId} /> : null}
           {window.kind === "terminal" ? <TerminalPanel /> : null}
+          {window.kind === "history" ? <CommandHistoryWindow /> : null}
           {window.kind === "import" && window.importId ? (
             <ImportSettingsWindow importId={window.importId} />
           ) : null}

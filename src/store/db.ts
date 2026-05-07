@@ -5,6 +5,7 @@ const defaultLayout: PersistedLayout = {
   windows: [],
   viewport: { x: 0, y: 0, scale: 1 },
   plotSpecs: [],
+  commandHistory: [],
 };
 
 export class SciSpaceDatabase extends Dexie {

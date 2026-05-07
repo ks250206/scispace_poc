@@ -120,7 +120,7 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
   if (!spec || !dataset) return <div className="empty-state">Plot source not found.</div>;
 
   const runPlotCommand = (command: string) => {
-    void runScispace(command);
+    void runScispace(command, { source: "gui" });
   };
   const setPlotType = (plotType: PlotType) => runPlotCommand(`plot-set ${plotId} type=${plotType}`);
   const setBorder = (border: boolean) => runPlotCommand(`plot-set ${plotId} border=${border}`);

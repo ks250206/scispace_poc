@@ -36,7 +36,7 @@ export function TerminalPanel() {
     await shell.attach((data) => write(data));
     shell.bash?.registerCommand(
       defineCommand("scispace", async (args) => {
-        const result = await runScispace(args.join(" "));
+        const result = await runScispace(args.join(" "), { source: "terminal" });
         return {
           stdout: `${result.output}\n`,
           stderr: result.kind === "error" ? `${result.output}\n` : "",

@@ -12,6 +12,8 @@ import {
   normalizePlotSpecForCommand,
 } from "../domain/scispace";
 import type {
+  CommandHistoryEntry,
+  CommandHistorySource,
   Dataset,
   ImportFileResult,
   ImportParseOptions,
@@ -32,6 +34,7 @@ interface ScispaceState {
   plotSpecs: PlotSpec[];
   pendingImports: PendingImport[];
   terminalEvents: string[];
+  commandHistory: CommandHistoryEntry[];
   activeDatasetId?: string;
   activeWindowId?: string;
   viewport: ViewportState;
@@ -44,7 +47,10 @@ interface ScispaceState {
   selectDataset: (datasetId: string) => Promise<void>;
   openTable: (datasetId: string) => Promise<void>;
   openPlot: (spec: PlotSpec) => Promise<void>;
-  runScispace: (input: string) => Promise<ScispaceCommandResult>;
+  runScispace: (
+    input: string,
+    options?: { source?: CommandHistorySource },
+  ) => Promise<ScispaceCommandResult>;
   closeWindow: (id: string) => void;
   createNewProject: () => Promise<void>;
   createDirectory: (name: string, parentPath?: string) => Promise<VirtualFile | undefined>;
@@ -103,24 +109,53 @@ const initialWindows = (): WorkspaceWindow[] => [
     height: 300,
     zIndex: 4,
   },
+  {
+    id: "history-main",
+    kind: "history",
+    title: "Command History",
+    x: 1760,
+    y: 88,
+    width: 420,
+    height: 520,
+    zIndex: 5,
+  },
 ];
 
-const ensureTerminalWindow = (windows: WorkspaceWindow[]): WorkspaceWindow[] => {
-  if (windows.some((window) => window.kind === "terminal")) return windows;
-  const zIndex = Math.max(0, ...windows.map((window) => window.zIndex)) + 1;
-  return [
-    ...windows,
-    {
-      id: "terminal-main",
-      kind: "terminal",
-      title: "Terminal",
-      x: 64,
-      y: 612,
-      width: 1664,
-      height: 300,
-      zIndex,
-    },
-  ];
+const ensureWorkspaceWindows = (windows: WorkspaceWindow[]): WorkspaceWindow[] => {
+  let nextWindows = windows;
+  if (!nextWindows.some((window) => window.kind === "terminal")) {
+    const zIndex = Math.max(0, ...nextWindows.map((window) => window.zIndex)) + 1;
+    nextWindows = [
+      ...nextWindows,
+      {
+        id: "terminal-main",
+        kind: "terminal",
+        title: "Terminal",
+        x: 64,
+        y: 612,
+        width: 1664,
+        height: 300,
+        zIndex,
+      },
+    ];
+  }
+  if (!nextWindows.some((window) => window.kind === "history")) {
+    const zIndex = Math.max(0, ...nextWindows.map((window) => window.zIndex)) + 1;
+    nextWindows = [
+      ...nextWindows,
+      {
+        id: "history-main",
+        kind: "history",
+        title: "Command History",
+        x: 1760,
+        y: 88,
+        width: 420,
+        height: 520,
+        zIndex,
+      },
+    ];
+  }
+  return nextWindows;
 };
 
 const seedPlot = (): PlotSpec => ({
@@ -206,6 +241,7 @@ const createInitialProject = () => {
     windows: initialWindows(),
     plotSpecs: [seedPlot()],
     viewport: initialViewport(),
+    commandHistory: [],
   };
 };
 
@@ -214,6 +250,7 @@ const persistLayout = (db: SciSpaceDatabase, state: ScispaceState): void => {
     windows: state.windows.filter((window) => window.kind !== "import"),
     viewport: state.viewport,
     plotSpecs: state.plotSpecs.map(normalizePlotSpec),
+    commandHistory: state.commandHistory,
   });
 };
 
@@ -300,6 +337,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     plotSpecs: [],
     pendingImports: [],
     terminalEvents: [],
+    commandHistory: [],
     viewport: { x: 0, y: 0, scale: 1 },
 
     initialize: async () => {
@@ -326,11 +364,12 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         files: nextFiles,
         datasets: nextDatasets,
         windows:
-          layout.windows.length > 0 ? ensureTerminalWindow(layout.windows) : initialWindows(),
+          layout.windows.length > 0 ? ensureWorkspaceWindows(layout.windows) : initialWindows(),
         plotSpecs:
           layout.plotSpecs && layout.plotSpecs.length > 0
             ? layout.plotSpecs.map(normalizePlotSpec)
             : [seedPlot()],
+        commandHistory: layout.commandHistory ?? [],
         viewport: layout.viewport,
         activeDatasetId: nextDatasets[0]?.id,
       });
@@ -545,7 +584,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       persistLayout(db, get());
     },
 
-    runScispace: async (input) => {
+    runScispace: async (input, options) => {
       const result = executeScispaceCommand(input, {
         datasets: get().datasets,
         plotSpecs: get().plotSpecs,
@@ -594,7 +633,20 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         }));
       }
 
-      set((state) => ({ terminalEvents: [...state.terminalEvents, result.output] }));
+      const commandHistoryEntry: CommandHistoryEntry = {
+        id: crypto.randomUUID(),
+        command: input,
+        output: result.output,
+        kind: result.kind,
+        status: result.kind === "error" ? "error" : "success",
+        createdAt: Date.now(),
+        source: options?.source ?? "terminal",
+      };
+      set((state) => ({
+        terminalEvents: [...state.terminalEvents, result.output],
+        commandHistory: [...state.commandHistory, commandHistoryEntry],
+      }));
+      persistLayout(db, get());
       return result;
     },
 
@@ -634,6 +686,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
             windows: initialProject.windows,
             viewport: initialProject.viewport,
             plotSpecs: initialProject.plotSpecs,
+            commandHistory: initialProject.commandHistory,
           },
         });
       });
@@ -646,6 +699,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         plotSpecs: initialProject.plotSpecs,
         pendingImports: [],
         terminalEvents: [],
+        commandHistory: [],
         activeDatasetId: initialProject.datasets[0]?.id,
         activeWindowId: undefined,
         viewport: initialProject.viewport,

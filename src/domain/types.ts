@@ -1,4 +1,4 @@
-export type WindowKind = "browser" | "table" | "plot" | "terminal" | "import";
+export type WindowKind = "browser" | "table" | "plot" | "terminal" | "import" | "history";
 
 export type ImportDelimiter = "auto" | "comma" | "tab" | "space" | "semicolon";
 
@@ -28,6 +28,19 @@ export interface WorkspaceWindow {
   datasetId?: string;
   plotId?: string;
   importId?: string;
+}
+
+export type CommandHistorySource = "terminal" | "gui" | "history";
+export type CommandHistoryStatus = "success" | "error";
+
+export interface CommandHistoryEntry {
+  id: string;
+  command: string;
+  output: string;
+  kind: ScispaceCommandResult["kind"];
+  status: CommandHistoryStatus;
+  createdAt: number;
+  source: CommandHistorySource;
 }
 
 export interface VirtualFile {
@@ -119,6 +132,7 @@ export interface PersistedLayout {
   windows: WorkspaceWindow[];
   viewport: ViewportState;
   plotSpecs?: PlotSpec[];
+  commandHistory?: CommandHistoryEntry[];
 }
 
 export interface ImportFileResult {
