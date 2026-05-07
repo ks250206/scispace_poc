@@ -80,6 +80,11 @@ describe("Workbench UI", () => {
       y: -1125,
       scale: 0.5,
     });
+    expect(shell).toHaveAttribute("data-grid-mode", "dots");
+
+    act(() => useScispaceStore.getState().setViewport({ x: -1920, y: -1080, scale: 0.49 }));
+    expect(shell).toHaveAttribute("data-grid-mode", "overview");
+    expect(shell.style.getPropertyValue("--canvas-major-step")).toBe("117.6px");
 
     act(() => useScispaceStore.getState().setViewport({ x: -1920, y: -1080, scale: 2 }));
     fireEvent.wheel(shell, { deltaY: 120, shiftKey: true });

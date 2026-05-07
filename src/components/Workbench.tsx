@@ -15,6 +15,7 @@ const minScale = 0.1;
 const maxScale = 3;
 const wheelPanSensitivity = 0.75;
 const baseDotSpacing = 24;
+const baseMajorGridSpacing = 240;
 
 export function Workbench() {
   const viewport = useScispaceStore((state) => state.viewport);
@@ -38,6 +39,7 @@ export function Workbench() {
     () =>
       ({
         "--canvas-dot-step": `${Number((baseDotSpacing * viewport.scale).toFixed(2))}px`,
+        "--canvas-major-step": `${Number((baseMajorGridSpacing * viewport.scale).toFixed(2))}px`,
         "--canvas-dot-x": `${Number(viewport.x.toFixed(2))}px`,
         "--canvas-dot-y": `${Number(viewport.y.toFixed(2))}px`,
       }) as CSSProperties,
@@ -141,6 +143,7 @@ export function Workbench() {
       </div>
       <section
         className="canvas-shell"
+        data-grid-mode={viewport.scale < 0.5 ? "overview" : "dots"}
         data-panning={isPanning}
         style={canvasShellStyle}
         onWheel={handleWheel}

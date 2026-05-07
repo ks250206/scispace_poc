@@ -78,6 +78,13 @@
   cursor: grabbing;
 }
 
+.canvas-shell[data-grid-mode="overview"] {
+  background-image:
+    linear-gradient(rgba(100, 116, 139, 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100, 116, 139, 0.18) 1px, transparent 1px);
+  background-size: var(--canvas-major-step, 120px) var(--canvas-major-step, 120px);
+}
+
 .workspace-plane {
   position: absolute;
   top: 0;
