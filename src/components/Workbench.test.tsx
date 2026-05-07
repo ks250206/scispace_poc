@@ -341,6 +341,29 @@ describe("Workbench UI", () => {
     );
   });
 
+  it("replays file commands from the command history window", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    await act(async () => {
+      await useScispaceStore.getState().initialize();
+    });
+    await act(async () => {
+      await useScispaceStore.getState().runScispace("file-list ~/raw");
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Run file-list ~/raw" }));
+
+    await waitFor(() =>
+      expect(useScispaceStore.getState().commandHistory.at(-1)).toMatchObject({
+        command: "file-list ~/raw",
+        source: "history",
+        status: "success",
+      }),
+    );
+  });
+
   it("resets the workspace after confirming New Project", async () => {
     const user = userEvent.setup();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
