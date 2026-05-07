@@ -167,7 +167,7 @@ describe("scispace zustand store", () => {
     const plot = await store.getState().runScispace("plot waveform.csv x=time y=signal,background");
     const table = await store.getState().runScispace("table waveform.csv");
 
-    expect(plot.kind).toBe("plot");
+    expect(plot.kind).toBe("plot-created");
     expect(table.kind).toBe("open-table");
     expect(
       store
@@ -220,15 +220,14 @@ describe("scispace zustand store", () => {
   it("updates and persists plot specs through layout", async () => {
     const { db, store } = await makeStore();
 
-    store.getState().updatePlotSpec("seed-plot", {
-      title: "Edited signal plot",
-      x: "index",
-      zoomMode: "x",
-      series: [
-        { y: "signal", label: "Signal", color: "#dc2626" },
-        { y: "background", label: "Background", color: "#16a34a" },
-      ],
-    });
+    await store
+      .getState()
+      .runScispace('plot-set seed-plot title="Edited signal plot" x=index zoom=x');
+    await store.getState().runScispace("plot-series seed-plot y=signal label=Signal color=#dc2626");
+    await store.getState().runScispace("plot-series seed-plot y=background action=add");
+    await store
+      .getState()
+      .runScispace("plot-series seed-plot y=background label=Background color=#16a34a");
 
     expect(store.getState().plotSpecs[0]).toMatchObject({
       title: "Edited signal plot",
@@ -364,7 +363,7 @@ describe("scispace zustand store", () => {
   it("keeps manually edited plot titles during dataset rename", async () => {
     const { store } = await makeStore();
 
-    store.getState().updatePlotSpec("seed-plot", { title: "Manual plot title" });
+    await store.getState().runScispace('plot-set seed-plot title="Manual plot title"');
     await store.getState().renameVirtualItem("~/raw/waveform.csv", "renamed.csv");
 
     expect(store.getState().plotSpecs[0]?.title).toBe("Manual plot title");
@@ -458,7 +457,16 @@ describe("scispace zustand store", () => {
 
     expect(store.getState().plotSpecs[0]).toMatchObject({
       id: "legacy-plot",
-      series: [{ y: "background", label: "background", color: "#2563eb" }],
+      series: [
+        {
+          y: "background",
+          label: "background",
+          color: "#2563eb",
+          lineWidth: 2,
+          markerSize: 6,
+          markerShape: "circle",
+        },
+      ],
       zoomMode: "xy",
     });
   });

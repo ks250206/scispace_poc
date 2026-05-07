@@ -6,14 +6,17 @@ import {
   normalizeVirtualPath,
   parseDelimitedText,
 } from "../domain/csv";
-import { executeScispaceCommand } from "../domain/scispace";
+import {
+  defaultPlotAxis,
+  executeScispaceCommand,
+  normalizePlotSpecForCommand,
+} from "../domain/scispace";
 import type {
   Dataset,
   ImportFileResult,
   ImportParseOptions,
   PendingImport,
   PlotSpec,
-  PlotSeries,
   ScispaceCommandResult,
   ViewportState,
   VirtualFile,
@@ -41,7 +44,6 @@ interface ScispaceState {
   selectDataset: (datasetId: string) => Promise<void>;
   openTable: (datasetId: string) => Promise<void>;
   openPlot: (spec: PlotSpec) => Promise<void>;
-  updatePlotSpec: (plotId: string, patch: Partial<PlotSpec>) => void;
   runScispace: (input: string) => Promise<ScispaceCommandResult>;
   closeWindow: (id: string) => void;
   createNewProject: () => Promise<void>;
@@ -124,39 +126,30 @@ const ensureTerminalWindow = (windows: WorkspaceWindow[]): WorkspaceWindow[] => 
 const seedPlot = (): PlotSpec => ({
   id: "seed-plot",
   type: "line",
+  plotType: "line",
   source: "seed-waveform",
   x: "time",
   y: "signal",
   title: "waveform.csv: signal vs time",
-  series: [{ y: "signal", label: "signal", color: "#2563eb" }],
+  series: [
+    {
+      y: "signal",
+      label: "signal",
+      color: "#2563eb",
+      lineWidth: 2,
+      markerSize: 6,
+      markerShape: "circle",
+    },
+  ],
   zoomMode: "xy",
+  axes: { x: defaultPlotAxis("time"), y: defaultPlotAxis("signal") },
+  grid: { x: true, y: true },
+  border: true,
   axisLabels: { x: "time", y: "signal" },
 });
 
-const plotColors = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2"];
-
-const normalizePlotSeries = (
-  series: PlotSeries[] | undefined,
-  fallbackY?: string,
-): PlotSeries[] => {
-  const sourceSeries: Partial<PlotSeries>[] =
-    series && series.length > 0 ? series : fallbackY ? [{ y: fallbackY }] : [];
-  return sourceSeries.map((item, index) => ({
-    y: item.y ?? `series_${index + 1}`,
-    label: item.label || item.y || `series_${index + 1}`,
-    color: item.color || plotColors[index % plotColors.length] || "#2563eb",
-  }));
-};
-
 const normalizePlotSpec = (spec: PlotSpec): PlotSpec => {
-  const series = normalizePlotSeries(spec.series, spec.y);
-  return {
-    ...spec,
-    y: series[0]?.y ?? spec.y,
-    series,
-    zoomMode: spec.zoomMode ?? "xy",
-    axisLabels: spec.axisLabels ?? { x: spec.x, y: series.map((item) => item.label).join(", ") },
-  };
+  return normalizePlotSpecForCommand(spec);
 };
 
 const initialViewport = (): ViewportState => ({ x: 0, y: 0, scale: 1 });
@@ -551,27 +544,32 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       persistLayout(db, get());
     },
 
-    updatePlotSpec: (plotId, patch) => {
-      set((state) => {
-        const plotSpecs = state.plotSpecs.map((plot) => {
-          if (plot.id !== plotId) return plot;
-          const titleEdited =
-            patch.title !== undefined && patch.title !== plot.title ? true : plot.titleEdited;
-          return normalizePlotSpec({ ...plot, ...patch, titleEdited });
-        });
-        const windows = state.windows.map((window) =>
-          retitleWindow(window, state.datasets, plotSpecs),
-        );
-        return { plotSpecs, windows };
-      });
-      persistLayout(db, get());
-    },
-
     runScispace: async (input) => {
-      const result = executeScispaceCommand(input, { datasets: get().datasets });
+      const result = executeScispaceCommand(input, {
+        datasets: get().datasets,
+        plotSpecs: get().plotSpecs,
+      });
 
       if (result.kind === "open-table") await get().openTable(result.datasetId);
-      if (result.kind === "plot") await get().openPlot(result.spec);
+      if (result.kind === "plot" || result.kind === "plot-created")
+        await get().openPlot(result.spec);
+      if (
+        result.kind === "plot-updated" ||
+        result.kind === "plot-series-updated" ||
+        result.kind === "plot-axis-updated"
+      ) {
+        const spec = normalizePlotSpec(result.spec);
+        set((state) => {
+          const plotSpecs = state.plotSpecs.map((plot) => (plot.id === spec.id ? spec : plot));
+          return {
+            plotSpecs,
+            windows: state.windows.map((window) =>
+              retitleWindow(window, state.datasets, plotSpecs),
+            ),
+          };
+        });
+        persistLayout(db, get());
+      }
       if (result.kind === "dataset-created") {
         await db.datasets.put(result.dataset);
         await db.files.put(

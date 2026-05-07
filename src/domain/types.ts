@@ -54,21 +54,37 @@ export interface Dataset {
 }
 
 export type PlotZoomMode = "x" | "y" | "xy";
+export type PlotType = "line" | "line-marker" | "marker";
+export type PlotTickDirection = "out" | "in" | "none";
+export type PlotMarkerShape = "circle" | "square";
+
+export interface PlotAxisSpec {
+  label: string;
+  range: { mode: "auto" | "manual"; min?: number; max?: number };
+  ticks: { mode: "auto" | "manual"; interval?: number; orientation: PlotTickDirection };
+}
 
 export interface PlotSeries {
   y: string;
   label: string;
   color: string;
+  lineWidth: number;
+  markerSize: number;
+  markerShape: PlotMarkerShape;
 }
 
 export interface PlotSpec {
   id: string;
   type: "line";
+  plotType: PlotType;
   source: string;
   x: string;
   title: string;
   series: PlotSeries[];
   zoomMode: PlotZoomMode;
+  axes: { x: PlotAxisSpec; y: PlotAxisSpec };
+  grid: { x: boolean; y: boolean };
+  border: boolean;
   axisLabels?: { x?: string; y?: string };
   titleEdited?: boolean;
   y?: string;
@@ -78,6 +94,10 @@ export type ScispaceCommandResult =
   | { kind: "text"; output: string }
   | { kind: "open-table"; datasetId: string; output: string }
   | { kind: "plot"; spec: PlotSpec; output: string }
+  | { kind: "plot-created"; spec: PlotSpec; output: string }
+  | { kind: "plot-updated"; spec: PlotSpec; output: string }
+  | { kind: "plot-series-updated"; spec: PlotSpec; output: string }
+  | { kind: "plot-axis-updated"; spec: PlotSpec; output: string }
   | { kind: "import-preview"; importId: string; preview?: Dataset; error?: string; output: string }
   | {
       kind: "import-confirm";

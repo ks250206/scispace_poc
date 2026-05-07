@@ -419,7 +419,11 @@
 
 .plot-title-input,
 .plot-controls select,
+.plot-style-panel select,
+.plot-axis-row input,
+.plot-axis-row select,
 .plot-series-row input,
+.plot-series-row select,
 .plot-series-add select {
   height: 26px;
   min-width: 0;
@@ -449,6 +453,34 @@
   padding: 8px 10px;
 }
 
+.plot-style-panel,
+.plot-axis-panel {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.plot-style-panel {
+  grid-template-columns: minmax(140px, 1fr) auto auto auto;
+}
+
+.plot-style-panel label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.plot-axis-row {
+  display: grid;
+  align-items: center;
+  gap: 6px;
+  grid-template-columns: 18px minmax(82px, 1fr) 104px 64px 64px 74px 72px;
+}
+
 .plot-series-row,
 .plot-series-add {
   display: grid;
@@ -457,7 +489,7 @@
 }
 
 .plot-series-row {
-  grid-template-columns: minmax(70px, 0.8fr) minmax(90px, 1fr) 34px 28px;
+  grid-template-columns: minmax(70px, 0.8fr) minmax(90px, 1fr) 34px 54px 58px 76px 28px;
 }
 
 .plot-series-add {

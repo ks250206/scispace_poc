@@ -25,15 +25,27 @@ describe("scispace pseudo command interpreter", () => {
     const result = executeScispaceCommand("plot waveform.csv x=time y=signal", {
       datasets: [dataset],
     });
-    expect(result.kind).toBe("plot");
-    if (result.kind === "plot") {
+    expect(result.kind).toBe("plot-created");
+    if (result.kind === "plot-created") {
       expect(result.spec).toMatchObject({
         source: "seed-waveform",
         x: "time",
         y: "signal",
         type: "line",
-        series: [{ y: "signal", label: "signal", color: "#2563eb" }],
+        plotType: "line",
+        series: [
+          {
+            y: "signal",
+            label: "signal",
+            color: "#2563eb",
+            lineWidth: 2,
+            markerSize: 6,
+            markerShape: "circle",
+          },
+        ],
         zoomMode: "xy",
+        grid: { x: true, y: true },
+        border: true,
       });
     }
   });
@@ -43,14 +55,165 @@ describe("scispace pseudo command interpreter", () => {
       datasets: [dataset],
     });
 
-    expect(result.kind).toBe("plot");
-    if (result.kind === "plot") {
+    expect(result.kind).toBe("plot-created");
+    if (result.kind === "plot-created") {
       expect(result.spec.series).toEqual([
-        { y: "signal", label: "signal", color: "#2563eb" },
-        { y: "background", label: "background", color: "#dc2626" },
+        {
+          y: "signal",
+          label: "signal",
+          color: "#2563eb",
+          lineWidth: 2,
+          markerSize: 6,
+          markerShape: "circle",
+        },
+        {
+          y: "background",
+          label: "background",
+          color: "#dc2626",
+          lineWidth: 2,
+          markerSize: 6,
+          markerShape: "circle",
+        },
       ]);
       expect(result.spec.title).toBe("waveform.csv: signal, background vs time");
     }
+  });
+
+  it("updates rich plot settings through plot commands", () => {
+    const created = executeScispaceCommand("plot waveform.csv x=time y=signal type=line-marker", {
+      datasets: [dataset],
+    });
+    expect(created.kind).toBe("plot-created");
+    if (created.kind !== "plot-created") return;
+
+    const plotSpecs = [{ ...created.spec, id: "plot-1" }];
+    const set = executeScispaceCommand(
+      'plot-set plot-1 title="Edited Plot" type=marker border=false zoom=x',
+      {
+        datasets: [dataset],
+        plotSpecs,
+      },
+    );
+    expect(set).toMatchObject({
+      kind: "plot-updated",
+      spec: { title: "Edited Plot", plotType: "marker", border: false, zoomMode: "x" },
+    });
+
+    const axis = executeScispaceCommand(
+      'plot-axis plot-1 axis=x label="Time axis" range=0:10 tick=2 tickDir=in',
+      { datasets: [dataset], plotSpecs },
+    );
+    expect(axis).toMatchObject({
+      kind: "plot-axis-updated",
+      spec: {
+        axes: {
+          x: {
+            label: "Time axis",
+            range: { mode: "manual", min: 0, max: 10 },
+            ticks: { mode: "manual", interval: 2, orientation: "in" },
+          },
+        },
+      },
+    });
+
+    const grid = executeScispaceCommand("plot-grid plot-1 x=false y=true", {
+      datasets: [dataset],
+      plotSpecs,
+    });
+    expect(grid).toMatchObject({ kind: "plot-updated", spec: { grid: { x: false, y: true } } });
+
+    const series = executeScispaceCommand(
+      "plot-series plot-1 y=signal label=Signal color=#dc2626 lineWidth=3 markerSize=8 markerShape=square",
+      { datasets: [dataset], plotSpecs },
+    );
+    expect(series).toMatchObject({
+      kind: "plot-series-updated",
+      spec: {
+        series: [
+          {
+            y: "signal",
+            label: "Signal",
+            color: "#dc2626",
+            lineWidth: 3,
+            markerSize: 8,
+            markerShape: "square",
+          },
+        ],
+      },
+    });
+  });
+
+  it("reports invalid rich plot updates", () => {
+    const result = executeScispaceCommand("plot waveform.csv x=time y=signal", {
+      datasets: [dataset],
+    });
+    expect(result.kind).toBe("plot-created");
+    if (result.kind !== "plot-created") return;
+    const plotSpecs = [{ ...result.spec, id: "plot-1" }];
+
+    expect(
+      executeScispaceCommand("plot-set missing title=x", { datasets: [dataset], plotSpecs }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("plot-set plot-1 type=bars", { datasets: [dataset], plotSpecs }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("plot waveform.csv x=time y=signal type=bars", {
+        datasets: [dataset],
+        plotSpecs,
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("plot-set plot-1 zoom=z", { datasets: [dataset], plotSpecs }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("plot-set plot-1 border=maybe", {
+        datasets: [dataset],
+        plotSpecs,
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("plot-axis plot-1 axis=x range=10:0", {
+        datasets: [dataset],
+        plotSpecs,
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("plot-axis plot-1 axis=x tick=bad", {
+        datasets: [dataset],
+        plotSpecs,
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("plot-axis plot-1 axis=x tickDir=sideways", {
+        datasets: [dataset],
+        plotSpecs,
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("plot-grid plot-1 x=maybe", {
+        datasets: [dataset],
+        plotSpecs,
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("plot-series plot-1 y=missing action=add", {
+        datasets: [dataset],
+        plotSpecs,
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("plot-series plot-1 y=signal markerShape=triangle", {
+        datasets: [dataset],
+        plotSpecs,
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("plot-series plot-1 y=signal lineWidth=wide", {
+        datasets: [dataset],
+        plotSpecs,
+      }).kind,
+    ).toBe("error");
   });
 
   it("creates derived datasets through elt", () => {

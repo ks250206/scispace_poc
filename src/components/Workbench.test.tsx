@@ -122,8 +122,22 @@ describe("Workbench UI", () => {
       zoomMode: "x",
     });
     expect(spec?.series).toEqual([
-      { y: "signal", label: "signal", color: "#2563eb" },
-      { y: "background", label: "Background", color: "#dc2626" },
+      {
+        y: "signal",
+        label: "signal",
+        color: "#2563eb",
+        lineWidth: 2,
+        markerSize: 6,
+        markerShape: "circle",
+      },
+      {
+        y: "background",
+        label: "Background",
+        color: "#dc2626",
+        lineWidth: 2,
+        markerSize: 6,
+        markerShape: "circle",
+      },
     ]);
 
     await user.click(screen.getByRole("button", { name: "Remove background" }));

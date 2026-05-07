@@ -1,9 +1,20 @@
 import { normalizeVirtualPath, parseDelimitedText } from "./csv";
-import type { Dataset, PendingImport, PlotSeries, PlotSpec, ScispaceCommandResult } from "./types";
+import type {
+  Dataset,
+  PendingImport,
+  PlotAxisSpec,
+  PlotMarkerShape,
+  PlotSeries,
+  PlotSpec,
+  PlotTickDirection,
+  PlotType,
+  ScispaceCommandResult,
+} from "./types";
 
 export interface CommandContext {
   datasets: Dataset[];
   pendingImports?: PendingImport[];
+  plotSpecs?: PlotSpec[];
 }
 
 const findDataset = (datasets: Dataset[], token: string): Dataset | undefined =>
@@ -11,6 +22,27 @@ const findDataset = (datasets: Dataset[], token: string): Dataset | undefined =>
     (dataset) =>
       dataset.id === token || dataset.name === token || dataset.sourcePath.endsWith(`/${token}`),
   );
+
+const tokenizeCommand = (input: string): string[] => {
+  const tokens: string[] = [];
+  let current = "";
+  let quote: "'" | '"' | undefined;
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index];
+    if ((char === "'" || char === '"') && !quote) {
+      quote = char;
+    } else if (char === quote) {
+      quote = undefined;
+    } else if (/\s/.test(char) && !quote) {
+      if (current) tokens.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  if (current) tokens.push(current);
+  return tokens;
+};
 
 const readOption = (tokens: string[], key: string): string | undefined => {
   const prefix = `${key}=`;
@@ -20,20 +52,93 @@ const readOption = (tokens: string[], key: string): string | undefined => {
 const parseBooleanOption = (tokens: string[], key: string): boolean =>
   readOption(tokens, key) === "true";
 
+const parseOptionalBoolean = (value: string | undefined): boolean | undefined => {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return undefined;
+};
+
 const plotColors = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2"];
+const plotTypes = new Set<PlotType>(["line", "line-marker", "marker"]);
+const tickDirections = new Set<PlotTickDirection>(["out", "in", "none"]);
+const markerShapes = new Set<PlotMarkerShape>(["circle", "square"]);
+
+export const defaultPlotAxis = (label: string): PlotAxisSpec => ({
+  label,
+  range: { mode: "auto" },
+  ticks: { mode: "auto", orientation: "out" },
+});
 
 const createPlotSeries = (columns: string[]): PlotSeries[] =>
   columns.map((column, index) => ({
     y: column,
     label: column,
     color: plotColors[index % plotColors.length] ?? "#2563eb",
+    lineWidth: 2,
+    markerSize: 6,
+    markerShape: "circle",
   }));
+
+const normalizeSeriesStyle = (series: PlotSeries, index: number): PlotSeries => ({
+  y: series.y,
+  label: series.label || series.y,
+  color: series.color || plotColors[index % plotColors.length] || "#2563eb",
+  lineWidth: Number.isFinite(series.lineWidth) ? series.lineWidth : 2,
+  markerSize: Number.isFinite(series.markerSize) ? series.markerSize : 6,
+  markerShape: markerShapes.has(series.markerShape) ? series.markerShape : "circle",
+});
+
+export const normalizePlotSpecForCommand = (spec: PlotSpec): PlotSpec => {
+  const existingSeries = spec.series ?? [];
+  const series = (
+    existingSeries.length > 0 ? existingSeries : spec.y ? createPlotSeries([spec.y]) : []
+  ).map(normalizeSeriesStyle);
+  const xLabel = spec.axes?.x.label ?? spec.axisLabels?.x ?? spec.x;
+  const yLabel =
+    spec.axes?.y.label ?? spec.axisLabels?.y ?? series.map((item) => item.label).join(", ");
+  return {
+    ...spec,
+    type: "line",
+    plotType: plotTypes.has(spec.plotType) ? spec.plotType : "line",
+    y: series[0]?.y ?? spec.y,
+    series,
+    zoomMode: spec.zoomMode ?? "xy",
+    axes: {
+      x: spec.axes?.x ?? defaultPlotAxis(xLabel),
+      y: spec.axes?.y ?? defaultPlotAxis(yLabel),
+    },
+    grid: spec.grid ?? { x: true, y: true },
+    border: spec.border ?? true,
+    axisLabels: { x: xLabel, y: yLabel },
+  };
+};
+
+const findPlot = (plotSpecs: PlotSpec[] | undefined, plotId: string): PlotSpec | undefined =>
+  plotSpecs?.find((plot) => plot.id === plotId);
+
+const parseRange = (value: string | undefined): PlotAxisSpec["range"] | undefined => {
+  if (!value) return undefined;
+  if (value === "auto") return { mode: "auto" };
+  const [minText, maxText] = value.split(":");
+  const min = Number(minText);
+  const max = Number(maxText);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min >= max) return undefined;
+  return { mode: "manual", min, max };
+};
+
+const parseTick = (value: string | undefined): Partial<PlotAxisSpec["ticks"]> | undefined => {
+  if (!value) return undefined;
+  if (value === "auto") return { mode: "auto", interval: undefined };
+  const interval = Number(value);
+  if (!Number.isFinite(interval) || interval <= 0) return undefined;
+  return { mode: "manual", interval };
+};
 
 export const executeScispaceCommand = (
   input: string,
   context: CommandContext,
 ): ScispaceCommandResult => {
-  const tokens = input.trim().split(/\s+/).filter(Boolean);
+  const tokens = tokenizeCommand(input);
   const [command, ...args] = tokens;
 
   if (!command || command === "help") {
@@ -43,7 +148,11 @@ export const executeScispaceCommand = (
         "scispace commands:",
         "  lsdata",
         "  table <dataset>",
-        "  plot <dataset> x=<column> y=<column>",
+        "  plot <dataset> x=<column> y=<column[,column...]> type=<line|line-marker|marker>",
+        "  plot-set <plotId> title=<title> type=<line|line-marker|marker> border=<true|false>",
+        "  plot-axis <plotId> axis=<x|y> range=<auto|min:max> tick=<auto|interval> tickDir=<out|in|none>",
+        "  plot-grid <plotId> x=<true|false> y=<true|false>",
+        "  plot-series <plotId> y=<column> action=<add|remove>",
         "  import-preview <importId>",
         "  import-confirm <importId> path=<virtualPath>",
         "  elt <dataset> as <newName>",
@@ -88,10 +197,15 @@ export const executeScispaceCommand = (
       };
     }
     const series = createPlotSeries(yColumns);
+    const plotType = readOption(args, "type") ?? "line";
+    if (!plotTypes.has(plotType as PlotType)) {
+      return { kind: "error", output: `Unknown plot type: ${plotType}` };
+    }
 
-    const spec: PlotSpec = {
+    const spec = normalizePlotSpecForCommand({
       id: crypto.randomUUID(),
       type: "line",
+      plotType: plotType as PlotType,
       source: dataset.id,
       x,
       y: series[0]?.y,
@@ -99,9 +213,163 @@ export const executeScispaceCommand = (
       series,
       zoomMode: "xy",
       axisLabels: { x, y: series.map((item) => item.label).join(", ") },
-    };
+      axes: {
+        x: defaultPlotAxis(x),
+        y: defaultPlotAxis(series.map((item) => item.label).join(", ")),
+      },
+      grid: { x: true, y: true },
+      border: true,
+    });
 
-    return { kind: "plot", spec, output: `Plot opened: ${spec.title}` };
+    return { kind: "plot-created", spec, output: `Plot opened: ${spec.title}` };
+  }
+
+  if (command === "plot-set") {
+    const plot = findPlot(context.plotSpecs, args[0] ?? "");
+    if (!plot) return { kind: "error", output: `Plot not found: ${args[0] ?? ""}` };
+    const patch: Partial<PlotSpec> = {};
+    const title = readOption(args, "title");
+    const type = readOption(args, "type");
+    const x = readOption(args, "x");
+    const zoom = readOption(args, "zoom");
+    const axisX = readOption(args, "axisX");
+    const borderValue = readOption(args, "border");
+    const border = parseOptionalBoolean(borderValue);
+    const dataset = findDataset(context.datasets, plot.source);
+    if (title !== undefined) {
+      patch.title = title;
+      patch.titleEdited = true;
+    }
+    if (type !== undefined) {
+      if (!plotTypes.has(type as PlotType))
+        return { kind: "error", output: `Unknown plot type: ${type}` };
+      patch.plotType = type as PlotType;
+    }
+    if (x !== undefined) {
+      if (!dataset?.columns.includes(x)) return { kind: "error", output: `Unknown x column: ${x}` };
+      patch.x = x;
+    }
+    if (zoom !== undefined) {
+      if (zoom !== "x" && zoom !== "y" && zoom !== "xy")
+        return { kind: "error", output: `Invalid zoom: ${zoom}` };
+      patch.zoomMode = zoom;
+    }
+    if (borderValue !== undefined && border === undefined)
+      return { kind: "error", output: `Invalid border value: ${borderValue}` };
+    if (border !== undefined) patch.border = border;
+    const current = normalizePlotSpecForCommand({ ...plot, ...patch });
+    const spec = normalizePlotSpecForCommand({
+      ...current,
+      axes:
+        axisX !== undefined
+          ? { ...current.axes, x: { ...current.axes.x, label: axisX } }
+          : current.axes,
+      axisLabels: axisX !== undefined ? { ...current.axisLabels, x: axisX } : current.axisLabels,
+    });
+    return { kind: "plot-updated", spec, output: `Plot updated: ${spec.title}` };
+  }
+
+  if (command === "plot-axis") {
+    const plot = findPlot(context.plotSpecs, args[0] ?? "");
+    if (!plot) return { kind: "error", output: `Plot not found: ${args[0] ?? ""}` };
+    const axisKey = readOption(args, "axis");
+    if (axisKey !== "x" && axisKey !== "y") return { kind: "error", output: "axis must be x or y" };
+    const current = normalizePlotSpecForCommand(plot);
+    const range = parseRange(readOption(args, "range"));
+    if (readOption(args, "range") && !range) return { kind: "error", output: "Invalid range" };
+    const tick = parseTick(readOption(args, "tick"));
+    if (readOption(args, "tick") && !tick)
+      return { kind: "error", output: "Invalid tick interval" };
+    const tickDir = readOption(args, "tickDir");
+    if (tickDir && !tickDirections.has(tickDir as PlotTickDirection)) {
+      return { kind: "error", output: `Invalid tick direction: ${tickDir}` };
+    }
+    const label = readOption(args, "label");
+    const axis = {
+      ...current.axes[axisKey],
+      ...(label !== undefined ? { label } : {}),
+      ...(range ? { range } : {}),
+      ticks: {
+        ...current.axes[axisKey].ticks,
+        ...tick,
+        ...(tickDir ? { orientation: tickDir as PlotTickDirection } : {}),
+      },
+    };
+    const spec = normalizePlotSpecForCommand({
+      ...current,
+      axes: { ...current.axes, [axisKey]: axis },
+      axisLabels: { ...current.axisLabels, [axisKey]: axis.label },
+    });
+    return {
+      kind: "plot-axis-updated",
+      spec,
+      output: `Plot ${axisKey} axis updated: ${spec.title}`,
+    };
+  }
+
+  if (command === "plot-grid") {
+    const plot = findPlot(context.plotSpecs, args[0] ?? "");
+    if (!plot) return { kind: "error", output: `Plot not found: ${args[0] ?? ""}` };
+    const current = normalizePlotSpecForCommand(plot);
+    const xValue = readOption(args, "x");
+    const yValue = readOption(args, "y");
+    const x = parseOptionalBoolean(xValue);
+    const y = parseOptionalBoolean(yValue);
+    if (xValue !== undefined && x === undefined)
+      return { kind: "error", output: `Invalid grid x value: ${xValue}` };
+    if (yValue !== undefined && y === undefined)
+      return { kind: "error", output: `Invalid grid y value: ${yValue}` };
+    const spec = normalizePlotSpecForCommand({
+      ...current,
+      grid: { x: x ?? current.grid.x, y: y ?? current.grid.y },
+    });
+    return { kind: "plot-updated", spec, output: `Plot grid updated: ${spec.title}` };
+  }
+
+  if (command === "plot-series") {
+    const plot = findPlot(context.plotSpecs, args[0] ?? "");
+    if (!plot) return { kind: "error", output: `Plot not found: ${args[0] ?? ""}` };
+    const current = normalizePlotSpecForCommand(plot);
+    const dataset = findDataset(context.datasets, current.source);
+    const y = readOption(args, "y");
+    if (!y || !dataset?.columns.includes(y))
+      return { kind: "error", output: `Unknown series column: ${y ?? ""}` };
+    const action = readOption(args, "action");
+    let series = current.series;
+    if (action === "add") {
+      if (!series.some((item) => item.y === y)) {
+        series = [...series, createPlotSeries([y])[0] as PlotSeries];
+      }
+    } else if (action === "remove") {
+      if (series.length <= 1) return { kind: "error", output: "Cannot remove the last series" };
+      series = series.filter((item) => item.y !== y);
+    } else {
+      const markerShape = readOption(args, "markerShape");
+      if (markerShape && !markerShapes.has(markerShape as PlotMarkerShape))
+        return { kind: "error", output: `Invalid marker shape: ${markerShape}` };
+      const lineWidth = readOption(args, "lineWidth");
+      if (lineWidth !== undefined && !Number.isFinite(Number(lineWidth)))
+        return { kind: "error", output: `Invalid line width: ${lineWidth}` };
+      const markerSize = readOption(args, "markerSize");
+      if (markerSize !== undefined && !Number.isFinite(Number(markerSize)))
+        return { kind: "error", output: `Invalid marker size: ${markerSize}` };
+      series = series.map((item) => {
+        if (item.y !== y) return item;
+        return normalizeSeriesStyle(
+          {
+            ...item,
+            label: readOption(args, "label") ?? item.label,
+            color: readOption(args, "color") ?? item.color,
+            lineWidth: Number(lineWidth ?? item.lineWidth),
+            markerSize: Number(markerSize ?? item.markerSize),
+            markerShape: (markerShape as PlotMarkerShape | undefined) ?? item.markerShape,
+          },
+          series.findIndex((candidate) => candidate.y === y),
+        );
+      });
+    }
+    const spec = normalizePlotSpecForCommand({ ...current, series });
+    return { kind: "plot-series-updated", spec, output: `Plot series updated: ${spec.title}` };
   }
 
   if (command === "import-preview") {
