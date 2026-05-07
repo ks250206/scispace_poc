@@ -230,6 +230,20 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   const hasSelectedRange = Boolean(rangeBounds);
   const canFillDownRange = Boolean(rangeBounds && rangeBounds.maxRow > rangeBounds.minRow);
 
+  const selectionPlotSpec = useMemo(() => {
+    if (!dataset) return undefined;
+    const selectedColumns = rangeBounds?.rangeColumns ?? (selectedColumn ? [selectedColumn] : []);
+    if (selectedColumns.length === 0) return undefined;
+    const visibleColumnIds = visibleDatasetColumns.map((column) => column.id);
+    const [rangeX, ...rangeY] = selectedColumns;
+    const fallbackX = visibleColumnIds.find((columnId) => columnId !== selectedColumns[0]);
+    const x = selectedColumns.length > 1 ? rangeX : fallbackX;
+    const yColumns = selectedColumns.length > 1 ? rangeY : selectedColumns;
+    const validYColumns = yColumns.filter((columnId) => columnId !== x);
+    if (!x || validYColumns.length === 0) return undefined;
+    return { x, yColumns: validYColumns };
+  }, [dataset, rangeBounds, selectedColumn, visibleDatasetColumns]);
+
   const copySelectedRange = () => {
     if (!dataset || !rangeBounds) return;
     const tsv = dataset.rows
@@ -279,6 +293,16 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
       `table-range ${quoteCommandArg(dataset.name)} action=fill-down r1=${rangeBounds.minRow + 1} c1=${quoteCommandArg(
         rangeBounds.firstColumn,
       )} r2=${rangeBounds.maxRow + 1} c2=${quoteCommandArg(rangeBounds.lastColumn)}`,
+      { source: "gui" },
+    );
+  };
+
+  const plotSelectedColumns = () => {
+    if (!dataset || !selectionPlotSpec) return;
+    void runScispace(
+      `plot ${quoteCommandArg(dataset.name)} x=${quoteCommandArg(selectionPlotSpec.x)} y=${selectionPlotSpec.yColumns
+        .map(quoteCommandArg)
+        .join(",")}`,
       { source: "gui" },
     );
   };
@@ -405,6 +429,9 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
           </button>
           <button type="button" disabled={!canFillDownRange} onClick={fillDownSelectedRange}>
             Fill down
+          </button>
+          <button type="button" disabled={!selectionPlotSpec} onClick={plotSelectedColumns}>
+            Plot selection
           </button>
           <button type="button" disabled={!selectedCell} onClick={deleteSelectedRow}>
             Delete row

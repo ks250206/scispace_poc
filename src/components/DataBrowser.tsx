@@ -97,6 +97,30 @@ export function DataBrowser() {
     );
   };
 
+  const handlePlotDataset = (datasetId: string) => {
+    const dataset = datasets.find((item) => item.id === datasetId);
+    if (!dataset) return;
+    const allColumns = datasetColumnIds(dataset);
+    const selectedColumns =
+      useScispaceStore
+        .getState()
+        .columnSelections[datasetId]?.filter((columnId) => allColumns.includes(columnId)) ??
+      allColumns;
+    const columns = selectedColumns.length > 0 ? selectedColumns : allColumns;
+    const [firstColumn, ...remainingColumns] = columns;
+    const x =
+      columns.length > 1 ? firstColumn : allColumns.find((columnId) => columnId !== firstColumn);
+    const yColumns = columns.length > 1 ? remainingColumns : firstColumn ? [firstColumn] : [];
+    if (!x || yColumns.length === 0) return;
+    void runScispace(
+      `plot ${quoteCommandArg(dataset.name)} x=${quoteCommandArg(x)} y=${yColumns
+        .filter((columnId) => columnId !== x)
+        .map(quoteCommandArg)
+        .join(",")}`,
+      { source: "gui" },
+    );
+  };
+
   const toggleDatasetCollapse = (datasetId: string) => {
     setCollapsedDatasetIds((current) => {
       const next = new Set(current);
@@ -180,6 +204,16 @@ export function DataBrowser() {
                       }
                     >
                       ⇄
+                    </button>
+                  ) : null}
+                  {dataset ? (
+                    <button
+                      type="button"
+                      aria-label={`Plot ${file.name}`}
+                      className="tree-action"
+                      onClick={() => handlePlotDataset(dataset.id)}
+                    >
+                      ⌁
                     </button>
                   ) : null}
                   <button

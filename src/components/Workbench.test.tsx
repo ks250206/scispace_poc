@@ -304,6 +304,35 @@ describe("Workbench UI", () => {
     expect(confirm).toHaveBeenCalledTimes(2);
   });
 
+  it("creates plots from selected table columns through scispace commands", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Plot selection" })).toBeDisabled();
+
+    await waitFor(() =>
+      expect(document.querySelectorAll(".table-scroll tbody td").length).toBeGreaterThan(10),
+    );
+    const cells = document.querySelectorAll(".table-scroll tbody td");
+    await user.click(cells[1] as HTMLElement);
+    fireEvent.click(cells[7], { shiftKey: true });
+
+    await user.click(screen.getByRole("button", { name: "Plot selection" }));
+
+    await waitFor(() =>
+      expect(useScispaceStore.getState().commandHistory.at(-1)).toMatchObject({
+        command: "plot waveform.csv x=time y=signal,background",
+        source: "gui",
+        status: "success",
+      }),
+    );
+    expect(useScispaceStore.getState().plotSpecs.at(-1)).toMatchObject({
+      x: "time",
+      series: [{ y: "signal" }, { y: "background" }],
+    });
+  });
+
   it("deletes selected table rows and columns through scispace commands", async () => {
     const user = userEvent.setup();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
@@ -726,6 +755,35 @@ describe("Workbench UI", () => {
       useScispaceStore.getState().windows.find((window) => window.id === "table-seed"),
     ).toMatchObject({
       columnIds: ["index", "time", "signal"],
+    });
+  });
+
+  it("creates plots from checked data browser columns through scispace commands", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    await act(async () => {
+      await useScispaceStore.getState().initialize();
+    });
+    await act(async () => {
+      useScispaceStore
+        .getState()
+        .setDatasetColumnSelection("seed-waveform", ["time", "signal", "background"]);
+    });
+
+    await user.click(screen.getByRole("button", { name: "Plot waveform.csv" }));
+
+    await waitFor(() =>
+      expect(useScispaceStore.getState().commandHistory.at(-1)).toMatchObject({
+        command: "plot waveform.csv x=time y=signal,background",
+        source: "gui",
+        status: "success",
+      }),
+    );
+    expect(useScispaceStore.getState().plotSpecs.at(-1)).toMatchObject({
+      x: "time",
+      series: [{ y: "signal" }, { y: "background" }],
     });
   });
 
