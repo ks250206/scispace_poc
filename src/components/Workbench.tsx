@@ -5,7 +5,7 @@ import { useScispaceStore } from "../store/scispaceStore";
 const centerViewport = { x: -1920, y: -1080, scale: 1 };
 const minScale = 0.1;
 const maxScale = 3;
-const wheelPanSensitivity = 0.5;
+const wheelPanSensitivity = 0.75;
 
 export function Workbench() {
   const viewport = useScispaceStore((state) => state.viewport);

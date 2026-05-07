@@ -58,32 +58,32 @@ describe("Workbench UI", () => {
     const shell = document.querySelector(".canvas-shell") as HTMLElement;
 
     fireEvent.wheel(shell, { deltaY: 120 });
-    expect(useScispaceStore.getState().viewport).toMatchObject({ x: -1920, y: -1140, scale: 1 });
+    expect(useScispaceStore.getState().viewport).toMatchObject({ x: -1920, y: -1170, scale: 1 });
 
     await user.click(screen.getByRole("button", { name: "Reset View" }));
     fireEvent.wheel(shell, { deltaY: 120, shiftKey: true });
-    expect(useScispaceStore.getState().viewport).toMatchObject({ x: -1980, y: -1080, scale: 1 });
+    expect(useScispaceStore.getState().viewport).toMatchObject({ x: -2010, y: -1080, scale: 1 });
 
     await user.click(screen.getByRole("button", { name: "Reset View" }));
     fireEvent.wheel(shell, { deltaX: 120, deltaY: 0, shiftKey: true });
-    expect(useScispaceStore.getState().viewport).toMatchObject({ x: -1980, y: -1080, scale: 1 });
+    expect(useScispaceStore.getState().viewport).toMatchObject({ x: -2010, y: -1080, scale: 1 });
 
     await user.click(screen.getByRole("button", { name: "Reset View" }));
     fireEvent.wheel(shell, { deltaX: 40 });
-    expect(useScispaceStore.getState().viewport).toMatchObject({ x: -1940, y: -1080, scale: 1 });
+    expect(useScispaceStore.getState().viewport).toMatchObject({ x: -1950, y: -1080, scale: 1 });
 
     act(() => useScispaceStore.getState().setViewport({ x: -1920, y: -1080, scale: 0.5 }));
     fireEvent.wheel(shell, { deltaY: 120 });
     expect(useScispaceStore.getState().viewport).toMatchObject({
       x: -1920,
-      y: -1110,
+      y: -1125,
       scale: 0.5,
     });
 
     act(() => useScispaceStore.getState().setViewport({ x: -1920, y: -1080, scale: 2 }));
     fireEvent.wheel(shell, { deltaY: 120, shiftKey: true });
     expect(useScispaceStore.getState().viewport).toMatchObject({
-      x: -2040,
+      x: -2100,
       y: -1080,
       scale: 2,
     });
