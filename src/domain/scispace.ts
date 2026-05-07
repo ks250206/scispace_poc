@@ -5,6 +5,7 @@ import type {
   PlotAxisSpec,
   PlotMarkerShape,
   PlotSeries,
+  PlotSizeSpec,
   PlotSpec,
   PlotTickDirection,
   PlotType,
@@ -62,6 +63,45 @@ const plotColors = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#089
 const plotTypes = new Set<PlotType>(["line", "line-marker", "marker"]);
 const tickDirections = new Set<PlotTickDirection>(["out", "in", "none"]);
 const markerShapes = new Set<PlotMarkerShape>(["circle", "square"]);
+const defaultPlotSize: PlotSizeSpec = { width: 640, height: 360 };
+
+const plotSpecSchema = {
+  id: "string",
+  type: '"line"',
+  plotType: '"line" | "line-marker" | "marker"',
+  source: "dataset id",
+  x: "x column name",
+  y: "primary y column name",
+  title: "string",
+  size: { width: "number", height: "number" },
+  zoomMode: '"x" | "y" | "xy"',
+  axes: {
+    x: {
+      label: "string",
+      range: '{ mode: "auto" } | { mode: "manual", min: number, max: number }',
+      ticks:
+        '{ mode: "auto", orientation: "out" | "in" | "none" } | { mode: "manual", interval: number, orientation: "out" | "in" | "none" }',
+    },
+    y: {
+      label: "string",
+      range: '{ mode: "auto" } | { mode: "manual", min: number, max: number }',
+      ticks:
+        '{ mode: "auto", orientation: "out" | "in" | "none" } | { mode: "manual", interval: number, orientation: "out" | "in" | "none" }',
+    },
+  },
+  grid: { x: "boolean", y: "boolean" },
+  border: "boolean",
+  series: [
+    {
+      y: "y column name",
+      label: "string",
+      color: "#rrggbb",
+      lineWidth: "number",
+      markerSize: "number",
+      markerShape: '"circle" | "square"',
+    },
+  ],
+} as const;
 
 export const defaultPlotAxis = (label: string): PlotAxisSpec => ({
   label,
@@ -109,6 +149,10 @@ export const normalizePlotSpecForCommand = (spec: PlotSpec): PlotSpec => {
     },
     grid: spec.grid ?? { x: true, y: true },
     border: spec.border ?? true,
+    size: {
+      width: parsePlotDimension(String(spec.size?.width)) ?? defaultPlotSize.width,
+      height: parsePlotDimension(String(spec.size?.height)) ?? defaultPlotSize.height,
+    },
     axisLabels: { x: xLabel, y: yLabel },
   };
 };
@@ -134,6 +178,13 @@ const parseTick = (value: string | undefined): Partial<PlotAxisSpec["ticks"]> | 
   return { mode: "manual", interval };
 };
 
+const parsePlotDimension = (value: string | undefined): number | undefined => {
+  if (value === undefined) return undefined;
+  const dimension = Number(value);
+  if (!Number.isFinite(dimension) || dimension < 120 || dimension > 4000) return undefined;
+  return Math.round(dimension);
+};
+
 export const executeScispaceCommand = (
   input: string,
   context: CommandContext,
@@ -149,10 +200,11 @@ export const executeScispaceCommand = (
         "  lsdata",
         "  table <dataset>",
         "  plot <dataset> x=<column> y=<column[,column...]> type=<line|line-marker|marker>",
-        "  plot-set <plotId> title=<title> type=<line|line-marker|marker> border=<true|false>",
+        "  plot-set <plotId> title=<title> type=<line|line-marker|marker> border=<true|false> width=<n> height=<n>",
         "  plot-axis <plotId> axis=<x|y> range=<auto|min:max> tick=<auto|interval> tickDir=<out|in|none>",
         "  plot-grid <plotId> x=<true|false> y=<true|false>",
         "  plot-series <plotId> y=<column> action=<add|remove>",
+        "  plot-schema [plotId]",
         "  import-preview <importId>",
         "  import-confirm <importId> path=<virtualPath>",
         "  elt <dataset> as <newName>",
@@ -201,6 +253,12 @@ export const executeScispaceCommand = (
     if (!plotTypes.has(plotType as PlotType)) {
       return { kind: "error", output: `Unknown plot type: ${plotType}` };
     }
+    const width = parsePlotDimension(readOption(args, "width"));
+    const height = parsePlotDimension(readOption(args, "height"));
+    if (readOption(args, "width") !== undefined && width === undefined)
+      return { kind: "error", output: `Invalid plot width: ${readOption(args, "width")}` };
+    if (readOption(args, "height") !== undefined && height === undefined)
+      return { kind: "error", output: `Invalid plot height: ${readOption(args, "height")}` };
 
     const spec = normalizePlotSpecForCommand({
       id: crypto.randomUUID(),
@@ -219,6 +277,10 @@ export const executeScispaceCommand = (
       },
       grid: { x: true, y: true },
       border: true,
+      size: {
+        width: width ?? defaultPlotSize.width,
+        height: height ?? defaultPlotSize.height,
+      },
     });
 
     return { kind: "plot-created", spec, output: `Plot opened: ${spec.title}` };
@@ -235,6 +297,10 @@ export const executeScispaceCommand = (
     const axisX = readOption(args, "axisX");
     const borderValue = readOption(args, "border");
     const border = parseOptionalBoolean(borderValue);
+    const widthValue = readOption(args, "width");
+    const heightValue = readOption(args, "height");
+    const width = parsePlotDimension(widthValue);
+    const height = parsePlotDimension(heightValue);
     const dataset = findDataset(context.datasets, plot.source);
     if (title !== undefined) {
       patch.title = title;
@@ -257,6 +323,17 @@ export const executeScispaceCommand = (
     if (borderValue !== undefined && border === undefined)
       return { kind: "error", output: `Invalid border value: ${borderValue}` };
     if (border !== undefined) patch.border = border;
+    if (widthValue !== undefined && width === undefined)
+      return { kind: "error", output: `Invalid plot width: ${widthValue}` };
+    if (heightValue !== undefined && height === undefined)
+      return { kind: "error", output: `Invalid plot height: ${heightValue}` };
+    if (width !== undefined || height !== undefined) {
+      const currentSize = normalizePlotSpecForCommand(plot).size;
+      patch.size = {
+        width: width ?? currentSize.width,
+        height: height ?? currentSize.height,
+      };
+    }
     const current = normalizePlotSpecForCommand({ ...plot, ...patch });
     const spec = normalizePlotSpecForCommand({
       ...current,
@@ -267,6 +344,16 @@ export const executeScispaceCommand = (
       axisLabels: axisX !== undefined ? { ...current.axisLabels, x: axisX } : current.axisLabels,
     });
     return { kind: "plot-updated", spec, output: `Plot updated: ${spec.title}` };
+  }
+
+  if (command === "plot-schema") {
+    const plotId = args[0];
+    if (!plotId) {
+      return { kind: "text", output: JSON.stringify(plotSpecSchema, null, 2) };
+    }
+    const plot = findPlot(context.plotSpecs, plotId);
+    if (!plot) return { kind: "error", output: `Plot not found: ${plotId}` };
+    return { kind: "text", output: JSON.stringify(normalizePlotSpecForCommand(plot), null, 2) };
   }
 
   if (command === "plot-axis") {

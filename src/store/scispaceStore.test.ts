@@ -222,7 +222,9 @@ describe("scispace zustand store", () => {
 
     await store
       .getState()
-      .runScispace('plot-set seed-plot title="Edited signal plot" x=index zoom=x');
+      .runScispace(
+        'plot-set seed-plot title="Edited signal plot" x=index zoom=x width=820 height=440',
+      );
     await store.getState().runScispace("plot-series seed-plot y=signal label=Signal color=#dc2626");
     await store.getState().runScispace("plot-series seed-plot y=background action=add");
     await store
@@ -234,6 +236,7 @@ describe("scispace zustand store", () => {
       titleEdited: true,
       x: "index",
       zoomMode: "x",
+      size: { width: 820, height: 440 },
     });
     expect(store.getState().windows.find((window) => window.id === "plot-seed")?.title).toBe(
       "Edited signal plot",
@@ -247,6 +250,7 @@ describe("scispace zustand store", () => {
       title: "Edited signal plot",
       x: "index",
       zoomMode: "x",
+      size: { width: 820, height: 440 },
     });
     expect(restoredStore.getState().plotSpecs[0]?.series.map((series) => series.y)).toEqual([
       "signal",
@@ -468,6 +472,7 @@ describe("scispace zustand store", () => {
         },
       ],
       zoomMode: "xy",
+      size: { width: 640, height: 360 },
     });
   });
 });

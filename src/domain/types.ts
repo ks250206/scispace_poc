@@ -64,6 +64,11 @@ export interface PlotAxisSpec {
   ticks: { mode: "auto" | "manual"; interval?: number; orientation: PlotTickDirection };
 }
 
+export interface PlotSizeSpec {
+  width: number;
+  height: number;
+}
+
 export interface PlotSeries {
   y: string;
   label: string;
@@ -85,6 +90,7 @@ export interface PlotSpec {
   axes: { x: PlotAxisSpec; y: PlotAxisSpec };
   grid: { x: boolean; y: boolean };
   border: boolean;
+  size: PlotSizeSpec;
   axisLabels?: { x?: string; y?: string };
   titleEdited?: boolean;
   y?: string;

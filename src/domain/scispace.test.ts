@@ -46,6 +46,7 @@ describe("scispace pseudo command interpreter", () => {
         zoomMode: "xy",
         grid: { x: true, y: true },
         border: true,
+        size: { width: 640, height: 360 },
       });
     }
   });
@@ -88,7 +89,7 @@ describe("scispace pseudo command interpreter", () => {
 
     const plotSpecs = [{ ...created.spec, id: "plot-1" }];
     const set = executeScispaceCommand(
-      'plot-set plot-1 title="Edited Plot" type=marker border=false zoom=x',
+      'plot-set plot-1 title="Edited Plot" type=marker border=false zoom=x width=800 height=480',
       {
         datasets: [dataset],
         plotSpecs,
@@ -96,7 +97,13 @@ describe("scispace pseudo command interpreter", () => {
     );
     expect(set).toMatchObject({
       kind: "plot-updated",
-      spec: { title: "Edited Plot", plotType: "marker", border: false, zoomMode: "x" },
+      spec: {
+        title: "Edited Plot",
+        plotType: "marker",
+        border: false,
+        zoomMode: "x",
+        size: { width: 800, height: 480 },
+      },
     });
 
     const axis = executeScispaceCommand(
@@ -143,6 +150,33 @@ describe("scispace pseudo command interpreter", () => {
     });
   });
 
+  it("prints the plot schema and current plot spec", () => {
+    const schema = executeScispaceCommand("plot-schema", { datasets: [dataset] });
+    expect(schema.kind).toBe("text");
+    expect(schema.output).toContain('"plotType"');
+    expect(schema.output).toContain('"size"');
+
+    const created = executeScispaceCommand(
+      "plot waveform.csv x=time y=signal width=700 height=420",
+      {
+        datasets: [dataset],
+      },
+    );
+    expect(created.kind).toBe("plot-created");
+    if (created.kind !== "plot-created") return;
+
+    const current = executeScispaceCommand("plot-schema plot-1", {
+      datasets: [dataset],
+      plotSpecs: [{ ...created.spec, id: "plot-1" }],
+    });
+    expect(current.kind).toBe("text");
+    expect(JSON.parse(current.output)).toMatchObject({
+      id: "plot-1",
+      size: { width: 700, height: 420 },
+      plotType: "line",
+    });
+  });
+
   it("reports invalid rich plot updates", () => {
     const result = executeScispaceCommand("plot waveform.csv x=time y=signal", {
       datasets: [dataset],
@@ -168,6 +202,18 @@ describe("scispace pseudo command interpreter", () => {
     ).toBe("error");
     expect(
       executeScispaceCommand("plot-set plot-1 border=maybe", {
+        datasets: [dataset],
+        plotSpecs,
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("plot-set plot-1 width=20", {
+        datasets: [dataset],
+        plotSpecs,
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("plot waveform.csv x=time y=signal height=5000", {
         datasets: [dataset],
         plotSpecs,
       }).kind,

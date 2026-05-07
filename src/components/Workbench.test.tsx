@@ -109,6 +109,8 @@ describe("Workbench UI", () => {
     await user.click(screen.getByRole("button", { name: "x" }));
     await user.selectOptions(screen.getByLabelText("Add series"), "background");
     await user.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.change(screen.getByLabelText("Plot width"), { target: { value: "720" } });
+    fireEvent.change(screen.getByLabelText("Plot height"), { target: { value: "420" } });
     fireEvent.change(screen.getByLabelText("Color background"), { target: { value: "#dc2626" } });
     const backgroundLabel = screen.getByLabelText("Label background");
     await user.click(backgroundLabel);
@@ -120,6 +122,7 @@ describe("Workbench UI", () => {
       titleEdited: true,
       x: "index",
       zoomMode: "x",
+      size: { width: 720, height: 420 },
     });
     expect(spec?.series).toEqual([
       {

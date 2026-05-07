@@ -56,7 +56,6 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
     if (!containerRef.current || !plotData || !spec) return;
     plotRef.current?.destroy();
 
-    const bounds = containerRef.current.getBoundingClientRect();
     const xRange = spec.axes.x.range;
     const yRange = spec.axes.y.range;
     const axisOptions = (axis: PlotAxisSpec, grid: boolean) => ({
@@ -72,8 +71,8 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
     });
     plotRef.current = new uPlot(
       {
-        width: Math.max(320, bounds.width),
-        height: Math.max(220, bounds.height),
+        width: spec.size.width,
+        height: spec.size.height,
         title: spec.title,
         cursor: { drag: { x: spec.zoomMode !== "y", y: spec.zoomMode !== "x" } },
         scales: {
@@ -128,6 +127,10 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
   const setZoomMode = (zoomMode: PlotZoomMode) =>
     runPlotCommand(`plot-set ${plotId} zoom=${zoomMode}`);
   const setTitle = (title: string) => runPlotCommand(`plot-set ${plotId} title=${quoteArg(title)}`);
+  const setPlotSize = (patch: Partial<typeof spec.size>) => {
+    const next = { ...spec.size, ...patch };
+    runPlotCommand(`plot-set ${plotId} width=${next.width} height=${next.height}`);
+  };
   const setGrid = (axis: "x" | "y", value: boolean) =>
     runPlotCommand(`plot-grid ${plotId} ${axis}=${value}`);
   const setAxis = (axis: "x" | "y", patch: AxisPatch) => {
@@ -239,6 +242,28 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
             onChange={(event) => setBorder(event.target.checked)}
           />
           Border
+        </label>
+        <label>
+          W
+          <input
+            aria-label="Plot width"
+            type="number"
+            min={120}
+            max={4000}
+            value={spec.size.width}
+            onChange={(event) => setPlotSize({ width: Number(event.target.value) })}
+          />
+        </label>
+        <label>
+          H
+          <input
+            aria-label="Plot height"
+            type="number"
+            min={120}
+            max={4000}
+            value={spec.size.height}
+            onChange={(event) => setPlotSize({ height: Number(event.target.value) })}
+          />
         </label>
       </div>
       <div className="plot-axis-panel">
@@ -394,7 +419,7 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
           </button>
         </div>
       </div>
-      <div ref={containerRef} className="plot-host" />
+      <div ref={containerRef} className="plot-host" style={{ width: spec.size.width }} />
     </div>
   );
 }

@@ -145,6 +145,7 @@ const seedPlot = (): PlotSpec => ({
   axes: { x: defaultPlotAxis("time"), y: defaultPlotAxis("signal") },
   grid: { x: true, y: true },
   border: true,
+  size: { width: 640, height: 360 },
   axisLabels: { x: "time", y: "signal" },
 });
 

@@ -391,7 +391,9 @@
 
 .plot-host {
   min-height: 0;
+  max-width: 100%;
   flex: 1;
+  overflow: auto;
   padding: 10px;
 }
 
@@ -419,6 +421,7 @@
 
 .plot-title-input,
 .plot-controls select,
+.plot-style-panel input[type="number"],
 .plot-style-panel select,
 .plot-axis-row input,
 .plot-axis-row select,
@@ -465,13 +468,18 @@
 }
 
 .plot-style-panel {
-  grid-template-columns: minmax(140px, 1fr) auto auto auto;
+  grid-template-columns: minmax(128px, 1fr) auto auto auto minmax(78px, auto) minmax(78px, auto);
 }
 
 .plot-style-panel label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.plot-style-panel input[type="number"] {
+  width: 62px;
+  padding: 0 6px;
 }
 
 .plot-axis-row {
