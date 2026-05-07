@@ -1,6 +1,7 @@
 import {
   datasetColumnIds,
   datasetColumnNames,
+  normalizeDataValue,
   normalizeVirtualPath,
   parseDelimitedText,
   resolveDatasetColumnId,
@@ -386,7 +387,7 @@ export const executeScispaceCommand = (
         "scispace commands:",
         "  lsdata",
         "  table <dataset> columns=<column[,column...]>",
-        "  table-edit <dataset> action=<delete-row|delete-column> index=<n> column=<col>",
+        "  table-edit <dataset> action=<delete-row|delete-column|set-cell> index=<n> row=<n> column=<col> value=<value>",
         "  plot <dataset> x=<column> y=<column[,column...]> type=<line|line-marker|marker>",
         "  plot-set <plotId> title=<title> type=<line|line-marker|marker> border=<true|false> width=<n> height=<n> fontFamily=<name> fontSize=<n> padding=<t:r:b:l>",
         "  plot-axis <plotId> axis=<x|y> range=<auto|min:max> tick=<auto|interval> tickDir=<out|in|none> scale=<linear|log>",
@@ -541,10 +542,40 @@ export const executeScispaceCommand = (
       };
     }
 
+    if (action === "set-cell") {
+      const rowText = readOption(args, "row") ?? "";
+      const rowNumber = Number(rowText);
+      if (!Number.isInteger(rowNumber) || rowNumber < 1 || rowNumber > dataset.rows.length) {
+        return {
+          kind: "error",
+          output: `Invalid row index for ${dataset.name}: ${rowText || "missing"}`,
+        };
+      }
+      const columnToken = readOption(args, "column") ?? "";
+      const columnId = resolveDatasetColumnId(dataset, columnToken);
+      if (!columnId) {
+        return { kind: "error", output: `Unknown column for ${dataset.name}: ${columnToken}` };
+      }
+      const value = readOption(args, "value");
+      if (value === undefined) return { kind: "error", output: "value is required" };
+      const updatedDataset: Dataset = {
+        ...dataset,
+        rows: dataset.rows.map((row, index) =>
+          index === rowNumber - 1 ? { ...row, [columnId]: normalizeDataValue(value) } : row,
+        ),
+      };
+      return {
+        kind: "dataset-updated",
+        datasetId: dataset.id,
+        dataset: updatedDataset,
+        output: `Updated cell row ${rowNumber} column ${columnId} in ${dataset.name}`,
+      };
+    }
+
     return {
       kind: "error",
       output:
-        "Usage: table-edit <dataset> action=<delete-row|delete-column> index=<n> column=<col>",
+        "Usage: table-edit <dataset> action=<delete-row|delete-column|set-cell> index=<n> row=<n> column=<col> value=<value>",
     };
   }
 

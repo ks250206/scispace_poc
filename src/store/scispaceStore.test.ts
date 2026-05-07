@@ -101,11 +101,17 @@ describe("scispace zustand store", () => {
   it("updates dataset cells and rewrites the backing virtual file", async () => {
     const { db, store } = await makeStore();
 
-    await store.getState().updateDatasetCell("seed-waveform", 0, "signal", "42.5");
+    await store
+      .getState()
+      .runScispace("table-edit waveform.csv action=set-cell row=1 column=signal value=42.5");
 
     expect(store.getState().datasets[0]?.rows[0]?.signal).toBe(42.5);
     expect((await db.datasets.get("seed-waveform"))?.rows[0]?.signal).toBe(42.5);
     expect((await db.files.get("~/raw/waveform.csv"))?.text?.split("\n")[1]).toBe("0,0,42.5,7");
+    expect(store.getState().commandHistory.at(-1)).toMatchObject({
+      command: "table-edit waveform.csv action=set-cell row=1 column=signal value=42.5",
+      status: "success",
+    });
   });
 
   it("runs table-edit row and column deletes through scispace and persists datasets", async () => {

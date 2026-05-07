@@ -51,6 +51,19 @@ describe("scispace pseudo command interpreter", () => {
     }
   });
 
+  it("updates table cells through table-edit commands", () => {
+    const updated = executeScispaceCommand(
+      "table-edit waveform.csv action=set-cell row=1 column=signal value=123.45",
+      { datasets: [dataset] },
+    );
+
+    expect(updated.kind).toBe("dataset-updated");
+    if (updated.kind === "dataset-updated") {
+      expect(updated.dataset.rows[0]?.signal).toBe(123.45);
+      expect(updated.output).toBe("Updated cell row 1 column signal in waveform.csv");
+    }
+  });
+
   it("reports malformed table-edit commands", () => {
     const singleColumnDataset = { ...dataset, columns: [dataset.columns[0]], rows: [{ index: 0 }] };
     expect(

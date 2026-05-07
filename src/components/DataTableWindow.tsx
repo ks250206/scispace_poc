@@ -57,7 +57,6 @@ const quoteCommandArg = (value: string): string =>
 export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWindowProps) {
   const dataset = useScispaceStore((state) => state.datasets.find((item) => item.id === datasetId));
   const updateWindow = useScispaceStore((state) => state.updateWindow);
-  const updateDatasetCell = useScispaceStore((state) => state.updateDatasetCell);
   const runScispace = useScispaceStore((state) => state.runScispace);
   const [visibleRows, setVisibleRows] = useState<TableVisibleRows>(10);
   const [selectedColumn, setSelectedColumn] = useState<string>();
@@ -163,7 +162,12 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     if (!dataset || !editingCell) return;
     const { rowIndex, column, value } = editingCell;
     setEditingCell(undefined);
-    void updateDatasetCell(dataset.id, rowIndex, column, nextValue ?? value);
+    void runScispace(
+      `table-edit ${quoteCommandArg(dataset.name)} action=set-cell row=${rowIndex + 1} column=${quoteCommandArg(
+        column,
+      )} value=${quoteCommandArg(nextValue ?? value)}`,
+      { source: "gui" },
+    );
   };
 
   const cancelEdit = () => {
