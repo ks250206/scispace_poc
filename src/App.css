@@ -199,19 +199,20 @@
 }
 
 .tree-row.root {
-  grid-template-columns: 18px 1fr;
+  grid-template-columns: 18px 1fr auto;
   color: var(--text-muted);
   font-weight: 650;
 }
 
 .tree-row.file {
   width: 100%;
-  padding: 0 8px;
-  cursor: pointer;
+  padding: 0 6px;
+  grid-template-columns: calc(var(--tree-depth, 0) * 14px) minmax(0, 1fr) auto auto;
 }
 
-.tree-row.file:disabled {
-  cursor: default;
+.tree-row.file.directory {
+  color: var(--text);
+  font-weight: 600;
 }
 
 .tree-row.file:hover,
@@ -223,8 +224,53 @@
   color: var(--text-muted);
 }
 
-.tree-row.file.raw-only:hover {
+.tree-item-main {
+  display: grid;
+  min-width: 0;
+  height: 28px;
+  align-items: center;
+  border: 0;
   background: transparent;
+  color: inherit;
+  cursor: pointer;
+  grid-template-columns: 18px minmax(0, 1fr);
+  padding: 0;
+  text-align: left;
+}
+
+.tree-item-main:disabled {
+  cursor: default;
+}
+
+.tree-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+}
+
+.tree-row.file:hover .tree-actions,
+.tree-row.file:focus-within .tree-actions {
+  opacity: 1;
+}
+
+.tree-action {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.tree-action:hover {
+  border-color: var(--border);
+  background: #fff;
+  color: var(--text);
 }
 
 .file-name {

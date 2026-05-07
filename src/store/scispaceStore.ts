@@ -43,6 +43,10 @@ interface ScispaceState {
   runScispace: (input: string) => Promise<ScispaceCommandResult>;
   closeWindow: (id: string) => void;
   createNewProject: () => Promise<void>;
+  createDirectory: (name: string, parentPath?: string) => Promise<VirtualFile | undefined>;
+  renameVirtualItem: (path: string, name: string) => Promise<void>;
+  moveVirtualItem: (path: string, targetDirectory: string) => Promise<void>;
+  deleteVirtualItem: (path: string) => Promise<void>;
   updateWindow: (
     id: string,
     patch: Partial<Pick<WorkspaceWindow, "x" | "y" | "width" | "height">>,
@@ -142,6 +146,32 @@ const makeFileRecord = (
   createdAt: Date.now(),
 });
 
+const makeDirectoryRecord = (path: string): VirtualFile => ({
+  id: path,
+  path,
+  name: path.split("/").at(-1) ?? path,
+  kind: "directory",
+  createdAt: Date.now(),
+});
+
+const normalizeDirectoryPath = (path: string): string => {
+  const trimmed = path.trim().replaceAll("\\", "/").replace(/\/+$/, "");
+  if (trimmed === "~" || trimmed === "~/raw") return "~/raw";
+  if (trimmed.startsWith("~/raw/")) return trimmed;
+  return `~/raw/${trimmed.replace(/^~\//, "").replace(/^raw\//, "")}`;
+};
+
+const safePathName = (name: string, fallback: string): string =>
+  name.trim().replaceAll("\\", "/").split("/").filter(Boolean).at(-1) ?? fallback;
+
+const parentDirectoryOf = (path: string): string => {
+  const slashIndex = path.lastIndexOf("/");
+  return slashIndex > "~/raw".length ? path.slice(0, slashIndex) : "~/raw";
+};
+
+const joinVirtualPath = (directory: string, name: string): string =>
+  `${normalizeDirectoryPath(directory)}/${safePathName(name, "untitled")}`;
+
 const createInitialProject = () => {
   const seed = createSeedDataset();
   const file = makeFileRecord(seed.sourcePath, datasetToDelimitedText(seed), seed.id);
@@ -176,6 +206,30 @@ const uniquifyPath = (path: string, files: VirtualFile[]): string => {
     const candidate = `${directory}${stem} (${index})${extension}`;
     if (!existing.has(candidate)) return candidate;
   }
+};
+
+const descendantPaths = (path: string, files: VirtualFile[]): Set<string> => {
+  const prefix = `${path}/`;
+  return new Set(
+    files
+      .filter((file) => file.path === path || file.path.startsWith(prefix))
+      .map((file) => file.path),
+  );
+};
+
+const nextActiveDatasetId = (datasets: Dataset[], current?: string): string | undefined =>
+  current && datasets.some((dataset) => dataset.id === current) ? current : datasets[0]?.id;
+
+const retitleWindow = (window: WorkspaceWindow, datasets: Dataset[], plotSpecs: PlotSpec[]) => {
+  if (window.kind === "table" && window.datasetId) {
+    const dataset = datasets.find((item) => item.id === window.datasetId);
+    return dataset ? { ...window, title: `Table - ${dataset.name}` } : window;
+  }
+  if (window.kind === "plot" && window.plotId) {
+    const plot = plotSpecs.find((item) => item.id === window.plotId);
+    return plot ? { ...window, title: plot.title } : window;
+  }
+  return window;
 };
 
 const canParseAsTable = (name: string): boolean => /\.(csv|tsv)$/i.test(name);
@@ -541,6 +595,180 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         activeWindowId: undefined,
         viewport: initialProject.viewport,
       });
+    },
+
+    createDirectory: async (name, parentPath = "~/raw") => {
+      const safeName = safePathName(name, "");
+      if (!safeName) return undefined;
+      const path = uniquifyPath(joinVirtualPath(parentPath, safeName), get().files);
+      const directory = makeDirectoryRecord(path);
+      await db.files.put(directory);
+      set((state) => ({
+        files: [...state.files, directory],
+        terminalEvents: [...state.terminalEvents, `Created directory ${directory.path}`],
+      }));
+      return directory;
+    },
+
+    renameVirtualItem: async (path, name) => {
+      const target = get().files.find((file) => file.path === path);
+      const safeName = safePathName(name, "");
+      if (!target || !safeName || path === "~/raw") return;
+
+      const affectedPaths =
+        target.kind === "directory" ? descendantPaths(path, get().files) : new Set([path]);
+      const unaffectedFiles = get().files.filter((file) => !affectedPaths.has(file.path));
+      const basePath = uniquifyPath(
+        joinVirtualPath(parentDirectoryOf(path), safeName),
+        unaffectedFiles,
+      );
+      const renamedAffectedEntries = get()
+        .files.filter((file) => affectedPaths.has(file.path))
+        .map((file) => {
+          const nextPath =
+            file.path === path ? basePath : `${basePath}${file.path.slice(path.length)}`;
+          return [
+            file.path,
+            {
+              ...file,
+              id: nextPath,
+              path: nextPath,
+              name: nextPath.split("/").at(-1) ?? nextPath,
+            },
+          ] as const;
+        });
+      const renamedAffectedFiles = renamedAffectedEntries.map(([, file]) => file);
+      const renamedByOldPath = new Map(renamedAffectedEntries);
+      const renamedFiles = get().files.map((file) => {
+        if (!affectedPaths.has(file.path)) return file;
+        return renamedByOldPath.get(file.path) ?? file;
+      });
+      const datasetIdsToRename = new Set(
+        target.kind === "file" && target.datasetId ? [target.datasetId] : [],
+      );
+      const updatedDatasets = get().datasets.map((dataset) => {
+        const sourceFile = renamedFiles.find((file) => file.datasetId === dataset.id);
+        if (!sourceFile) return dataset;
+        return {
+          ...dataset,
+          name: datasetIdsToRename.has(dataset.id) ? sourceFile.name : dataset.name,
+          sourcePath: sourceFile.path,
+        };
+      });
+      const updatedPlotSpecs = get().plotSpecs.map((plot) => {
+        const dataset = updatedDatasets.find((item) => item.id === plot.source);
+        if (!dataset || !datasetIdsToRename.has(dataset.id)) return plot;
+        return { ...plot, title: `${dataset.name}: ${plot.y} vs ${plot.x}` };
+      });
+      const updatedWindows = get().windows.map((window) =>
+        retitleWindow(window, updatedDatasets, updatedPlotSpecs),
+      );
+
+      await db.transaction("rw", db.files, db.datasets, async () => {
+        await Promise.all([...affectedPaths].map((oldPath) => db.files.delete(oldPath)));
+        await db.files.bulkPut(renamedAffectedFiles);
+        await db.datasets.bulkPut(updatedDatasets);
+      });
+
+      set((state) => ({
+        ...state,
+        files: renamedFiles,
+        datasets: updatedDatasets,
+        plotSpecs: updatedPlotSpecs,
+        windows: updatedWindows,
+        terminalEvents: [...state.terminalEvents, `Renamed ${path} to ${basePath}`],
+      }));
+      persistLayout(db, get());
+    },
+
+    moveVirtualItem: async (path, targetDirectory) => {
+      const target = get().files.find((file) => file.path === path);
+      const directory = normalizeDirectoryPath(targetDirectory);
+      if (!target || path === "~/raw" || directory === parentDirectoryOf(path)) return;
+      if (target.kind === "directory" && directory.startsWith(`${path}/`)) return;
+
+      const affectedPaths =
+        target.kind === "directory" ? descendantPaths(path, get().files) : new Set([path]);
+      const unaffectedFiles = get().files.filter((file) => !affectedPaths.has(file.path));
+      const basePath = uniquifyPath(joinVirtualPath(directory, target.name), unaffectedFiles);
+      const movedAffectedEntries = get()
+        .files.filter((file) => affectedPaths.has(file.path))
+        .map((file) => {
+          const nextPath =
+            file.path === path ? basePath : `${basePath}${file.path.slice(path.length)}`;
+          return [
+            file.path,
+            {
+              ...file,
+              id: nextPath,
+              path: nextPath,
+              name: nextPath.split("/").at(-1) ?? nextPath,
+            },
+          ] as const;
+        });
+      const movedAffectedFiles = movedAffectedEntries.map(([, file]) => file);
+      const movedByOldPath = new Map(movedAffectedEntries);
+      const movedFiles = get().files.map((file) => {
+        if (!affectedPaths.has(file.path)) return file;
+        return movedByOldPath.get(file.path) ?? file;
+      });
+      const updatedDatasets = get().datasets.map((dataset) => {
+        const sourceFile = movedFiles.find((file) => file.datasetId === dataset.id);
+        return sourceFile ? { ...dataset, sourcePath: sourceFile.path } : dataset;
+      });
+
+      await db.transaction("rw", db.files, db.datasets, async () => {
+        await Promise.all([...affectedPaths].map((oldPath) => db.files.delete(oldPath)));
+        await db.files.bulkPut(movedAffectedFiles);
+        await db.datasets.bulkPut(updatedDatasets);
+      });
+
+      set((state) => ({
+        ...state,
+        files: movedFiles,
+        datasets: updatedDatasets,
+        terminalEvents: [...state.terminalEvents, `Moved ${path} to ${basePath}`],
+      }));
+    },
+
+    deleteVirtualItem: async (path) => {
+      const target = get().files.find((file) => file.path === path);
+      if (!target || path === "~/raw") return;
+
+      const affectedPaths =
+        target.kind === "directory" ? descendantPaths(path, get().files) : new Set([path]);
+      const removedFiles = get().files.filter((file) => affectedPaths.has(file.path));
+      const removedDatasetIds = new Set(
+        removedFiles.map((file) => file.datasetId).filter((id): id is string => Boolean(id)),
+      );
+      const files = get().files.filter((file) => !affectedPaths.has(file.path));
+      const datasets = get().datasets.filter((dataset) => !removedDatasetIds.has(dataset.id));
+      const plotSpecs = get().plotSpecs.filter((plot) => !removedDatasetIds.has(plot.source));
+      const windows = get().windows.filter((window) => {
+        if (window.datasetId && removedDatasetIds.has(window.datasetId)) return false;
+        if (window.plotId && !plotSpecs.some((plot) => plot.id === window.plotId)) return false;
+        return true;
+      });
+
+      await db.transaction("rw", db.files, db.datasets, async () => {
+        await Promise.all([...affectedPaths].map((oldPath) => db.files.delete(oldPath)));
+        await Promise.all([...removedDatasetIds].map((datasetId) => db.datasets.delete(datasetId)));
+      });
+
+      set((state) => ({
+        ...state,
+        files,
+        datasets,
+        plotSpecs,
+        windows,
+        activeDatasetId: nextActiveDatasetId(datasets, state.activeDatasetId),
+        activeWindowId:
+          state.activeWindowId && windows.some((window) => window.id === state.activeWindowId)
+            ? state.activeWindowId
+            : undefined,
+        terminalEvents: [...state.terminalEvents, `Deleted ${path}`],
+      }));
+      persistLayout(db, get());
     },
 
     updateWindow: (id, patch) => {

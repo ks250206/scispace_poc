@@ -26,10 +26,10 @@ describe("Workbench UI", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
-    const fileButton = document.querySelector(".tree-row.file") as HTMLButtonElement;
+    const fileButton = document.querySelector(".tree-item-main") as HTMLButtonElement;
     await user.click(fileButton);
 
-    expect(fileButton).toHaveClass("selected");
+    expect(document.querySelector(".tree-row.file")).toHaveClass("selected");
     expect(screen.getByText("Table - waveform.csv")).toBeInTheDocument();
   });
 
@@ -60,6 +60,37 @@ describe("Workbench UI", () => {
 
     expect(screen.queryByText("Table - waveform.csv")).not.toBeInTheDocument();
     expect(document.querySelector(".tree-row.file")).toBeInTheDocument();
+  });
+
+  it("creates, moves, renames, and deletes raw tree items from the data browser", async () => {
+    const user = userEvent.setup();
+    const prompt = vi
+      .spyOn(window, "prompt")
+      .mockReturnValueOnce("analysis")
+      .mockReturnValueOnce("~/raw/analysis")
+      .mockReturnValueOnce("renamed.csv");
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "+" }));
+    expect(screen.getByText("analysis")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Move waveform.csv" }));
+    await waitFor(() =>
+      expect(useScispaceStore.getState().datasets[0]?.sourcePath).toBe(
+        "~/raw/analysis/waveform.csv",
+      ),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Rename waveform.csv" }));
+    await waitFor(() => expect(screen.getByText("renamed.csv")).toBeInTheDocument());
+    expect(screen.getByText("Table - renamed.csv")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Delete renamed.csv" }));
+    await waitFor(() => expect(screen.queryByText("renamed.csv")).not.toBeInTheDocument());
+    expect(confirm).toHaveBeenCalled();
+    expect(prompt).toHaveBeenCalledTimes(3);
   });
 
   it("resets the workspace after confirming New Project", async () => {

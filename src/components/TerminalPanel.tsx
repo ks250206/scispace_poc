@@ -55,7 +55,13 @@ export function TerminalPanel() {
     const bash = shell?.bash;
     if (!bash) return;
     void (async () => {
+      await bash.fs.rm("/home/user/raw", { recursive: true, force: true });
       await bash.fs.mkdir("/home/user/raw", { recursive: true });
+      await Promise.all(
+        files
+          .filter((file) => file.kind === "directory")
+          .map((file) => bash.fs.mkdir(toBashPath(file.path), { recursive: true })),
+      );
       await Promise.all(
         files
           .filter((file) => file.text)

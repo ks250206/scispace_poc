@@ -243,6 +243,70 @@ describe("scispace zustand store", () => {
     ]);
   });
 
+  it("creates folders and moves datasets while preserving their names", async () => {
+    const { db, store } = await makeStore();
+    await store.getState().createDirectory("analysis");
+
+    await store.getState().moveVirtualItem("~/raw/waveform.csv", "~/raw/analysis");
+
+    expect(store.getState().files.some((file) => file.path === "~/raw/analysis")).toBe(true);
+    expect(store.getState().files.some((file) => file.path === "~/raw/analysis/waveform.csv")).toBe(
+      true,
+    );
+    expect(store.getState().datasets[0]).toMatchObject({
+      name: "waveform.csv",
+      sourcePath: "~/raw/analysis/waveform.csv",
+    });
+    expect(await db.files.get("~/raw/analysis/waveform.csv")).toMatchObject({
+      datasetId: "seed-waveform",
+    });
+  });
+
+  it("renames dataset files and retitles open windows", async () => {
+    const { db, store } = await makeStore();
+
+    await store.getState().renameVirtualItem("~/raw/waveform.csv", "renamed.csv");
+
+    expect(store.getState().files.some((file) => file.path === "~/raw/renamed.csv")).toBe(true);
+    expect(store.getState().datasets[0]).toMatchObject({
+      name: "renamed.csv",
+      sourcePath: "~/raw/renamed.csv",
+    });
+    expect(store.getState().windows.find((window) => window.id === "table-seed")?.title).toBe(
+      "Table - renamed.csv",
+    );
+    expect(await db.files.get("~/raw/waveform.csv")).toBeUndefined();
+    expect(await db.files.get("~/raw/renamed.csv")).toMatchObject({ name: "renamed.csv" });
+  });
+
+  it("deletes files with their datasets and dependent windows", async () => {
+    const { db, store } = await makeStore();
+
+    await store.getState().deleteVirtualItem("~/raw/waveform.csv");
+
+    expect(store.getState().files).toHaveLength(0);
+    expect(store.getState().datasets).toHaveLength(0);
+    expect(store.getState().windows.some((window) => window.kind === "table")).toBe(false);
+    expect(store.getState().windows.some((window) => window.kind === "plot")).toBe(false);
+    expect(store.getState().plotSpecs).toHaveLength(0);
+    expect(await db.files.get("~/raw/waveform.csv")).toBeUndefined();
+    expect(await db.datasets.get("seed-waveform")).toBeUndefined();
+  });
+
+  it("recursively renames and deletes folders", async () => {
+    const { db, store } = await makeStore();
+    await store.getState().createDirectory("analysis");
+    await store.getState().moveVirtualItem("~/raw/waveform.csv", "~/raw/analysis");
+
+    await store.getState().renameVirtualItem("~/raw/analysis", "processed");
+    expect(store.getState().datasets[0]?.sourcePath).toBe("~/raw/processed/waveform.csv");
+
+    await store.getState().deleteVirtualItem("~/raw/processed");
+    expect(store.getState().files).toHaveLength(0);
+    expect(store.getState().datasets).toHaveLength(0);
+    expect(await db.files.get("~/raw/processed/waveform.csv")).toBeUndefined();
+  });
+
   it("adds a terminal window when loading an older persisted layout", async () => {
     const db = new SciSpaceDatabase(`test-${crypto.randomUUID()}`);
     await db.open();
