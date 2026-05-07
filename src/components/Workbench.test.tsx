@@ -10,6 +10,7 @@ describe("Workbench UI", () => {
     await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
     expect(screen.getByText("~/raw")).toBeInTheDocument();
     expect(screen.getByText("Table - waveform.csv")).toBeInTheDocument();
+    expect(screen.getByText("160 rows · virtualized")).toBeInTheDocument();
     expect(screen.getByText("Plot - waveform.csv")).toBeInTheDocument();
     expect(screen.getByText("Terminal")).toBeInTheDocument();
   });

@@ -273,7 +273,8 @@
 
 .table-scroll {
   min-height: 0;
-  flex: 1;
+  height: min(100%, var(--table-visible-height, 640px));
+  flex: 1 1 auto;
   overflow: auto;
 }
 

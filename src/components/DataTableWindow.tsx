@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useScispaceStore } from "../store/scispaceStore";
@@ -17,8 +17,9 @@ const formatCellValue = (value: unknown): string => {
 
 export function DataTableWindow({ datasetId }: DataTableWindowProps) {
   const dataset = useScispaceStore((state) => state.datasets.find((item) => item.id === datasetId));
-  const [pageSize, setPageSize] = useState<20 | 50>(20);
+  const [visibleRows, setVisibleRows] = useState<20 | 50>(20);
   const parentRef = useRef<HTMLDivElement>(null);
+  const rowHeight = 32;
 
   const columns = useMemo(
     () =>
@@ -30,13 +31,13 @@ export function DataTableWindow({ datasetId }: DataTableWindowProps) {
     [dataset],
   );
 
-  const data = useMemo(() => dataset?.rows.slice(0, pageSize) ?? [], [dataset, pageSize]);
+  const data = useMemo(() => dataset?.rows ?? [], [dataset]);
   const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel() });
   const rows = table.getRowModel().rows;
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 32,
+    estimateSize: () => rowHeight,
     overscan: 6,
   });
 
@@ -45,25 +46,29 @@ export function DataTableWindow({ datasetId }: DataTableWindowProps) {
   return (
     <div className="table-window">
       <div className="window-controls">
-        <span>{dataset.rows.length} rows</span>
+        <span>{dataset.rows.length} rows · virtualized</span>
         <div className="segmented">
           <button
             type="button"
-            className={pageSize === 20 ? "active" : ""}
-            onClick={() => setPageSize(20)}
+            className={visibleRows === 20 ? "active" : ""}
+            onClick={() => setVisibleRows(20)}
           >
             20
           </button>
           <button
             type="button"
-            className={pageSize === 50 ? "active" : ""}
-            onClick={() => setPageSize(50)}
+            className={visibleRows === 50 ? "active" : ""}
+            onClick={() => setVisibleRows(50)}
           >
             50
           </button>
         </div>
       </div>
-      <div ref={parentRef} className="table-scroll">
+      <div
+        ref={parentRef}
+        className="table-scroll"
+        style={{ "--table-visible-height": `${visibleRows * rowHeight}px` } as CSSProperties}
+      >
         <table>
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -79,6 +84,7 @@ export function DataTableWindow({ datasetId }: DataTableWindowProps) {
           <tbody style={{ height: rowVirtualizer.getTotalSize() }}>
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
               const row = rows[virtualRow.index];
+              if (!row) return null;
               return (
                 <tr key={row.id} style={{ transform: `translateY(${virtualRow.start}px)` }}>
                   {row.getVisibleCells().map((cell) => (
