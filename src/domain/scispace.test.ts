@@ -24,6 +24,62 @@ describe("scispace pseudo command interpreter", () => {
     expect(result).toMatchObject({ kind: "open-table", datasetId: "seed-waveform" });
   });
 
+  it("deletes table rows and columns through table-edit commands", () => {
+    const deletedRow = executeScispaceCommand("table-edit waveform.csv action=delete-row index=1", {
+      datasets: [dataset],
+    });
+    expect(deletedRow.kind).toBe("dataset-updated");
+    if (deletedRow.kind === "dataset-updated") {
+      expect(deletedRow.dataset.rows).toHaveLength(dataset.rows.length - 1);
+      expect(deletedRow.dataset.rows[0]?.index).toBe(1);
+      expect(deletedRow.output).toBe("Deleted row 1 from waveform.csv");
+    }
+
+    const deletedColumn = executeScispaceCommand(
+      "table-edit waveform.csv action=delete-column column=signal",
+      { datasets: [dataset] },
+    );
+    expect(deletedColumn.kind).toBe("dataset-updated");
+    if (deletedColumn.kind === "dataset-updated") {
+      expect(deletedColumn.dataset.columns.map((column) => column.id)).toEqual([
+        "index",
+        "time",
+        "background",
+      ]);
+      expect(deletedColumn.dataset.rows[0]).not.toHaveProperty("signal");
+      expect(deletedColumn.output).toBe("Deleted column signal from waveform.csv");
+    }
+  });
+
+  it("reports malformed table-edit commands", () => {
+    const singleColumnDataset = { ...dataset, columns: [dataset.columns[0]], rows: [{ index: 0 }] };
+    expect(
+      executeScispaceCommand("table-edit missing.csv action=delete-row index=1", {
+        datasets: [dataset],
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("table-edit waveform.csv action=delete-row index=0", {
+        datasets: [dataset],
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("table-edit waveform.csv action=delete-row index=999", {
+        datasets: [dataset],
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("table-edit waveform.csv action=delete-column column=missing", {
+        datasets: [dataset],
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("table-edit waveform.csv action=delete-column column=index", {
+        datasets: [singleColumnDataset],
+      }).kind,
+    ).toBe("error");
+  });
+
   it("creates plot specs from column options", () => {
     const result = executeScispaceCommand("plot waveform.csv x=time y=signal", {
       datasets: [dataset],

@@ -1,13 +1,18 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { useScispaceStore } from "../store/scispaceStore";
 
 describe("Workbench UI", () => {
   beforeEach(async () => {
+    cleanup();
     vi.restoreAllMocks();
     await useScispaceStore.getState().createNewProject();
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it("renders a filesystem browser, table window, plot window, and draggable terminal window", async () => {
@@ -189,6 +194,63 @@ describe("Workbench UI", () => {
       expect(useScispaceStore.getState().datasets[0]?.rows[0]?.signal).toBe(123.45),
     );
     expect(document.querySelectorAll(".table-scroll tbody td")[2]).toHaveTextContent("123.45");
+  });
+
+  it("deletes selected table rows and columns through scispace commands", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Delete row" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete column" })).toBeDisabled();
+
+    await waitFor(() =>
+      expect(document.querySelectorAll(".table-scroll tbody td").length).toBeGreaterThan(2),
+    );
+    await user.click(document.querySelectorAll(".table-scroll tbody td")[2] as HTMLElement);
+    expect(screen.getByRole("button", { name: "Delete row" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Delete row" }));
+
+    await waitFor(() => expect(useScispaceStore.getState().datasets[0]?.rows).toHaveLength(159));
+    expect(useScispaceStore.getState().commandHistory.at(-1)).toMatchObject({
+      command: "table-edit waveform.csv action=delete-row index=1",
+      source: "gui",
+    });
+
+    await user.click(screen.getByRole("button", { name: "Select column background" }));
+    expect(screen.getByRole("button", { name: "Delete column" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Delete column" }));
+
+    await waitFor(() =>
+      expect(useScispaceStore.getState().datasets[0]?.columns.map((column) => column.id)).toEqual([
+        "index",
+        "time",
+        "signal",
+      ]),
+    );
+    expect(screen.queryByRole("button", { name: "Select column background" })).toBeNull();
+    expect(useScispaceStore.getState().commandHistory.at(-1)).toMatchObject({
+      command: "table-edit waveform.csv action=delete-column column=background",
+      source: "gui",
+    });
+    expect(confirm).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not delete table data when confirmation is cancelled", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(document.querySelectorAll(".table-scroll tbody td").length).toBeGreaterThan(2),
+    );
+    await user.click(document.querySelectorAll(".table-scroll tbody td")[2] as HTMLElement);
+    await user.click(screen.getByRole("button", { name: "Delete row" }));
+
+    expect(useScispaceStore.getState().datasets[0]?.rows).toHaveLength(160);
+    expect(useScispaceStore.getState().commandHistory).toHaveLength(0);
   });
 
   it("resizes table columns and keeps a minimum width with horizontal scrolling", async () => {

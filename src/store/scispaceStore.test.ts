@@ -108,6 +108,52 @@ describe("scispace zustand store", () => {
     expect((await db.files.get("~/raw/waveform.csv"))?.text?.split("\n")[1]).toBe("0,0,42.5,7");
   });
 
+  it("runs table-edit row and column deletes through scispace and persists datasets", async () => {
+    const { db, store } = await makeStore();
+
+    const rowResult = await store
+      .getState()
+      .runScispace("table-edit waveform.csv action=delete-row index=1", { source: "gui" });
+    expect(rowResult.kind).toBe("dataset-updated");
+    expect(store.getState().datasets[0]?.rows).toHaveLength(159);
+    expect((await db.files.get("~/raw/waveform.csv"))?.text).not.toContain("0,0,3,7");
+    expect(store.getState().commandHistory.at(-1)).toMatchObject({
+      command: "table-edit waveform.csv action=delete-row index=1",
+      source: "gui",
+      status: "success",
+    });
+
+    const columnResult = await store
+      .getState()
+      .runScispace("table-edit waveform.csv action=delete-column column=background", {
+        source: "history",
+      });
+    expect(columnResult.kind).toBe("dataset-updated");
+    expect(datasetColumnNames(store.getState().datasets[0]!)).toEqual(["index", "time", "signal"]);
+    expect(store.getState().windows.find((window) => window.id === "table-seed")).toMatchObject({
+      columnIds: ["index", "time", "signal"],
+    });
+    expect(store.getState().plotSpecs[0]?.series.map((series) => series.y)).toEqual(["signal"]);
+    expect((await db.datasets.get("seed-waveform"))?.columns.map((column) => column.id)).toEqual([
+      "index",
+      "time",
+      "signal",
+    ]);
+    expect((await db.files.get("~/raw/waveform.csv"))?.text?.split("\n")[0]).toBe(
+      "index,time,signal",
+    );
+  });
+
+  it("removes plot windows when table-edit deletes required plot columns", async () => {
+    const { store } = await makeStore();
+
+    await store.getState().runScispace("table-edit waveform.csv action=delete-column column=time");
+
+    expect(store.getState().plotSpecs).toHaveLength(0);
+    expect(store.getState().windows.some((window) => window.kind === "plot")).toBe(false);
+    expect(store.getState().currentPlotId).toBeUndefined();
+  });
+
   it("opens an import dialog before persisting dropped files and confirms through settings", async () => {
     const { db, store } = await makeStore();
     const importId = store

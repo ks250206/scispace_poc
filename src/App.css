@@ -467,6 +467,27 @@
   gap: 6px;
 }
 
+.table-delete-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-delete-actions button {
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+}
+
+.table-delete-actions button:disabled {
+  cursor: not-allowed;
+  color: var(--text-muted);
+  opacity: 0.55;
+}
+
 .table-row-select select {
   height: 26px;
   border: 1px solid var(--border);

@@ -385,6 +385,7 @@ export const executeScispaceCommand = (
         "scispace commands:",
         "  lsdata",
         "  table <dataset> columns=<column[,column...]>",
+        "  table-edit <dataset> action=<delete-row|delete-column> index=<n> column=<col>",
         "  plot <dataset> x=<column> y=<column[,column...]> type=<line|line-marker|marker>",
         "  plot-set <plotId> title=<title> type=<line|line-marker|marker> border=<true|false> width=<n> height=<n> fontFamily=<name> fontSize=<n> padding=<t:r:b:l>",
         "  plot-axis <plotId> axis=<x|y> range=<auto|min:max> tick=<auto|interval> tickDir=<out|in|none> scale=<linear|log>",
@@ -484,6 +485,63 @@ export const executeScispaceCommand = (
       datasetId: dataset.id,
       columnIds: resolvedColumnIds && resolvedColumnIds.length > 0 ? resolvedColumnIds : undefined,
       output: `Table opened: ${dataset.name} (${dataset.rows.length} rows)`,
+    };
+  }
+
+  if (command === "table-edit") {
+    const dataset = findDataset(context.datasets, args[0] ?? "");
+    if (!dataset) return { kind: "error", output: `Dataset not found: ${args[0] ?? ""}` };
+
+    const action = readOption(args, "action");
+    if (action === "delete-row") {
+      const indexText = readOption(args, "index") ?? "";
+      const rowIndex = Number(indexText);
+      if (!Number.isInteger(rowIndex) || rowIndex < 1 || rowIndex > dataset.rows.length) {
+        return {
+          kind: "error",
+          output: `Invalid row index for ${dataset.name}: ${indexText || "missing"}`,
+        };
+      }
+      const updatedDataset: Dataset = {
+        ...dataset,
+        rows: dataset.rows.filter((_, index) => index !== rowIndex - 1),
+      };
+      return {
+        kind: "dataset-updated",
+        datasetId: dataset.id,
+        dataset: updatedDataset,
+        output: `Deleted row ${rowIndex} from ${dataset.name}`,
+      };
+    }
+
+    if (action === "delete-column") {
+      const columnToken = readOption(args, "column") ?? "";
+      const columnId = resolveDatasetColumnId(dataset, columnToken);
+      if (!columnId) {
+        return { kind: "error", output: `Unknown column for ${dataset.name}: ${columnToken}` };
+      }
+      if (dataset.columns.length <= 1) {
+        return { kind: "error", output: `Cannot delete the last column from ${dataset.name}` };
+      }
+      const updatedDataset: Dataset = {
+        ...dataset,
+        columns: dataset.columns.filter((column) => column.id !== columnId),
+        rows: dataset.rows.map((row) =>
+          Object.fromEntries(Object.entries(row).filter(([key]) => key !== columnId)),
+        ),
+      };
+      return {
+        kind: "dataset-updated",
+        datasetId: dataset.id,
+        dataset: updatedDataset,
+        output: `Deleted column ${columnId} from ${dataset.name}`,
+      };
+    }
+
+    return {
+      kind: "error",
+      output:
+        "Usage: table-edit <dataset> action=<delete-row|delete-column> index=<n> column=<col>",
     };
   }
 

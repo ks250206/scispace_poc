@@ -60,11 +60,9 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
               }}
               onMouseDown={(event) => {
                 event.stopPropagation();
-                closeWindow(window.id);
               }}
               onPointerDown={(event) => {
                 event.stopPropagation();
-                closeWindow(window.id);
               }}
             >
               ×

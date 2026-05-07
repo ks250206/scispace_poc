@@ -178,6 +178,7 @@ export type ScispaceCommandResult =
   | { kind: "plot-series-updated"; spec: PlotSpec; output: string }
   | { kind: "plot-axis-updated"; spec: PlotSpec; output: string }
   | { kind: "plot-annotation-updated"; spec: PlotSpec; output: string }
+  | { kind: "dataset-updated"; datasetId: string; dataset: Dataset; output: string }
   | {
       kind: "file-command";
       action: "mkdir" | "rename" | "move" | "delete" | "list";

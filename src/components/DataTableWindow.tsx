@@ -40,10 +40,14 @@ const tableScrollHeight = (visibleRows: TableVisibleRows): number =>
 export const tableWindowHeightForRows = (visibleRows: TableVisibleRows): number =>
   tableTitlebarHeight + tableControlsHeight + tableScrollHeight(visibleRows);
 
+const quoteCommandArg = (value: string): string =>
+  /[\s"']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
+
 export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWindowProps) {
   const dataset = useScispaceStore((state) => state.datasets.find((item) => item.id === datasetId));
   const updateWindow = useScispaceStore((state) => state.updateWindow);
   const updateDatasetCell = useScispaceStore((state) => state.updateDatasetCell);
+  const runScispace = useScispaceStore((state) => state.runScispace);
   const [visibleRows, setVisibleRows] = useState<TableVisibleRows>(10);
   const [selectedColumn, setSelectedColumn] = useState<string>();
   const [selectedCell, setSelectedCell] = useState<{ rowIndex: number; column: string }>();
@@ -133,6 +137,33 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     setEditingCell(undefined);
   };
 
+  const deleteSelectedRow = () => {
+    if (!selectedCell) return;
+    const rowNumber = selectedCell.rowIndex + 1;
+    if (!window.confirm(`Delete row ${rowNumber} from ${dataset.name}?`)) return;
+    setSelectedCell(undefined);
+    setSelectedColumn(undefined);
+    setEditingCell(undefined);
+    void runScispace(
+      `table-edit ${quoteCommandArg(dataset.name)} action=delete-row index=${rowNumber}`,
+      { source: "gui" },
+    );
+  };
+
+  const deleteSelectedColumn = () => {
+    if (!selectedColumn) return;
+    if (!window.confirm(`Delete column ${selectedColumn} from ${dataset.name}?`)) return;
+    setSelectedCell(undefined);
+    setSelectedColumn(undefined);
+    setEditingCell(undefined);
+    void runScispace(
+      `table-edit ${quoteCommandArg(dataset.name)} action=delete-column column=${quoteCommandArg(
+        selectedColumn,
+      )}`,
+      { source: "gui" },
+    );
+  };
+
   const handleCellKeyDown = (
     event: KeyboardEvent<HTMLTableCellElement>,
     rowIndex: number,
@@ -149,6 +180,14 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     <div className="table-window">
       <div className="window-controls">
         <span>{dataset.rows.length} rows · virtualized</span>
+        <div className="table-delete-actions">
+          <button type="button" disabled={!selectedCell} onClick={deleteSelectedRow}>
+            Delete row
+          </button>
+          <button type="button" disabled={!selectedColumn} onClick={deleteSelectedColumn}>
+            Delete column
+          </button>
+        </div>
         <label className="table-row-select">
           Rows
           <select
