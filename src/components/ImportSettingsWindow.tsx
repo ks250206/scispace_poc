@@ -45,7 +45,6 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
     state.pendingImports.find((item) => item.id === importId),
   );
   const runScispace = useScispaceStore((state) => state.runScispace);
-  const updateImportText = useScispaceStore((state) => state.updateImportText);
   const confirmImport = useScispaceStore((state) => state.confirmImport);
   const cancelImport = useScispaceStore((state) => state.cancelImport);
   const rawParentRef = useRef<HTMLDivElement>(null);
@@ -140,9 +139,12 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   if (!pendingImport) return <div className="empty-state">Import request not found.</div>;
 
   const updateRawLine = (lineIndex: number, value: string) => {
-    const nextLines = [...rawLines];
-    nextLines[lineIndex] = value;
-    updateImportText(importId, nextLines.join("\n"));
+    void runScispace(
+      `import-line ${importId} line=${lineIndex + 1} value=${encodeURIComponent(value)}`,
+      {
+        source: "gui",
+      },
+    );
   };
   const runImportSet = (options: string) => {
     void runScispace(`import-set ${importId} ${options}`, { source: "gui" });

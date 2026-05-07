@@ -47,7 +47,6 @@ interface ScispaceState {
   importTextFile: (name: string, text: string) => Promise<ImportFileResult>;
   openImportDialog: (fileName: string, text: string) => string;
   updateImportOptions: (importId: string, options: Partial<ImportParseOptions>) => void;
-  updateImportText: (importId: string, text: string) => void;
   updateImportMode: (importId: string, mode: "tabular" | "raw") => void;
   confirmImport: (importId: string) => Promise<ImportFileResult | undefined>;
   cancelImport: (importId: string) => void;
@@ -564,21 +563,6 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
             preview,
             error,
           };
-        }),
-      }));
-    },
-
-    updateImportText: (importId, text) => {
-      set((state) => ({
-        pendingImports: state.pendingImports.map((pendingImport) => {
-          if (pendingImport.id !== importId) return pendingImport;
-          const { allPreview, preview, error } = createPreviews(
-            pendingImport.id,
-            pendingImport.fileName,
-            text,
-            pendingImport.options,
-          );
-          return { ...pendingImport, text, allPreview, preview, error };
         }),
       }));
     },

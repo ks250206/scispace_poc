@@ -659,6 +659,38 @@ describe("scispace pseudo command interpreter", () => {
     }
   });
 
+  it("updates import raw text lines through commands", () => {
+    const pendingImport = {
+      id: "import-1",
+      fileName: "configured.csv",
+      text: "x,y\n1,2\n3,4",
+      mode: "tabular" as const,
+      options: {
+        skipRows: 0,
+        delimiter: "comma" as const,
+        commentPrefix: "",
+        hasHeader: true,
+        columnNames: [],
+        excludedColumnIds: [],
+      },
+    };
+
+    const updated = executeScispaceCommand("import-line import-1 line=2 value=10,20", {
+      datasets: [],
+      pendingImports: [pendingImport],
+    });
+    const invalid = executeScispaceCommand("import-line import-1 line=0 value=bad", {
+      datasets: [],
+      pendingImports: [pendingImport],
+    });
+
+    expect(updated).toMatchObject({ kind: "import-updated" });
+    if (updated.kind === "import-updated") {
+      expect(updated.pendingImport.text).toBe("x,y\n10,20\n3,4");
+    }
+    expect(invalid).toMatchObject({ kind: "error" });
+  });
+
   it("reports import command failures and raw confirmations", () => {
     const pendingImport = {
       id: "import-raw",

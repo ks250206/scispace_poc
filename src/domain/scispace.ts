@@ -403,6 +403,7 @@ export const executeScispaceCommand = (
         "  import-preview <importId>",
         "  import-set <importId> skipRows=<n> delimiter=<auto|comma|tab|space|semicolon> hasHeader=<true|false> mode=<tabular|raw>",
         "  import-column <importId> column=<col> action=<include|exclude>",
+        "  import-line <importId> line=<n> value=<text>",
         "  import-confirm <importId> mode=<tabular|raw> path=<virtualPath>",
         "  elt <dataset> as <newName>",
       ].join("\n"),
@@ -1130,6 +1131,34 @@ export const executeScispaceCommand = (
       importId,
       pendingImport: pendingImportUpdate,
       output: `Import column ${action}: ${column}`,
+    };
+  }
+
+  if (command === "import-line") {
+    const importId = args[0] ?? "";
+    const pendingImport = context.pendingImports?.find((item) => item.id === importId);
+    if (!pendingImport) return { kind: "error", output: `Pending import not found: ${importId}` };
+    const lineValue = readOption(args, "line");
+    const lineNumber = lineValue === undefined ? undefined : parseInteger(lineValue);
+    if (lineNumber === undefined || lineNumber < 1) {
+      return { kind: "error", output: `Invalid import line: ${lineValue ?? "missing"}` };
+    }
+    const value = readOption(args, "value");
+    if (value === undefined) return { kind: "error", output: "value is required" };
+    const lines = pendingImport.text.split(/\r?\n/);
+    if (lineNumber > lines.length) {
+      return { kind: "error", output: `Import line out of range: ${lineNumber}` };
+    }
+    lines[lineNumber - 1] = decodeURIComponent(value);
+    const pendingImportUpdate: PendingImport = {
+      ...pendingImport,
+      text: lines.join("\n"),
+    };
+    return {
+      kind: "import-updated",
+      importId,
+      pendingImport: pendingImportUpdate,
+      output: `Import line updated: ${lineNumber}`,
     };
   }
 

@@ -283,6 +283,26 @@ describe("scispace zustand store", () => {
     ]);
   });
 
+  it("updates import raw text lines through scispace commands", async () => {
+    const { store } = await makeStore();
+    const importId = store.getState().openImportDialog("editable.csv", "x,y\n1,2\n3,4");
+
+    await store
+      .getState()
+      .runScispace(`import-line ${importId} line=2 value=${encodeURIComponent("10,20")}`, {
+        source: "gui",
+      });
+
+    const pendingImport = store.getState().pendingImports.find((item) => item.id === importId);
+    expect(pendingImport?.text).toBe("x,y\n10,20\n3,4");
+    expect(pendingImport?.preview?.rows[0]).toEqual({ x: 10, y: 20 });
+    expect(store.getState().commandHistory.at(-1)).toMatchObject({
+      command: `import-line ${importId} line=2 value=${encodeURIComponent("10,20")}`,
+      source: "gui",
+      status: "success",
+    });
+  });
+
   it("opens raw import dialogs and confirms them without datasets", async () => {
     const { db, store } = await makeStore();
     const importId = store.getState().openImportDialog("notes.txt", "raw notes");

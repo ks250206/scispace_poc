@@ -376,6 +376,15 @@ describe("Workbench UI", () => {
     expect(screen.queryByRole("textbox", { name: "Raw text" })).not.toBeInTheDocument();
 
     expect(preview.querySelector('[aria-label="Resize import column x"]')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Raw line 2"), { target: { value: "10,20" } });
+    await waitFor(() =>
+      expect(useScispaceStore.getState().pendingImports[0]?.text).toBe("x,y\n10,20\n3,4\n5,6"),
+    );
+    expect(useScispaceStore.getState().commandHistory.at(-1)).toMatchObject({
+      command: `import-line ${importId} line=2 value=${encodeURIComponent("10,20")}`,
+      source: "gui",
+      status: "success",
+    });
   });
 
   it("can mark import columns for deletion and grays skipped raw rows", async () => {
