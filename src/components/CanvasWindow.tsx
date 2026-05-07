@@ -65,7 +65,7 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
         <div className="window-body">
           {window.kind === "browser" ? <DataBrowser /> : null}
           {window.kind === "table" && window.datasetId ? (
-            <DataTableWindow datasetId={window.datasetId} />
+            <DataTableWindow datasetId={window.datasetId} windowId={window.id} />
           ) : null}
           {window.kind === "plot" && window.plotId ? <PlotWindow plotId={window.plotId} /> : null}
           {window.kind === "terminal" ? <TerminalPanel /> : null}

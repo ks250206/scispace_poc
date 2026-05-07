@@ -45,9 +45,12 @@ describe("scispace zustand store", () => {
       x: 1984,
       y: 1152,
     });
+    expect(state.windows.find((window) => window.kind === "table")).toMatchObject({
+      height: 424,
+    });
     expect(state.windows.find((window) => window.kind === "terminal")).toMatchObject({
       x: 1984,
-      y: 1692,
+      y: 1836,
       height: 300,
     });
     expect(state.windows.find((window) => window.kind === "history")).toMatchObject({

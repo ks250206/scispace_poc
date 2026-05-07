@@ -405,6 +405,21 @@
   font-size: 12px;
 }
 
+.table-row-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-row-select select {
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+}
+
 .segmented {
   display: inline-flex;
   overflow: hidden;
@@ -431,9 +446,8 @@
 }
 
 .table-scroll {
-  min-height: 0;
-  height: min(100%, var(--table-visible-height, 640px));
-  flex: 1 1 auto;
+  height: var(--table-visible-height, 672px);
+  flex: 0 0 var(--table-visible-height, 672px);
   overflow: auto;
 }
 

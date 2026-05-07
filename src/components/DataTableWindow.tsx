@@ -1,11 +1,14 @@
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useScispaceStore } from "../store/scispaceStore";
 
 interface DataTableWindowProps {
   datasetId: string;
+  windowId: string;
 }
+
+export type TableVisibleRows = 10 | 20 | 50;
 
 const formatCellValue = (value: unknown): string => {
   if (value == null) return "";
@@ -15,11 +18,22 @@ const formatCellValue = (value: unknown): string => {
   return JSON.stringify(value);
 };
 
-export function DataTableWindow({ datasetId }: DataTableWindowProps) {
+const tableTitlebarHeight = 34;
+const tableControlsHeight = 38;
+const tableHeaderHeight = 32;
+const rowHeight = 32;
+
+const tableScrollHeight = (visibleRows: TableVisibleRows): number =>
+  tableHeaderHeight + visibleRows * rowHeight;
+
+export const tableWindowHeightForRows = (visibleRows: TableVisibleRows): number =>
+  tableTitlebarHeight + tableControlsHeight + tableScrollHeight(visibleRows);
+
+export function DataTableWindow({ datasetId, windowId }: DataTableWindowProps) {
   const dataset = useScispaceStore((state) => state.datasets.find((item) => item.id === datasetId));
-  const [visibleRows, setVisibleRows] = useState<20 | 50>(20);
+  const updateWindow = useScispaceStore((state) => state.updateWindow);
+  const [visibleRows, setVisibleRows] = useState<TableVisibleRows>(10);
   const parentRef = useRef<HTMLDivElement>(null);
-  const rowHeight = 32;
 
   const columns = useMemo(
     () =>
@@ -41,33 +55,33 @@ export function DataTableWindow({ datasetId }: DataTableWindowProps) {
     overscan: 6,
   });
 
+  useEffect(() => {
+    updateWindow(windowId, { height: tableWindowHeightForRows(visibleRows) });
+  }, [updateWindow, visibleRows, windowId]);
+
   if (!dataset) return <div className="empty-state">Dataset not found.</div>;
 
   return (
     <div className="table-window">
       <div className="window-controls">
         <span>{dataset.rows.length} rows · virtualized</span>
-        <div className="segmented">
-          <button
-            type="button"
-            className={visibleRows === 20 ? "active" : ""}
-            onClick={() => setVisibleRows(20)}
+        <label className="table-row-select">
+          Rows
+          <select
+            aria-label="Visible rows"
+            value={visibleRows}
+            onChange={(event) => setVisibleRows(Number(event.target.value) as TableVisibleRows)}
           >
-            20
-          </button>
-          <button
-            type="button"
-            className={visibleRows === 50 ? "active" : ""}
-            onClick={() => setVisibleRows(50)}
-          >
-            50
-          </button>
-        </div>
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+          </select>
+        </label>
       </div>
       <div
         ref={parentRef}
         className="table-scroll"
-        style={{ "--table-visible-height": `${visibleRows * rowHeight}px` } as CSSProperties}
+        style={{ "--table-visible-height": `${tableScrollHeight(visibleRows)}px` } as CSSProperties}
       >
         <table>
           <thead>

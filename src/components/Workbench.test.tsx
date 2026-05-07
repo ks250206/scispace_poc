@@ -93,6 +93,32 @@ describe("Workbench UI", () => {
     expect(screen.getByText("Table - waveform.csv")).toBeInTheDocument();
   });
 
+  it("resizes the table window when changing visible row count", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    const tableScroll = document.querySelector(".table-scroll") as HTMLElement;
+    expect(screen.getByLabelText("Visible rows")).toHaveValue("10");
+    expect(tableScroll.style.getPropertyValue("--table-visible-height")).toBe("352px");
+    expect(
+      useScispaceStore.getState().windows.find((window) => window.id === "table-seed"),
+    ).toMatchObject({
+      height: 424,
+    });
+
+    await user.selectOptions(screen.getByLabelText("Visible rows"), "50");
+
+    expect(tableScroll.style.getPropertyValue("--table-visible-height")).toBe("1632px");
+    await waitFor(() =>
+      expect(
+        useScispaceStore.getState().windows.find((window) => window.id === "table-seed"),
+      ).toMatchObject({
+        height: 1704,
+      }),
+    );
+  });
+
   it("opens an import settings window with a virtualized preview after file drop", async () => {
     render(<App />);
 

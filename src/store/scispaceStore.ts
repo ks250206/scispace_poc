@@ -67,6 +67,8 @@ interface ScispaceState {
 
 const centerTileX = 1920;
 const centerTileY = 1080;
+const tableWindowHeightForRows = (visibleRows: 10 | 20 | 50): number =>
+  34 + 38 + 32 + visibleRows * 32;
 
 const initialWindows = (): WorkspaceWindow[] => [
   {
@@ -86,7 +88,7 @@ const initialWindows = (): WorkspaceWindow[] => [
     x: centerTileX + 396,
     y: centerTileY + 88,
     width: 650,
-    height: 420,
+    height: tableWindowHeightForRows(10),
     zIndex: 2,
     datasetId: "seed-waveform",
   },
@@ -107,7 +109,7 @@ const initialWindows = (): WorkspaceWindow[] => [
     kind: "terminal",
     title: "Terminal",
     x: centerTileX + 64,
-    y: centerTileY + 612,
+    y: centerTileY + 756,
     width: 1664,
     height: 300,
     zIndex: 4,
@@ -135,7 +137,7 @@ const ensureWorkspaceWindows = (windows: WorkspaceWindow[]): WorkspaceWindow[] =
         kind: "terminal",
         title: "Terminal",
         x: centerTileX + 64,
-        y: centerTileY + 612,
+        y: centerTileY + 756,
         width: 1664,
         height: 300,
         zIndex,
@@ -542,7 +544,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           x: 420 + state.windows.length * 18,
           y: 102 + state.windows.length * 14,
           width: 650,
-          height: 420,
+          height: tableWindowHeightForRows(10),
           zIndex,
           datasetId,
         };
