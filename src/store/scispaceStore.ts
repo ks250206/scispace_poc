@@ -695,9 +695,12 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           const plotSpecs = state.plotSpecs.map((plot) => (plot.id === spec.id ? spec : plot));
           return {
             plotSpecs,
-            windows: state.windows.map((window) =>
-              retitleWindow(window, state.datasets, plotSpecs),
-            ),
+            windows: state.windows.map((window) => {
+              const retitledWindow = retitleWindow(window, state.datasets, plotSpecs);
+              return retitledWindow.kind === "plot" && retitledWindow.plotId === spec.id
+                ? { ...retitledWindow, width: spec.size.width, height: spec.size.height }
+                : retitledWindow;
+            }),
           };
         });
         persistLayout(db, get());

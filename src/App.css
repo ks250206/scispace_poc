@@ -524,8 +524,8 @@
   min-height: 0;
   max-width: 100%;
   flex: 1;
-  overflow: auto;
-  padding: 10px;
+  overflow: hidden;
+  padding: 0;
 }
 
 .plot-window-toolbar {
@@ -569,10 +569,6 @@
   color: var(--text);
   cursor: pointer;
   font-size: 12px;
-}
-
-.plot-host .uplot {
-  max-width: 100%;
 }
 
 .plot-config-window {

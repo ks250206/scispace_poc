@@ -252,6 +252,12 @@ describe("Workbench UI", () => {
         height: 420,
       }),
     );
+    expect(
+      useScispaceStore.getState().windows.find((window) => window.id === "plot-seed"),
+    ).toMatchObject({
+      width: 720,
+      height: 420,
+    });
 
     await user.click(screen.getByRole("tab", { name: "Series" }));
     expect(screen.getByRole("tab", { name: "Series" })).toHaveAttribute("aria-selected", "true");
