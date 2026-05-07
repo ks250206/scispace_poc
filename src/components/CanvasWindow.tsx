@@ -15,6 +15,8 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
   const activeWindowId = useScispaceStore((state) => state.activeWindowId);
   const updateWindow = useScispaceStore((state) => state.updateWindow);
   const focusWindow = useScispaceStore((state) => state.focusWindow);
+  const closeWindow = useScispaceStore((state) => state.closeWindow);
+  const canClose = window.kind === "table" || window.kind === "plot";
 
   return (
     <Rnd
@@ -42,6 +44,20 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
           <span className={`window-dot ${window.kind}`} />
           <strong>{window.title}</strong>
           <span className="window-kind">{window.kind}</span>
+          {canClose ? (
+            <button
+              aria-label={`Close ${window.title}`}
+              className="window-close"
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                closeWindow(window.id);
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              ×
+            </button>
+          ) : null}
         </header>
         <div className="window-body">
           {window.kind === "browser" ? <DataBrowser /> : null}

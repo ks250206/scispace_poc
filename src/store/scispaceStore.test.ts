@@ -183,6 +183,66 @@ describe("scispace zustand store", () => {
     });
   });
 
+  it("closes table windows without deleting the source dataset", async () => {
+    const { db, store } = await makeStore();
+
+    store.getState().closeWindow("table-seed");
+
+    expect(store.getState().windows.some((window) => window.id === "table-seed")).toBe(false);
+    expect(store.getState().datasets.some((dataset) => dataset.id === "seed-waveform")).toBe(true);
+    expect(await db.datasets.get("seed-waveform")).toMatchObject({ name: "waveform.csv" });
+    expect(
+      (await db.layout.get("main"))?.value.windows.some((window) => window.id === "table-seed"),
+    ).toBe(false);
+  });
+
+  it("removes unreferenced plot specs when closing plot windows", async () => {
+    const { store } = await makeStore();
+
+    store.getState().closeWindow("plot-seed");
+
+    expect(store.getState().windows.some((window) => window.id === "plot-seed")).toBe(false);
+    expect(store.getState().plotSpecs.some((plot) => plot.id === "seed-plot")).toBe(false);
+    expect(store.getState().datasets.some((dataset) => dataset.id === "seed-waveform")).toBe(true);
+  });
+
+  it("resets Zustand and Dexie to a fresh project", async () => {
+    const { db, store } = await makeStore();
+    store.getState().openImportDialog("pending.csv", "x,y\n1,2");
+    await store.getState().importTextFile("sample.csv", "x,y\n0,1");
+    await store.getState().runScispace("elt waveform.csv as derived.csv");
+    store.getState().closeWindow("table-seed");
+    store.getState().setViewport({ x: 32, y: 48, scale: 0.8 });
+
+    await store.getState().createNewProject();
+
+    const state = store.getState();
+    expect(state.files.map((file) => file.path)).toEqual(["~/raw/waveform.csv"]);
+    expect(state.datasets.map((dataset) => dataset.id)).toEqual(["seed-waveform"]);
+    expect(state.windows.map((window) => window.kind)).toEqual([
+      "browser",
+      "table",
+      "plot",
+      "terminal",
+    ]);
+    expect(state.plotSpecs.map((plot) => plot.id)).toEqual(["seed-plot"]);
+    expect(state.pendingImports).toHaveLength(0);
+    expect(state.terminalEvents).toHaveLength(0);
+    expect(state.activeDatasetId).toBe("seed-waveform");
+    expect(state.activeWindowId).toBeUndefined();
+    expect(state.viewport).toEqual({ x: 0, y: 0, scale: 1 });
+    expect(await db.files.get("~/raw/sample.csv")).toBeUndefined();
+    expect((await db.datasets.toArray()).some((dataset) => dataset.name === "derived.csv")).toBe(
+      false,
+    );
+    expect((await db.layout.get("main"))?.value.windows.map((window) => window.kind)).toEqual([
+      "browser",
+      "table",
+      "plot",
+      "terminal",
+    ]);
+  });
+
   it("adds a terminal window when loading an older persisted layout", async () => {
     const db = new SciSpaceDatabase(`test-${crypto.randomUUID()}`);
     await db.open();

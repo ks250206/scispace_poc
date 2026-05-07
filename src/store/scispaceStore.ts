@@ -41,6 +41,8 @@ interface ScispaceState {
   openTable: (datasetId: string) => Promise<void>;
   openPlot: (spec: PlotSpec) => Promise<void>;
   runScispace: (input: string) => Promise<ScispaceCommandResult>;
+  closeWindow: (id: string) => void;
+  createNewProject: () => Promise<void>;
   updateWindow: (
     id: string,
     patch: Partial<Pick<WorkspaceWindow, "x" | "y" | "width" | "height">>,
@@ -122,6 +124,8 @@ const seedPlot = (): PlotSpec => ({
   title: "waveform.csv: signal vs time",
 });
 
+const initialViewport = (): ViewportState => ({ x: 0, y: 0, scale: 1 });
+
 const makeFileRecord = (
   path: string,
   text: string,
@@ -137,6 +141,18 @@ const makeFileRecord = (
   parseError,
   createdAt: Date.now(),
 });
+
+const createInitialProject = () => {
+  const seed = createSeedDataset();
+  const file = makeFileRecord(seed.sourcePath, datasetToDelimitedText(seed), seed.id);
+  return {
+    files: [file],
+    datasets: [seed],
+    windows: initialWindows(),
+    plotSpecs: [seedPlot()],
+    viewport: initialViewport(),
+  };
+};
 
 const persistLayout = (db: SciSpaceDatabase, state: ScispaceState): void => {
   void writePersistedLayout(db, {
@@ -216,14 +232,13 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       let nextFiles = files;
 
       if (nextDatasets.length === 0) {
-        const seed = createSeedDataset();
-        const file = makeFileRecord(seed.sourcePath, datasetToDelimitedText(seed), seed.id);
+        const initialProject = createInitialProject();
         await db.transaction("rw", db.datasets, db.files, async () => {
-          await db.datasets.put(seed);
-          await db.files.put(file);
+          await db.datasets.bulkPut(initialProject.datasets);
+          await db.files.bulkPut(initialProject.files);
         });
-        nextDatasets = [seed];
-        nextFiles = [file];
+        nextDatasets = initialProject.datasets;
+        nextFiles = initialProject.files;
       }
 
       set({
@@ -473,6 +488,59 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
 
       set((state) => ({ terminalEvents: [...state.terminalEvents, result.output] }));
       return result;
+    },
+
+    closeWindow: (id) => {
+      set((state) => {
+        const target = state.windows.find((window) => window.id === id);
+        if (!target) return state;
+
+        const windows = state.windows.filter((window) => window.id !== id);
+        const plotSpecs =
+          target.kind === "plot" &&
+          target.plotId &&
+          !windows.some((window) => window.kind === "plot" && window.plotId === target.plotId)
+            ? state.plotSpecs.filter((plot) => plot.id !== target.plotId)
+            : state.plotSpecs;
+
+        return {
+          windows,
+          plotSpecs,
+          activeWindowId: state.activeWindowId === id ? undefined : state.activeWindowId,
+        };
+      });
+      persistLayout(db, get());
+    },
+
+    createNewProject: async () => {
+      const initialProject = createInitialProject();
+      await db.transaction("rw", db.files, db.datasets, db.layout, async () => {
+        await db.files.clear();
+        await db.datasets.clear();
+        await db.layout.clear();
+        await db.files.bulkPut(initialProject.files);
+        await db.datasets.bulkPut(initialProject.datasets);
+        await db.layout.put({
+          id: "main",
+          value: {
+            windows: initialProject.windows,
+            viewport: initialProject.viewport,
+          },
+        });
+      });
+
+      set({
+        initialized: true,
+        files: initialProject.files,
+        datasets: initialProject.datasets,
+        windows: initialProject.windows,
+        plotSpecs: initialProject.plotSpecs,
+        pendingImports: [],
+        terminalEvents: [],
+        activeDatasetId: initialProject.datasets[0]?.id,
+        activeWindowId: undefined,
+        viewport: initialProject.viewport,
+      });
     },
 
     updateWindow: (id, patch) => {

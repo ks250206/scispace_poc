@@ -10,6 +10,7 @@ export function Workbench() {
   const setViewport = useScispaceStore((state) => state.setViewport);
   const windows = useScispaceStore((state) => state.windows);
   const openImportDialog = useScispaceStore((state) => state.openImportDialog);
+  const createNewProject = useScispaceStore((state) => state.createNewProject);
   const canvasDrag = useRef<{ x: number; y: number; originX: number; originY: number } | null>(
     null,
   );
@@ -70,11 +71,19 @@ export function Workbench() {
     }
   };
 
+  const handleNewProject = () => {
+    const confirmed = window.confirm("Create a new project? Current data and windows will reset.");
+    if (confirmed) void createNewProject();
+  };
+
   return (
     <main className="workbench" onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}>
       <div className="topbar">
         <div className="brand">SciSpace</div>
         <div className="toolbar-group">
+          <button type="button" onClick={handleNewProject}>
+            New Project
+          </button>
           <button type="button" onClick={() => setViewport({ x: 0, y: 0, scale: 1 })}>
             Reset View
           </button>
