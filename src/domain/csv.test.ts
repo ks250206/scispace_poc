@@ -3,6 +3,7 @@ import {
   createSeedDataset,
   datasetToDelimitedText,
   datasetColumnNames,
+  detectImportPreset,
   normalizeVirtualPath,
   normalizeDataset,
   parseDelimitedText,
@@ -12,6 +13,22 @@ describe("csv domain", () => {
   it("normalizes upload names into ~/raw paths", () => {
     expect(normalizeVirtualPath("nested/sample.csv")).toBe("~/raw/sample.csv");
     expect(normalizeVirtualPath("")).toBe("~/raw/untitled.txt");
+  });
+
+  it("detects EC-Lab mpt import presets from header line metadata", () => {
+    const preset = detectImportPreset(
+      "EC-Lab ASCII FILE\nNb header lines : 4\nRun on channel : 4\nmode\ttime/s\tEwe/V\n1\t0\t3",
+      "sample.mpt",
+    );
+
+    expect(preset).toMatchObject({
+      id: "ec-lab-mpt",
+      label: "EC-Lab MPT",
+      dataStartLine: 4,
+      options: { skipRows: 3, delimiter: "tab", hasHeader: true },
+      metadata: { "Nb header lines": "4", "Run on channel": "4" },
+    });
+    expect(detectImportPreset("x,y\n1,2", "sample.csv")).toBeUndefined();
   });
 
   it("parses CSV text into typed dataset rows", () => {

@@ -2,6 +2,7 @@ import type {
   DataValue,
   Dataset,
   DatasetColumn,
+  DetectedImportPreset,
   ImportDelimiter,
   ImportParseOptions,
 } from "./types";
@@ -124,6 +125,39 @@ export const normalizeVirtualPath = (fileName: string, directory = "~/raw"): str
   const safeName = fileName.trim().replaceAll("\\", "/").split("/").filter(Boolean).at(-1);
 
   return `${directory.replace(/\/$/, "")}/${safeName || "untitled.txt"}`;
+};
+
+export const detectImportPreset = (
+  text: string,
+  fileName: string,
+): DetectedImportPreset | undefined => {
+  if (!/\.mpt$/i.test(fileName) && !text.startsWith("EC-Lab ASCII FILE")) return undefined;
+  const lines = text.split(/\r?\n/);
+  const headerLine = lines.find((line) => /^Nb header lines\s*:/i.test(line.trim()));
+  const headerLineCount = Number(headerLine?.split(":").at(1)?.trim());
+  if (!Number.isInteger(headerLineCount) || headerLineCount < 1) return undefined;
+
+  const metadata = Object.fromEntries(
+    lines
+      .slice(0, Math.max(0, headerLineCount - 1))
+      .map((line) => line.split(":"))
+      .filter((parts) => parts.length >= 2)
+      .map(([key, ...value]) => [key.trim(), value.join(":").trim()])
+      .filter(([key]) => key.length > 0),
+  );
+
+  return {
+    id: "ec-lab-mpt",
+    label: "EC-Lab MPT",
+    dataStartLine: headerLineCount,
+    options: {
+      skipRows: headerLineCount - 1,
+      delimiter: "tab",
+      commentPrefix: "",
+      hasHeader: true,
+    },
+    metadata,
+  };
 };
 
 const delimiterToString = (delimiter: ImportDelimiter, sampleLine: string): string => {

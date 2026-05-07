@@ -334,6 +334,20 @@ describe("scispace zustand store", () => {
     ]);
   });
 
+  it("applies EC-Lab mpt presets when opening imports", async () => {
+    const { store } = await makeStore();
+    const text =
+      "EC-Lab ASCII FILE\nNb header lines : 4\nRun on channel : 4\nmode\ttime/s\tEwe/V\n1\t0\t3";
+    const importId = store.getState().openImportDialog("sample.mpt", text);
+
+    expect(store.getState().pendingImports[0]).toMatchObject({
+      id: importId,
+      detectedPreset: { id: "ec-lab-mpt", label: "EC-Lab MPT", dataStartLine: 4 },
+      options: { skipRows: 3, delimiter: "tab", hasHeader: true },
+      preview: { rows: [{ mode: 1, time_s: 0, Ewe_V: 3 }] },
+    });
+  });
+
   it("updates import settings through scispace commands", async () => {
     const { store } = await makeStore();
     const importId = store

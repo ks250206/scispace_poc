@@ -18,6 +18,14 @@ export interface ImportParseOptions {
   excludedColumnIds: string[];
 }
 
+export interface DetectedImportPreset {
+  id: "ec-lab-mpt";
+  label: string;
+  dataStartLine: number;
+  options: Pick<ImportParseOptions, "skipRows" | "delimiter" | "commentPrefix" | "hasHeader">;
+  metadata: Record<string, string>;
+}
+
 export interface ViewportState {
   x: number;
   y: number;
@@ -222,6 +230,7 @@ export interface PendingImport {
   text: string;
   mode: "tabular" | "raw";
   options: ImportParseOptions;
+  detectedPreset?: DetectedImportPreset;
   allPreview?: Dataset;
   preview?: Dataset;
   error?: string;

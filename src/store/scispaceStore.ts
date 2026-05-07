@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   createSeedDataset,
+  detectImportPreset,
   datasetToDelimitedText,
   defaultImportParseOptions,
   datasetColumnIds,
@@ -594,9 +595,13 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
 
     openImportDialog: (fileName, text) => {
       const id = crypto.randomUUID();
-      const initialPreview = createPreviews(id, fileName, text, defaultImportParseOptions);
+      const detectedPreset = detectImportPreset(text, fileName);
+      const baseOptions = detectedPreset
+        ? { ...defaultImportParseOptions, ...detectedPreset.options }
+        : defaultImportParseOptions;
+      const initialPreview = createPreviews(id, fileName, text, baseOptions);
       const options = {
-        ...defaultImportParseOptions,
+        ...baseOptions,
         excludedColumnIds: emptyColumnIds(initialPreview.allPreview),
       };
       const { allPreview, preview, error } = createPreviews(id, fileName, text, options);
@@ -609,6 +614,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           text,
           mode: "tabular",
           options,
+          detectedPreset,
           allPreview,
           preview,
           error,
@@ -826,14 +832,21 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       }
       if (result.kind === "import-open") {
         const importId = result.importId;
+        const detectedPreset = detectImportPreset(
+          result.pendingImport.text,
+          result.pendingImport.fileName,
+        );
+        const baseOptions = detectedPreset
+          ? { ...result.pendingImport.options, ...detectedPreset.options }
+          : result.pendingImport.options;
         const initialPreview = createPreviews(
           importId,
           result.pendingImport.fileName,
           result.pendingImport.text,
-          result.pendingImport.options,
+          baseOptions,
         );
         const options = {
-          ...result.pendingImport.options,
+          ...baseOptions,
           excludedColumnIds: emptyColumnIds(initialPreview.allPreview),
         };
         const { allPreview, preview, error } = createPreviews(
@@ -845,6 +858,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         const pendingImport: PendingImport = {
           ...result.pendingImport,
           options,
+          detectedPreset,
           allPreview,
           preview,
           error,
