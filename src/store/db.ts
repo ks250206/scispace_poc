@@ -4,6 +4,7 @@ import type { Dataset, PersistedLayout, VirtualFile } from "../domain/types";
 const defaultLayout: PersistedLayout = {
   windows: [],
   viewport: { x: 0, y: 0, scale: 1 },
+  plotSpecs: [],
 };
 
 export class SciSpaceDatabase extends Dexie {

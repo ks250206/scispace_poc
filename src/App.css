@@ -399,6 +399,100 @@
   max-width: 100%;
 }
 
+.plot-controls {
+  display: grid;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.plot-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.plot-title-input,
+.plot-controls select,
+.plot-series-row input,
+.plot-series-add select {
+  height: 26px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+}
+
+.plot-title-input {
+  width: 100%;
+  padding: 0 8px;
+  font-weight: 600;
+}
+
+.plot-controls select,
+.plot-series-add select {
+  padding: 0 6px;
+}
+
+.plot-series-panel {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+}
+
+.plot-series-row,
+.plot-series-add {
+  display: grid;
+  align-items: center;
+  gap: 6px;
+}
+
+.plot-series-row {
+  grid-template-columns: minmax(70px, 0.8fr) minmax(90px, 1fr) 34px 28px;
+}
+
+.plot-series-add {
+  grid-template-columns: minmax(120px, 1fr) 54px;
+}
+
+.series-source {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plot-series-row input[type="color"] {
+  width: 34px;
+  padding: 2px;
+}
+
+.plot-series-row button,
+.plot-series-add button {
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.plot-series-row button:disabled,
+.plot-series-add button:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
 .import-window {
   display: flex;
   height: 100%;

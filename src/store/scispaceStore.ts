@@ -13,6 +13,7 @@ import type {
   ImportParseOptions,
   PendingImport,
   PlotSpec,
+  PlotSeries,
   ScispaceCommandResult,
   ViewportState,
   VirtualFile,
@@ -40,6 +41,7 @@ interface ScispaceState {
   selectDataset: (datasetId: string) => Promise<void>;
   openTable: (datasetId: string) => Promise<void>;
   openPlot: (spec: PlotSpec) => Promise<void>;
+  updatePlotSpec: (plotId: string, patch: Partial<PlotSpec>) => void;
   runScispace: (input: string) => Promise<ScispaceCommandResult>;
   closeWindow: (id: string) => void;
   createNewProject: () => Promise<void>;
@@ -126,7 +128,36 @@ const seedPlot = (): PlotSpec => ({
   x: "time",
   y: "signal",
   title: "waveform.csv: signal vs time",
+  series: [{ y: "signal", label: "signal", color: "#2563eb" }],
+  zoomMode: "xy",
+  axisLabels: { x: "time", y: "signal" },
 });
+
+const plotColors = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2"];
+
+const normalizePlotSeries = (
+  series: PlotSeries[] | undefined,
+  fallbackY?: string,
+): PlotSeries[] => {
+  const sourceSeries: Partial<PlotSeries>[] =
+    series && series.length > 0 ? series : fallbackY ? [{ y: fallbackY }] : [];
+  return sourceSeries.map((item, index) => ({
+    y: item.y ?? `series_${index + 1}`,
+    label: item.label || item.y || `series_${index + 1}`,
+    color: item.color || plotColors[index % plotColors.length] || "#2563eb",
+  }));
+};
+
+const normalizePlotSpec = (spec: PlotSpec): PlotSpec => {
+  const series = normalizePlotSeries(spec.series, spec.y);
+  return {
+    ...spec,
+    y: series[0]?.y ?? spec.y,
+    series,
+    zoomMode: spec.zoomMode ?? "xy",
+    axisLabels: spec.axisLabels ?? { x: spec.x, y: series.map((item) => item.label).join(", ") },
+  };
+};
 
 const initialViewport = (): ViewportState => ({ x: 0, y: 0, scale: 1 });
 
@@ -188,6 +219,7 @@ const persistLayout = (db: SciSpaceDatabase, state: ScispaceState): void => {
   void writePersistedLayout(db, {
     windows: state.windows.filter((window) => window.kind !== "import"),
     viewport: state.viewport,
+    plotSpecs: state.plotSpecs.map(normalizePlotSpec),
   });
 };
 
@@ -301,7 +333,10 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         datasets: nextDatasets,
         windows:
           layout.windows.length > 0 ? ensureTerminalWindow(layout.windows) : initialWindows(),
-        plotSpecs: [seedPlot()],
+        plotSpecs:
+          layout.plotSpecs && layout.plotSpecs.length > 0
+            ? layout.plotSpecs.map(normalizePlotSpec)
+            : [seedPlot()],
         viewport: layout.viewport,
         activeDatasetId: nextDatasets[0]?.id,
       });
@@ -486,28 +521,48 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     },
 
     openPlot: async (spec) => {
+      const normalizedSpec = normalizePlotSpec(spec);
       const dataset = get().datasets.find((item) => item.id === spec.source);
       set((state) => {
         const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
         return {
-          plotSpecs: [...state.plotSpecs.filter((plot) => plot.id !== spec.id), spec],
+          plotSpecs: [
+            ...state.plotSpecs.filter((plot) => plot.id !== normalizedSpec.id),
+            normalizedSpec,
+          ],
           windows: [
             ...state.windows,
             {
-              id: `plot-${spec.id}`,
+              id: `plot-${normalizedSpec.id}`,
               kind: "plot",
-              title: spec.title,
+              title: normalizedSpec.title,
               x: 760 + state.windows.length * 20,
               y: 116 + state.windows.length * 16,
               width: 640,
               height: 420,
               zIndex,
               datasetId: dataset?.id,
-              plotId: spec.id,
+              plotId: normalizedSpec.id,
             },
           ],
-          activeWindowId: `plot-${spec.id}`,
+          activeWindowId: `plot-${normalizedSpec.id}`,
         };
+      });
+      persistLayout(db, get());
+    },
+
+    updatePlotSpec: (plotId, patch) => {
+      set((state) => {
+        const plotSpecs = state.plotSpecs.map((plot) => {
+          if (plot.id !== plotId) return plot;
+          const titleEdited =
+            patch.title !== undefined && patch.title !== plot.title ? true : plot.titleEdited;
+          return normalizePlotSpec({ ...plot, ...patch, titleEdited });
+        });
+        const windows = state.windows.map((window) =>
+          retitleWindow(window, state.datasets, plotSpecs),
+        );
+        return { plotSpecs, windows };
       });
       persistLayout(db, get());
     },
@@ -579,6 +634,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           value: {
             windows: initialProject.windows,
             viewport: initialProject.viewport,
+            plotSpecs: initialProject.plotSpecs,
           },
         });
       });
@@ -595,6 +651,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         activeWindowId: undefined,
         viewport: initialProject.viewport,
       });
+      persistLayout(db, get());
     },
 
     createDirectory: async (name, parentPath = "~/raw") => {
@@ -658,7 +715,10 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       const updatedPlotSpecs = get().plotSpecs.map((plot) => {
         const dataset = updatedDatasets.find((item) => item.id === plot.source);
         if (!dataset || !datasetIdsToRename.has(dataset.id)) return plot;
-        return { ...plot, title: `${dataset.name}: ${plot.y} vs ${plot.x}` };
+        const title = plot.titleEdited
+          ? plot.title
+          : `${dataset.name}: ${plot.series.map((series) => series.y).join(", ")} vs ${plot.x}`;
+        return normalizePlotSpec({ ...plot, title });
       });
       const updatedWindows = get().windows.map((window) =>
         retitleWindow(window, updatedDatasets, updatedPlotSpecs),

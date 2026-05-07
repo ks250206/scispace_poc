@@ -62,6 +62,7 @@ Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
       stroke: () => {},
       save: () => {},
       restore: () => {},
+      rotate: () => {},
       scale: () => {},
       translate: () => {},
       setTransform: () => {},

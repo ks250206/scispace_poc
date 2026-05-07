@@ -53,13 +53,25 @@ export interface Dataset {
   createdAt: number;
 }
 
+export type PlotZoomMode = "x" | "y" | "xy";
+
+export interface PlotSeries {
+  y: string;
+  label: string;
+  color: string;
+}
+
 export interface PlotSpec {
   id: string;
   type: "line";
   source: string;
   x: string;
-  y: string;
   title: string;
+  series: PlotSeries[];
+  zoomMode: PlotZoomMode;
+  axisLabels?: { x?: string; y?: string };
+  titleEdited?: boolean;
+  y?: string;
 }
 
 export type ScispaceCommandResult =
@@ -80,6 +92,7 @@ export type ScispaceCommandResult =
 export interface PersistedLayout {
   windows: WorkspaceWindow[];
   viewport: ViewportState;
+  plotSpecs?: PlotSpec[];
 }
 
 export interface ImportFileResult {

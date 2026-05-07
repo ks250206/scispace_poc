@@ -1,5 +1,5 @@
 import { normalizeVirtualPath, parseDelimitedText } from "./csv";
-import type { Dataset, PendingImport, PlotSpec, ScispaceCommandResult } from "./types";
+import type { Dataset, PendingImport, PlotSeries, PlotSpec, ScispaceCommandResult } from "./types";
 
 export interface CommandContext {
   datasets: Dataset[];
@@ -19,6 +19,15 @@ const readOption = (tokens: string[], key: string): string | undefined => {
 
 const parseBooleanOption = (tokens: string[], key: string): boolean =>
   readOption(tokens, key) === "true";
+
+const plotColors = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2"];
+
+const createPlotSeries = (columns: string[]): PlotSeries[] =>
+  columns.map((column, index) => ({
+    y: column,
+    label: column,
+    color: plotColors[index % plotColors.length] ?? "#2563eb",
+  }));
 
 export const executeScispaceCommand = (
   input: string,
@@ -67,18 +76,29 @@ export const executeScispaceCommand = (
     if (!dataset) return { kind: "error", output: `Dataset not found: ${args[0] ?? ""}` };
 
     const x = readOption(args, "x") ?? dataset.columns[0];
-    const y = readOption(args, "y") ?? dataset.columns[1];
-    if (!dataset.columns.includes(x) || !dataset.columns.includes(y)) {
-      return { kind: "error", output: `Unknown plot columns for ${dataset.name}: x=${x} y=${y}` };
+    const yColumns = (readOption(args, "y") ?? dataset.columns[1] ?? "")
+      .split(",")
+      .map((column) => column.trim())
+      .filter(Boolean);
+    const unknownColumns = [x, ...yColumns].filter((column) => !dataset.columns.includes(column));
+    if (yColumns.length === 0 || unknownColumns.length > 0) {
+      return {
+        kind: "error",
+        output: `Unknown plot columns for ${dataset.name}: ${unknownColumns.join(", ")}`,
+      };
     }
+    const series = createPlotSeries(yColumns);
 
     const spec: PlotSpec = {
       id: crypto.randomUUID(),
       type: "line",
       source: dataset.id,
       x,
-      y,
-      title: `${dataset.name}: ${y} vs ${x}`,
+      y: series[0]?.y,
+      title: `${dataset.name}: ${series.map((item) => item.y).join(", ")} vs ${x}`,
+      series,
+      zoomMode: "xy",
+      axisLabels: { x, y: series.map((item) => item.label).join(", ") },
     };
 
     return { kind: "plot", spec, output: `Plot opened: ${spec.title}` };

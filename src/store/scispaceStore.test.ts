@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createSeedDataset, datasetToDelimitedText } from "../domain/csv";
 import { createScispaceStore } from "./scispaceStore";
 import { SciSpaceDatabase } from "./db";
 
@@ -8,6 +9,22 @@ const makeStore = async () => {
   const store = createScispaceStore(db);
   await store.getState().initialize();
   return { db, store };
+};
+
+const storeSeedDataset = () => {
+  const dataset = createSeedDataset();
+  return {
+    dataset,
+    file: {
+      id: dataset.sourcePath,
+      path: dataset.sourcePath,
+      name: "waveform.csv",
+      kind: "file" as const,
+      text: datasetToDelimitedText(dataset),
+      datasetId: dataset.id,
+      createdAt: Date.now(),
+    },
+  };
 };
 
 describe("scispace zustand store", () => {
@@ -53,6 +70,17 @@ describe("scispace zustand store", () => {
       parseError: "Raw file stored without tabular parsing",
     });
     expect(await db.files.get("~/raw/notes (1).txt")).toMatchObject({ text: "more notes" });
+  });
+
+  it("stores parse errors for invalid tabular uploads", async () => {
+    const { db, store } = await makeStore();
+    const result = await store.getState().importTextFile("bad.csv", "\n");
+
+    expect(result.dataset).toBeUndefined();
+    expect(result.parseError).toBe("Empty tabular file");
+    expect(await db.files.get("~/raw/bad.csv")).toMatchObject({
+      parseError: "Empty tabular file",
+    });
   });
 
   it("opens an import dialog before persisting dropped files and confirms through settings", async () => {
@@ -136,11 +164,17 @@ describe("scispace zustand store", () => {
 
   it("runs pseudo commands and mutates real store state", async () => {
     const { store } = await makeStore();
-    const plot = await store.getState().runScispace("plot waveform.csv x=time y=signal");
+    const plot = await store.getState().runScispace("plot waveform.csv x=time y=signal,background");
     const table = await store.getState().runScispace("table waveform.csv");
 
     expect(plot.kind).toBe("plot");
     expect(table.kind).toBe("open-table");
+    expect(
+      store
+        .getState()
+        .plotSpecs.at(-1)
+        ?.series.map((series) => series.y),
+    ).toEqual(["signal", "background"]);
     expect(
       store
         .getState()
@@ -181,6 +215,44 @@ describe("scispace zustand store", () => {
       x: 120,
       y: 140,
     });
+  });
+
+  it("updates and persists plot specs through layout", async () => {
+    const { db, store } = await makeStore();
+
+    store.getState().updatePlotSpec("seed-plot", {
+      title: "Edited signal plot",
+      x: "index",
+      zoomMode: "x",
+      series: [
+        { y: "signal", label: "Signal", color: "#dc2626" },
+        { y: "background", label: "Background", color: "#16a34a" },
+      ],
+    });
+
+    expect(store.getState().plotSpecs[0]).toMatchObject({
+      title: "Edited signal plot",
+      titleEdited: true,
+      x: "index",
+      zoomMode: "x",
+    });
+    expect(store.getState().windows.find((window) => window.id === "plot-seed")?.title).toBe(
+      "Edited signal plot",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const restoredStore = createScispaceStore(db);
+    await restoredStore.getState().initialize();
+
+    expect(restoredStore.getState().plotSpecs[0]).toMatchObject({
+      title: "Edited signal plot",
+      x: "index",
+      zoomMode: "x",
+    });
+    expect(restoredStore.getState().plotSpecs[0]?.series.map((series) => series.y)).toEqual([
+      "signal",
+      "background",
+    ]);
   });
 
   it("closes table windows without deleting the source dataset", async () => {
@@ -262,6 +334,15 @@ describe("scispace zustand store", () => {
     });
   });
 
+  it("normalizes shorthand move target directories", async () => {
+    const { store } = await makeStore();
+    await store.getState().createDirectory("analysis");
+
+    await store.getState().moveVirtualItem("~/raw/waveform.csv", "analysis");
+
+    expect(store.getState().datasets[0]?.sourcePath).toBe("~/raw/analysis/waveform.csv");
+  });
+
   it("renames dataset files and retitles open windows", async () => {
     const { db, store } = await makeStore();
 
@@ -275,8 +356,21 @@ describe("scispace zustand store", () => {
     expect(store.getState().windows.find((window) => window.id === "table-seed")?.title).toBe(
       "Table - renamed.csv",
     );
+    expect(store.getState().plotSpecs[0]?.title).toBe("renamed.csv: signal vs time");
     expect(await db.files.get("~/raw/waveform.csv")).toBeUndefined();
     expect(await db.files.get("~/raw/renamed.csv")).toMatchObject({ name: "renamed.csv" });
+  });
+
+  it("keeps manually edited plot titles during dataset rename", async () => {
+    const { store } = await makeStore();
+
+    store.getState().updatePlotSpec("seed-plot", { title: "Manual plot title" });
+    await store.getState().renameVirtualItem("~/raw/waveform.csv", "renamed.csv");
+
+    expect(store.getState().plotSpecs[0]?.title).toBe("Manual plot title");
+    expect(store.getState().windows.find((window) => window.id === "plot-seed")?.title).toBe(
+      "Manual plot title",
+    );
   });
 
   it("deletes files with their datasets and dependent windows", async () => {
@@ -333,5 +427,39 @@ describe("scispace zustand store", () => {
     await store.getState().initialize();
 
     expect(store.getState().windows.some((window) => window.kind === "terminal")).toBe(true);
+  });
+
+  it("restores legacy persisted plot specs without series fields", async () => {
+    const db = new SciSpaceDatabase(`test-${crypto.randomUUID()}`);
+    await db.open();
+    const seed = storeSeedDataset();
+    await db.datasets.put(seed.dataset);
+    await db.files.put(seed.file);
+    await db.layout.put({
+      id: "main",
+      value: {
+        windows: [],
+        viewport: { x: 0, y: 0, scale: 1 },
+        plotSpecs: [
+          {
+            id: "legacy-plot",
+            type: "line",
+            source: "seed-waveform",
+            x: "time",
+            y: "background",
+            title: "legacy plot",
+          } as never,
+        ],
+      },
+    });
+
+    const store = createScispaceStore(db);
+    await store.getState().initialize();
+
+    expect(store.getState().plotSpecs[0]).toMatchObject({
+      id: "legacy-plot",
+      series: [{ y: "background", label: "background", color: "#2563eb" }],
+      zoomMode: "xy",
+    });
   });
 });

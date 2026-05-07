@@ -42,8 +42,9 @@ describe("Workbench UI", () => {
     fireEvent.drop(shell as Element, { dataTransfer: { files: [file] } });
 
     await waitFor(() => expect(screen.getByText("Import - dropped.csv")).toBeInTheDocument());
-    expect(screen.getByText("dropped.csv")).toBeInTheDocument();
-    expect(screen.getByText("2 preview rows")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(useScispaceStore.getState().pendingImports[0]?.preview?.rows).toHaveLength(2),
+    );
   });
 
   it("shows close buttons only on table and plot windows and removes the clicked window", async () => {
@@ -91,6 +92,42 @@ describe("Workbench UI", () => {
     await waitFor(() => expect(screen.queryByText("renamed.csv")).not.toBeInTheDocument());
     expect(confirm).toHaveBeenCalled();
     expect(prompt).toHaveBeenCalledTimes(3);
+  });
+
+  it("edits plot title, axes, series, colors, and zoom mode from the plot window", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    const titleInput = screen.getByLabelText("Plot title");
+    await user.click(titleInput);
+    await user.keyboard("{Control>}a{/Control}Custom plot");
+    await waitFor(() =>
+      expect(useScispaceStore.getState().plotSpecs[0]?.title).toBe("Custom plot"),
+    );
+    await user.selectOptions(screen.getByLabelText("Plot x column"), "index");
+    await user.click(screen.getByRole("button", { name: "x" }));
+    await user.selectOptions(screen.getByLabelText("Add series"), "background");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.change(screen.getByLabelText("Color background"), { target: { value: "#dc2626" } });
+    const backgroundLabel = screen.getByLabelText("Label background");
+    await user.click(backgroundLabel);
+    await user.keyboard("{Control>}a{/Control}Background");
+
+    const spec = useScispaceStore.getState().plotSpecs.find((plot) => plot.id === "seed-plot");
+    expect(spec).toMatchObject({
+      title: "Custom plot",
+      titleEdited: true,
+      x: "index",
+      zoomMode: "x",
+    });
+    expect(spec?.series).toEqual([
+      { y: "signal", label: "signal", color: "#2563eb" },
+      { y: "background", label: "Background", color: "#dc2626" },
+    ]);
+
+    await user.click(screen.getByRole("button", { name: "Remove background" }));
+    expect(useScispaceStore.getState().plotSpecs[0]?.series).toHaveLength(1);
   });
 
   it("resets the workspace after confirming New Project", async () => {
