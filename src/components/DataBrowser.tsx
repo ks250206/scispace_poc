@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from "react";
+import { useMemo, useRef, type CSSProperties } from "react";
 import { datasetColumnIds } from "../domain/csv";
 import type { VirtualFile } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
@@ -23,6 +23,7 @@ const quoteCommandArg = (value: string): string =>
   /\s|["']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
 
 export function DataBrowser() {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const files = useScispaceStore((state) => state.files);
   const datasets = useScispaceStore((state) => state.datasets);
   const activeDatasetId = useScispaceStore((state) => state.activeDatasetId);
@@ -36,13 +37,16 @@ export function DataBrowser() {
     [files],
   );
 
+  const openFiles = async (loadedFiles: File[]) => {
+    for (const file of loadedFiles) {
+      openImportDialog(file.name, await file.text());
+    }
+  };
+
   const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    const droppedFiles = Array.from(event.dataTransfer.files);
-    for (const file of droppedFiles) {
-      openImportDialog(file.name, await file.text());
-    }
+    await openFiles(Array.from(event.dataTransfer.files));
   };
 
   const handleCreateFolder = () => {
@@ -185,10 +189,26 @@ export function DataBrowser() {
           </div>
         );
       })}
-      <div className="drop-hint">
+      <button
+        type="button"
+        className="drop-hint"
+        onClick={() => fileInputRef.current?.click()}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
         <strong>Drop files here</strong>
-        <span>CSV/TSV become datasets. Other files stay as raw virtual FS files.</span>
-      </div>
+        <span>Click to load, or drop files. Raw text can be parsed in the preview window.</span>
+      </button>
+      <input
+        ref={fileInputRef}
+        aria-label="Load data files"
+        className="visually-hidden"
+        multiple
+        type="file"
+        onChange={(event) => {
+          void openFiles(Array.from(event.currentTarget.files ?? []));
+          event.currentTarget.value = "";
+        }}
+      />
     </div>
   );
 }

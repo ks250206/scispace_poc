@@ -167,6 +167,17 @@ describe("Workbench UI", () => {
     );
   });
 
+  it("opens an import settings window from the data browser load field", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    const file = new File(["x,y\n5,6"], "clicked.csv", { type: "text/csv" });
+    fireEvent.change(screen.getByLabelText("Load data files"), { target: { files: [file] } });
+
+    await waitFor(() => expect(screen.getByText("Import - clicked.csv")).toBeInTheDocument());
+    expect(useScispaceStore.getState().pendingImports[0]?.fileName).toBe("clicked.csv");
+  });
+
   it("shows close buttons only on table and plot windows and removes the clicked window", async () => {
     const user = userEvent.setup();
     render(<App />);

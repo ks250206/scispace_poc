@@ -314,15 +314,35 @@
 
 .drop-hint {
   display: flex;
+  width: 100%;
   flex-direction: column;
   gap: 4px;
   margin-top: auto;
   border: 1px dashed var(--border-strong);
   border-radius: 6px;
+  background: #fff;
   padding: 10px;
   color: var(--text-muted);
+  cursor: pointer;
   font-size: 12px;
   line-height: 1.35;
+  text-align: left;
+}
+
+.drop-hint:hover {
+  border-color: var(--blue);
+  background: #f8fbff;
+  color: var(--text);
+}
+
+.visually-hidden {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .history-window {
