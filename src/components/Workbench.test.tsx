@@ -373,6 +373,51 @@ describe("Workbench UI", () => {
     expect(preview.querySelector('[aria-label="Resize import column x"]')).toBeInTheDocument();
   });
 
+  it("can mark import columns for deletion and grays skipped raw rows", async () => {
+    let importId = "";
+    act(() => {
+      importId = useScispaceStore
+        .getState()
+        .openImportDialog("drop-cols.csv", "x,empty,y\n1,,2\n3,,4");
+    });
+    render(<ImportSettingsWindow importId={importId} />);
+
+    await waitFor(() => expect(screen.getByText("drop-cols.csv")).toBeInTheDocument());
+    expect(document.querySelector(".column-import-list label.excluded span")?.textContent).toBe(
+      "empty",
+    );
+
+    const yColumnToggle = Array.from(document.querySelectorAll(".column-import-list label"))
+      .find((label) => label.querySelector("span")?.textContent === "y")
+      ?.querySelector("input");
+    fireEvent.click(yColumnToggle as Element);
+
+    expect(useScispaceStore.getState().pendingImports[0]?.options.excludedColumnIds).toEqual([
+      "empty",
+      "y",
+    ]);
+
+    fireEvent.change(screen.getByDisplayValue("0"), { target: { value: "1" } });
+    expect(document.querySelector(".raw-text-table tbody tr")).toHaveClass("skipped-row");
+  });
+
+  it("uses the whole import body for raw text mode", async () => {
+    let importId = "";
+    act(() => {
+      importId = useScispaceStore
+        .getState()
+        .openImportDialog("notes.mpt", "EC-Lab ASCII FILE\nNb header lines : 70\n\nmetadata");
+      useScispaceStore.getState().updateImportMode(importId, "raw");
+    });
+    render(<ImportSettingsWindow importId={importId} />);
+
+    await waitFor(() => expect(screen.getByText("notes.mpt")).toBeInTheDocument());
+    expect(screen.getByText("4 raw lines")).toBeInTheDocument();
+    expect(document.querySelector(".import-editor-grid")).toHaveClass("raw-only");
+    expect(document.querySelector(".raw-text-table")).toBeInTheDocument();
+    expect(document.querySelector(".import-preview")).not.toBeInTheDocument();
+  });
+
   it("opens an import settings window from the data browser load field", async () => {
     render(<App />);
 

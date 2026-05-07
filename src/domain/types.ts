@@ -15,6 +15,7 @@ export interface ImportParseOptions {
   commentPrefix: string;
   hasHeader: boolean;
   columnNames: string[];
+  excludedColumnIds: string[];
 }
 
 export interface ViewportState {
@@ -218,6 +219,7 @@ export interface PendingImport {
   text: string;
   mode: "tabular" | "raw";
   options: ImportParseOptions;
+  allPreview?: Dataset;
   preview?: Dataset;
   error?: string;
 }

@@ -220,16 +220,41 @@ describe("scispace zustand store", () => {
     expect(result?.dataset?.rows[0]).toEqual({ energy: 1, intensity: 2 });
   });
 
+  it("defaults import dialogs to tabular mode and excludes empty columns", async () => {
+    const { store } = await makeStore();
+    const importId = store.getState().openImportDialog("with-empty.csv", "x,empty,y\n1,,2\n3,,4");
+    const pendingImport = store.getState().pendingImports.find((item) => item.id === importId);
+
+    expect(pendingImport).toMatchObject({
+      mode: "tabular",
+      options: { excludedColumnIds: ["empty"] },
+    });
+    expect(pendingImport?.allPreview ? datasetColumnNames(pendingImport.allPreview) : []).toEqual([
+      "x",
+      "empty",
+      "y",
+    ]);
+    expect(pendingImport?.preview ? datasetColumnNames(pendingImport.preview) : []).toEqual([
+      "x",
+      "y",
+    ]);
+  });
+
   it("opens raw import dialogs and confirms them without datasets", async () => {
     const { db, store } = await makeStore();
     const importId = store.getState().openImportDialog("notes.txt", "raw notes");
 
-    expect(store.getState().pendingImports[0]).toMatchObject({ mode: "raw" });
+    store.getState().updateImportMode(importId, "raw");
     const result = await store.getState().confirmImport(importId);
 
     expect(result?.dataset).toBeUndefined();
     expect(result?.parseError).toContain("Raw file stored");
     expect(await db.files.get("~/raw/notes.txt")).toMatchObject({ text: "raw notes" });
+    expect(store.getState().commandHistory.at(-1)).toMatchObject({
+      command: expect.stringContaining("import-confirm"),
+      source: "gui",
+      status: "success",
+    });
   });
 
   it("returns undefined when confirming a missing pending import", async () => {

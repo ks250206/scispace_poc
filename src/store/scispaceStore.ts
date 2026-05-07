@@ -349,18 +349,36 @@ const retitleWindow = (window: WorkspaceWindow, datasets: Dataset[], plotSpecs: 
 
 const canParseAsTable = (name: string): boolean => /\.(csv|tsv)$/i.test(name);
 
-const createPreview = (
+const emptyColumnIds = (dataset?: Dataset): string[] => {
+  if (!dataset) return [];
+  return dataset.columns
+    .filter((column) =>
+      dataset.rows.every((row) => {
+        const value = row[column.id];
+        return value == null || value === "";
+      }),
+    )
+    .map((column) => column.id);
+};
+
+const createPreviews = (
   id: string,
   fileName: string,
   text: string,
   options: ImportParseOptions,
-): { preview?: Dataset; error?: string } => {
+): { allPreview?: Dataset; preview?: Dataset; error?: string } => {
+  const allResult = executeScispaceCommand(`import-preview ${id}`, {
+    datasets: [],
+    pendingImports: [
+      { id, fileName, text, mode: "tabular", options: { ...options, excludedColumnIds: [] } },
+    ],
+  });
   const result = executeScispaceCommand(`import-preview ${id}`, {
     datasets: [],
     pendingImports: [{ id, fileName, text, mode: "tabular", options }],
   });
-  if (result.kind === "import-preview") {
-    return { preview: result.preview, error: result.error };
+  if (result.kind === "import-preview" && allResult.kind === "import-preview") {
+    return { allPreview: allResult.preview, preview: result.preview, error: result.error };
   }
   return { error: result.output };
 };
@@ -374,6 +392,17 @@ const normalizeColumnNames = (
     (column, index) => options.columnNames[index]?.trim() || column.name || `column_${index + 1}`,
   );
   return { ...options, columnNames };
+};
+
+const readCommandPath = (input: string): string | undefined => {
+  const match = input.match(/(?:^|\s)path=("[^"]+"|'[^']+'|\S+)/);
+  if (!match) return undefined;
+  const token = match[1].replace(/^["']|["']$/g, "");
+  try {
+    return decodeURIComponent(token);
+  } catch {
+    return token;
+  }
 };
 
 export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
@@ -483,8 +512,12 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
 
     openImportDialog: (fileName, text) => {
       const id = crypto.randomUUID();
-      const options = { ...defaultImportParseOptions };
-      const { preview, error } = createPreview(id, fileName, text, options);
+      const initialPreview = createPreviews(id, fileName, text, defaultImportParseOptions);
+      const options = {
+        ...defaultImportParseOptions,
+        excludedColumnIds: emptyColumnIds(initialPreview.allPreview),
+      };
+      const { allPreview, preview, error } = createPreviews(id, fileName, text, options);
 
       set((state) => {
         const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
@@ -492,8 +525,9 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           id,
           fileName,
           text,
-          mode: canParseAsTable(fileName) ? "tabular" : "raw",
+          mode: "tabular",
           options,
+          allPreview,
           preview,
           error,
         };
@@ -525,7 +559,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         pendingImports: state.pendingImports.map((pendingImport) => {
           if (pendingImport.id !== importId) return pendingImport;
           const nextOptions = { ...pendingImport.options, ...options };
-          const { preview, error } = createPreview(
+          const { allPreview, preview, error } = createPreviews(
             pendingImport.id,
             pendingImport.fileName,
             pendingImport.text,
@@ -533,7 +567,8 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           );
           return {
             ...pendingImport,
-            options: normalizeColumnNames(nextOptions, preview),
+            options: normalizeColumnNames(nextOptions, allPreview),
+            allPreview,
             preview,
             error,
           };
@@ -545,13 +580,13 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       set((state) => ({
         pendingImports: state.pendingImports.map((pendingImport) => {
           if (pendingImport.id !== importId) return pendingImport;
-          const { preview, error } = createPreview(
+          const { allPreview, preview, error } = createPreviews(
             pendingImport.id,
             pendingImport.fileName,
             text,
             pendingImport.options,
           );
-          return { ...pendingImport, text, preview, error };
+          return { ...pendingImport, text, allPreview, preview, error };
         }),
       }));
     },
@@ -569,40 +604,17 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       if (!pendingImport) return undefined;
 
       const path = uniquifyPath(normalizeVirtualPath(pendingImport.fileName), get().files);
-      let parseError: string | undefined;
-      let dataset: Dataset | undefined;
-      const result = executeScispaceCommand(
+      const result = await get().runScispace(
         `import-confirm ${importId} path=${encodeURIComponent(path)} mode=${pendingImport.mode}`,
-        { datasets: get().datasets, pendingImports: [pendingImport] },
+        { source: "gui" },
       );
-      if (result.kind === "import-confirm") {
-        dataset = result.dataset;
-        parseError = result.parseError;
-      } else {
-        parseError = result.output;
-      }
-
-      const file = makeFileRecord(path, pendingImport.text, dataset?.id, parseError);
-      await db.files.put(file);
-      if (dataset) await db.datasets.put(dataset);
-
-      set((state) => ({
-        files: [...state.files.filter((item) => item.id !== file.id), file],
-        datasets: dataset
-          ? [...state.datasets.filter((item) => item.id !== dataset.id), dataset]
-          : state.datasets,
-        activeDatasetId: dataset?.id ?? state.activeDatasetId,
-        pendingImports: state.pendingImports.filter((item) => item.id !== importId),
-        windows: state.windows.filter((window) => window.importId !== importId),
-        terminalEvents: [
-          ...state.terminalEvents,
-          dataset
-            ? `Imported ${file.path} as dataset ${dataset.name}`
-            : `Stored ${file.path}: ${parseError}`,
-        ],
-      }));
-      persistLayout(db, get());
-
+      const file = get().files.find((item) => item.path === path);
+      if (!file) return undefined;
+      const dataset =
+        result.kind === "import-confirm" && result.dataset
+          ? get().datasets.find((item) => item.id === result.dataset?.id)
+          : undefined;
+      const parseError = result.kind === "import-confirm" ? result.parseError : result.output;
       return { file, dataset, parseError };
     },
 
@@ -783,6 +795,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         datasets: get().datasets,
         files: get().files,
         plotSpecs: get().plotSpecs,
+        pendingImports: get().pendingImports,
       });
 
       if (result.kind === "open-table") await get().openTable(result.datasetId, result.columnIds);
@@ -897,6 +910,31 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           ],
           activeDatasetId: dataset.id,
         }));
+      }
+      if (result.kind === "import-confirm") {
+        const importId = result.importId;
+        const pendingImport = get().pendingImports.find((item) => item.id === importId);
+        if (!pendingImport) {
+          result = { kind: "error", output: `Pending import not found: ${importId}` };
+        } else {
+          const rawPath = readCommandPath(input) ?? normalizeVirtualPath(pendingImport.fileName);
+          const path = uniquifyPath(rawPath, get().files);
+          const dataset = result.dataset;
+          const file = makeFileRecord(path, pendingImport.text, dataset?.id, result.parseError);
+          await db.transaction("rw", db.datasets, db.files, async () => {
+            await db.files.put(file);
+            if (dataset) await db.datasets.put(dataset);
+          });
+          set((state) => ({
+            files: [...state.files.filter((item) => item.id !== file.id), file],
+            datasets: dataset
+              ? [...state.datasets.filter((item) => item.id !== dataset.id), dataset]
+              : state.datasets,
+            activeDatasetId: dataset?.id ?? state.activeDatasetId,
+            pendingImports: state.pendingImports.filter((item) => item.id !== importId),
+            windows: state.windows.filter((window) => window.importId !== importId),
+          }));
+        }
       }
       if (result.kind === "file-command") {
         const fileCommand = result;

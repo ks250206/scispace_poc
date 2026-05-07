@@ -12,6 +12,7 @@ export const defaultImportParseOptions: ImportParseOptions = {
   commentPrefix: "",
   hasHeader: true,
   columnNames: [],
+  excludedColumnIds: [],
 };
 
 export const normalizeDataValue = (value: string): number | string => {
@@ -212,13 +213,22 @@ export const parseDelimitedText = (
     ...column,
     dataType: inferColumnType(rows.map((row) => row[column.id] ?? "")),
   }));
+  const excludedColumnIds = new Set(resolvedOptions.excludedColumnIds);
+  const includedColumns = typedColumns.filter((column) => !excludedColumnIds.has(column.id));
+  if (includedColumns.length === 0) {
+    throw new Error("No import columns selected");
+  }
+  const includedColumnIds = new Set(includedColumns.map((column) => column.id));
+  const includedRows = rows.map((row) =>
+    Object.fromEntries(Object.entries(row).filter(([columnId]) => includedColumnIds.has(columnId))),
+  );
 
   return {
     id: crypto.randomUUID(),
     name,
     sourcePath,
-    columns: typedColumns,
-    rows,
+    columns: includedColumns,
+    rows: includedRows,
     createdBy: "upload",
     createdAt: now,
   };

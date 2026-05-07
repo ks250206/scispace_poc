@@ -580,6 +580,7 @@ describe("scispace pseudo command interpreter", () => {
         commentPrefix: "#",
         hasHeader: true,
         columnNames: [],
+        excludedColumnIds: [],
       },
     };
 
@@ -613,6 +614,7 @@ describe("scispace pseudo command interpreter", () => {
         commentPrefix: "",
         hasHeader: true,
         columnNames: [],
+        excludedColumnIds: [],
       },
     };
 
@@ -649,6 +651,7 @@ describe("scispace pseudo command interpreter", () => {
         commentPrefix: "",
         hasHeader: true,
         columnNames: [],
+        excludedColumnIds: [],
       },
     };
     const fullPreview = executeScispaceCommand("import-preview good full=true", {

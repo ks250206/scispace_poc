@@ -35,8 +35,8 @@ const formatCellValue = (value: unknown): string => {
 const rowHeight = 32;
 const defaultColumnWidth = 140;
 const minColumnWidth = 96;
-const rawLineNumberWidth = 76;
-const rawTextDefaultWidth = 520;
+const rawLineNumberWidth = 64;
+const rawTextDefaultWidth = 720;
 
 export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   const pendingImport = useScispaceStore((state) =>
@@ -52,6 +52,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   const [previewColumnWidths, setPreviewColumnWidths] = useState<Record<string, number>>({});
   const [rawColumnWidths, setRawColumnWidths] = useState<Record<string, number>>({});
   const preview = pendingImport?.preview;
+  const allPreview = pendingImport?.allPreview;
   const rawLines = useMemo(() => pendingImport?.text.split(/\r?\n/) ?? [], [pendingImport?.text]);
   const columns = useMemo(
     () =>
@@ -109,6 +110,13 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
           key: index,
           start: index * rowHeight,
         }));
+  const isRawMode = pendingImport?.mode === "raw";
+  const importStatus =
+    pendingImport?.mode === "raw"
+      ? `${rawLines.length} raw lines`
+      : preview
+        ? `${preview.rows.length} preview rows · ${preview.columns.length} columns`
+        : pendingImport?.error;
 
   const startColumnResize = (
     setter: Dispatch<SetStateAction<Record<string, number>>>,
@@ -134,6 +142,12 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
     const nextLines = [...rawLines];
     nextLines[lineIndex] = value;
     updateImportText(importId, nextLines.join("\n"));
+  };
+  const toggleExcludedColumn = (columnId: string, checked: boolean) => {
+    const current = new Set(pendingImport.options.excludedColumnIds);
+    if (checked) current.add(columnId);
+    else current.delete(columnId);
+    updateImportOptions(importId, { excludedColumnIds: [...current] });
   };
 
   return (
@@ -211,21 +225,15 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
         </div>
       </div>
       <div className="import-summary">
-        <span>{pendingImport.fileName}</span>
-        <span>
-          {pendingImport.mode === "raw"
-            ? "raw text import"
-            : preview
-              ? `${preview.rows.length} preview rows`
-              : pendingImport.error}
-        </span>
+        <span className="import-file-name">{pendingImport.fileName}</span>
+        <span className="import-file-meta">{importStatus}</span>
       </div>
       {pendingImport.error && !preview ? (
         <div className="import-error">{pendingImport.error}</div>
       ) : null}
-      {!pendingImport.options.hasHeader && preview ? (
+      {!pendingImport.options.hasHeader && allPreview ? (
         <div className="column-name-editor">
-          {preview.columns.map((column, index) => (
+          {allPreview.columns.map((column, index) => (
             <label key={`${column.id}-${index}`}>
               <span>{`Column ${index + 1}`}</span>
               <input
@@ -240,9 +248,35 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
           ))}
         </div>
       ) : null}
-      <div className="import-editor-grid stacked">
+      {pendingImport.mode === "tabular" && allPreview ? (
+        <div className="column-import-editor">
+          <div className="column-import-title">Columns</div>
+          <div className="column-import-list">
+            {allPreview.columns.map((column) => {
+              const isExcluded = pendingImport.options.excludedColumnIds.includes(column.id);
+              return (
+                <label key={column.id} className={isExcluded ? "excluded" : undefined}>
+                  <input
+                    type="checkbox"
+                    checked={isExcluded}
+                    onChange={(event) =>
+                      toggleExcludedColumn(column.id, event.currentTarget.checked)
+                    }
+                  />
+                  <span>{column.name}</span>
+                  <small>{isExcluded ? "delete" : "import"}</small>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+      <div className={`import-editor-grid stacked ${isRawMode ? "raw-only" : ""}`}>
         <section className="raw-text-editor">
-          <div className="virtual-table-title">Raw text</div>
+          <div className="virtual-table-title">
+            <span>Raw text</span>
+            <span>{rawLines.length} lines</span>
+          </div>
           <div
             ref={rawParentRef}
             className="table-scroll raw-text-table"
@@ -294,6 +328,9 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
                 {visibleRawRows.map((virtualRow) => (
                   <tr
                     key={virtualRow.key}
+                    className={
+                      virtualRow.index < pendingImport.options.skipRows ? "skipped-row" : undefined
+                    }
                     style={{ width: rawTableWidth, transform: `translateY(${virtualRow.start}px)` }}
                   >
                     <td
@@ -324,79 +361,87 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
             </table>
           </div>
         </section>
-        <div
-          ref={previewParentRef}
-          className="table-scroll import-preview"
-          style={
-            {
-              "--table-visible-height": "260px",
-              "--table-width": `${previewTableWidth}px`,
-            } as CSSProperties
-          }
-        >
-          <table style={{ width: previewTableWidth, minWidth: previewTableWidth }}>
-            <thead>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id} style={{ width: previewTableWidth }}>
-                  {headerGroup.headers.map((header) => (
-                    <th
-                      key={header.id}
-                      style={{
-                        width: getPreviewColumnWidth(header.column.id),
-                        minWidth: minColumnWidth,
-                      }}
-                    >
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                      <button
-                        type="button"
-                        role="separator"
-                        aria-label={`Resize import column ${header.column.id}`}
-                        className="column-resize-handle"
-                        onPointerDown={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          startColumnResize(
-                            setPreviewColumnWidths,
-                            header.column.id,
-                            event.clientX,
-                            getPreviewColumnWidth(header.column.id),
-                          );
-                        }}
-                      />
-                    </th>
+        {!isRawMode ? (
+          <section className="preview-editor">
+            <div className="virtual-table-title">
+              <span>Parsed preview</span>
+              <span>{preview ? `${preview.rows.length} rows` : "No preview"}</span>
+            </div>
+            <div
+              ref={previewParentRef}
+              className="table-scroll import-preview"
+              style={
+                {
+                  "--table-visible-height": "260px",
+                  "--table-width": `${previewTableWidth}px`,
+                } as CSSProperties
+              }
+            >
+              <table style={{ width: previewTableWidth, minWidth: previewTableWidth }}>
+                <thead>
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <tr key={headerGroup.id} style={{ width: previewTableWidth }}>
+                      {headerGroup.headers.map((header) => (
+                        <th
+                          key={header.id}
+                          style={{
+                            width: getPreviewColumnWidth(header.column.id),
+                            minWidth: minColumnWidth,
+                          }}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          <button
+                            type="button"
+                            role="separator"
+                            aria-label={`Resize import column ${header.column.id}`}
+                            className="column-resize-handle"
+                            onPointerDown={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              startColumnResize(
+                                setPreviewColumnWidths,
+                                header.column.id,
+                                event.clientX,
+                                getPreviewColumnWidth(header.column.id),
+                              );
+                            }}
+                          />
+                        </th>
+                      ))}
+                    </tr>
                   ))}
-                </tr>
-              ))}
-            </thead>
-            <tbody style={{ height: rowVirtualizer.getTotalSize() }}>
-              {visiblePreviewRows.map((virtualRow) => {
-                const row = rows[virtualRow.index];
-                if (!row) return null;
-                return (
-                  <tr
-                    key={row.id}
-                    style={{
-                      width: previewTableWidth,
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <td
-                        key={cell.id}
+                </thead>
+                <tbody style={{ height: rowVirtualizer.getTotalSize() }}>
+                  {visiblePreviewRows.map((virtualRow) => {
+                    const row = rows[virtualRow.index];
+                    if (!row) return null;
+                    return (
+                      <tr
+                        key={row.id}
                         style={{
-                          width: getPreviewColumnWidth(cell.column.id),
-                          minWidth: minColumnWidth,
+                          width: previewTableWidth,
+                          transform: `translateY(${virtualRow.start}px)`,
                         }}
                       >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                        {row.getVisibleCells().map((cell) => (
+                          <td
+                            key={cell.id}
+                            style={{
+                              width: getPreviewColumnWidth(cell.column.id),
+                              minWidth: minColumnWidth,
+                            }}
+                          >
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : null}
       </div>
     </div>
   );

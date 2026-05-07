@@ -115,6 +115,15 @@ describe("csv domain", () => {
     expect(dataset.rows[0]).toEqual({ energy: 1, intensity: 2 });
   });
 
+  it("excludes selected import columns", () => {
+    const dataset = parseDelimitedText("x,empty,y\n1,,2\n3,,4", "cols.csv", "~/raw/cols.csv", 10, {
+      excludedColumnIds: ["empty"],
+    });
+
+    expect(datasetColumnNames(dataset)).toEqual(["x", "y"]);
+    expect(dataset.rows[0]).toEqual({ x: 1, y: 2 });
+  });
+
   it("round-trips generated seed data to delimited text", () => {
     const dataset = createSeedDataset(10);
     const text = datasetToDelimitedText(dataset);
