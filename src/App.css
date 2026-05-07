@@ -602,7 +602,7 @@
 .plot-config-tabs {
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   border-bottom: 1px solid var(--border);
   background: #fff;
   padding: 6px;
@@ -651,12 +651,16 @@
 .plot-title-input,
 .plot-controls select,
 .plot-style-panel input[type="number"],
+.plot-style-panel input[type="text"],
+.plot-style-panel input:not([type]),
 .plot-style-panel select,
 .plot-axis-row input,
 .plot-axis-row select,
 .plot-series-row input,
 .plot-series-row select,
-.plot-series-add select {
+.plot-series-add select,
+.plot-annotation-row input,
+.plot-annotation-add input {
   height: 26px;
   min-width: 0;
   border: 1px solid var(--border);
@@ -695,7 +699,7 @@
 }
 
 .plot-style-panel {
-  grid-template-columns: minmax(128px, 1fr) auto auto auto minmax(78px, auto) minmax(78px, auto);
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
 }
 
 .plot-style-panel label {
@@ -709,11 +713,16 @@
   padding: 0 6px;
 }
 
+.plot-style-panel input[aria-label="Plot font family"] {
+  width: 160px;
+  padding: 0 6px;
+}
+
 .plot-axis-row {
   display: grid;
   align-items: center;
   gap: 6px;
-  grid-template-columns: 18px minmax(82px, 1fr) 104px 64px 64px 74px 72px;
+  grid-template-columns: 18px repeat(auto-fit, minmax(72px, 1fr));
 }
 
 .plot-series-row,
@@ -724,7 +733,7 @@
 }
 
 .plot-series-row {
-  grid-template-columns: minmax(70px, 0.8fr) minmax(90px, 1fr) 34px 54px 58px 76px 28px;
+  grid-template-columns: minmax(70px, 0.8fr) minmax(90px, 1fr) 34px 54px 58px 86px 58px 28px;
 }
 
 .plot-series-add {
@@ -745,7 +754,9 @@
 }
 
 .plot-series-row button,
-.plot-series-add button {
+.plot-series-add button,
+.plot-annotation-row button,
+.plot-annotation-add button {
   height: 26px;
   border: 1px solid var(--border);
   border-radius: 5px;
@@ -758,6 +769,32 @@
 .plot-series-add button:disabled {
   color: var(--text-muted);
   cursor: default;
+}
+
+.plot-annotation-panel {
+  display: grid;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.plot-annotation-row,
+.plot-annotation-add {
+  display: grid;
+  align-items: center;
+  gap: 6px;
+}
+
+.plot-annotation-add {
+  grid-template-columns: minmax(120px, 1fr) repeat(4, 58px) 118px;
+}
+
+.plot-annotation-row {
+  grid-template-columns: minmax(120px, 1fr) 34px minmax(92px, 1fr) 58px 28px;
+}
+
+.plot-annotation-row input[type="color"] {
+  width: 34px;
+  padding: 2px;
 }
 
 .import-window {

@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import type { PlotAxisSpec, PlotMarkerShape, PlotSeries, PlotType } from "../domain/types";
+import type {
+  PlotAnnotation,
+  PlotAxisSpec,
+  PlotMarkerShape,
+  PlotSeries,
+  PlotType,
+} from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
 
 type AxisPatch = Omit<Partial<PlotAxisSpec>, "ticks"> & {
   ticks?: Partial<PlotAxisSpec["ticks"]>;
 };
 
-type PlotConfigTab = "basic" | "axes" | "series";
+type PlotConfigTab = "basic" | "axes" | "series" | "annotations";
 
 const quoteArg = (value: string): string =>
   /[\s=]/.test(value) ? `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"` : value;
@@ -16,6 +22,13 @@ const rangeToCommand = (range: PlotAxisSpec["range"]): string =>
 
 const tickToCommand = (ticks: PlotAxisSpec["ticks"]): string =>
   ticks.mode === "manual" && ticks.interval ? String(ticks.interval) : "auto";
+
+const paddingToCommand = (padding: {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}): string => `${padding.top}:${padding.right}:${padding.bottom}:${padding.left}`;
 
 export function PlotConfigWindow() {
   const currentPlotId = useScispaceStore((state) => state.currentPlotId);
@@ -29,6 +42,13 @@ export function PlotConfigWindow() {
   const [seriesToAdd, setSeriesToAdd] = useState("");
   const [activeTab, setActiveTab] = useState<PlotConfigTab>("basic");
   const [plotSizeDraft, setPlotSizeDraft] = useState({ width: "", height: "" });
+  const [annotationDraft, setAnnotationDraft] = useState({
+    text: "Annotation",
+    x: "1",
+    y: "1",
+    dx: "24",
+    dy: "-24",
+  });
 
   const availableSeriesColumns = useMemo(() => {
     if (!dataset || !spec) return [];
@@ -71,6 +91,16 @@ export function PlotConfigWindow() {
     const next = { ...spec.size, ...patch };
     runPlotCommand(`plot-set ${currentPlotId} width=${next.width} height=${next.height}`);
   };
+  const setPlotFont = (patch: Partial<typeof spec.font>) => {
+    const next = { ...spec.font, ...patch };
+    runPlotCommand(
+      `plot-set ${currentPlotId} fontFamily=${quoteArg(next.family)} fontSize=${next.size}`,
+    );
+  };
+  const setPlotPadding = (patch: Partial<typeof spec.padding>) => {
+    const next = { ...spec.padding, ...patch };
+    runPlotCommand(`plot-set ${currentPlotId} padding=${paddingToCommand(next)}`);
+  };
   const commitPlotSize = () => {
     const width = Number(plotSizeDraft.width);
     const height = Number(plotSizeDraft.height);
@@ -97,7 +127,15 @@ export function PlotConfigWindow() {
         next.label,
       )} range=${rangeToCommand(next.range)} tick=${tickToCommand(next.ticks)} tickDir=${
         next.ticks.orientation
-      }`,
+      } scale=${next.scale} labelFontFamily=${quoteArg(next.labelStyle.family)} labelFontSize=${
+        next.labelStyle.size
+      } valueFontFamily=${quoteArg(next.valueStyle.family)} valueFontSize=${
+        next.valueStyle.size
+      } size=${next.size} gap=${next.gap} labelGap=${next.labelGap} labelSize=${
+        next.labelSize
+      } color=${next.color} gridColor=${next.gridColor} tickColor=${next.tickColor} tickLength=${
+        next.ticks.length
+      } minorTick=${next.ticks.minor}`,
     );
   };
   const updateSeries = (series: PlotSeries, patch: Partial<PlotSeries>) => {
@@ -105,7 +143,7 @@ export function PlotConfigWindow() {
     runPlotCommand(
       `plot-series ${currentPlotId} y=${next.y} label=${quoteArg(next.label)} color=${next.color} lineWidth=${
         next.lineWidth
-      } markerSize=${next.markerSize} markerShape=${next.markerShape}`,
+      } markerSize=${next.markerSize} markerShape=${next.markerShape} order=${next.drawOrder}`,
     );
   };
   const addSeries = () => {
@@ -116,6 +154,31 @@ export function PlotConfigWindow() {
   const removeSeries = (series: PlotSeries) => {
     if (spec.series.length <= 1) return;
     runPlotCommand(`plot-series ${currentPlotId} y=${series.y} action=remove`);
+  };
+  const addAnnotation = () => {
+    const x = Number(annotationDraft.x);
+    const y = Number(annotationDraft.y);
+    const dx = Number(annotationDraft.dx);
+    const dy = Number(annotationDraft.dy);
+    if (![x, y, dx, dy].every(Number.isFinite)) return;
+    runPlotCommand(
+      `plot-annotation ${currentPlotId} action=add type=text-arrow text=${quoteArg(
+        annotationDraft.text,
+      )} x=${x} y=${y} dx=${dx} dy=${dy}`,
+    );
+  };
+  const updateAnnotation = (annotation: PlotAnnotation, patch: Partial<PlotAnnotation>) => {
+    const next = { ...annotation, ...patch };
+    runPlotCommand(
+      `plot-annotation ${currentPlotId} action=update id=${next.id} text=${quoteArg(
+        next.text,
+      )} x=${next.x} y=${next.y} dx=${next.dx} dy=${next.dy} color=${next.color} fontFamily=${quoteArg(
+        next.font.family,
+      )} fontSize=${next.font.size}`,
+    );
+  };
+  const removeAnnotation = (annotation: PlotAnnotation) => {
+    runPlotCommand(`plot-annotation ${currentPlotId} action=remove id=${annotation.id}`);
   };
 
   return (
@@ -129,6 +192,7 @@ export function PlotConfigWindow() {
           ["basic", "Basic"],
           ["axes", "Axes"],
           ["series", "Series"],
+          ["annotations", "Annotations"],
         ].map(([tab, label]) => (
           <button
             key={tab}
@@ -260,6 +324,36 @@ export function PlotConfigWindow() {
                 }}
               />
             </label>
+            <label>
+              Plot font
+              <input
+                aria-label="Plot font family"
+                value={spec.font.family}
+                onChange={(event) => setPlotFont({ family: event.target.value })}
+              />
+            </label>
+            <label>
+              Plot font size
+              <input
+                aria-label="Plot font size"
+                type="number"
+                min={1}
+                value={spec.font.size}
+                onChange={(event) => setPlotFont({ size: Number(event.target.value) })}
+              />
+            </label>
+            {(["top", "right", "bottom", "left"] as const).map((side) => (
+              <label key={side}>
+                Pad {side}
+                <input
+                  aria-label={`Plot padding ${side}`}
+                  type="number"
+                  min={0}
+                  value={spec.padding[side]}
+                  onChange={(event) => setPlotPadding({ [side]: Number(event.target.value) })}
+                />
+              </label>
+            ))}
           </div>
         </div>
       ) : null}
@@ -348,6 +442,126 @@ export function PlotConfigWindow() {
                 <option value="in">in</option>
                 <option value="none">none</option>
               </select>
+              <select
+                aria-label={`${axis} scale`}
+                value={spec.axes[axis].scale}
+                onChange={(event) =>
+                  setAxis(axis, { scale: event.target.value as PlotAxisSpec["scale"] })
+                }
+              >
+                <option value="linear">linear</option>
+                <option value="log">log</option>
+              </select>
+              <input
+                aria-label={`${axis} label font family`}
+                value={spec.axes[axis].labelStyle.family}
+                onChange={(event) =>
+                  setAxis(axis, {
+                    labelStyle: { ...spec.axes[axis].labelStyle, family: event.target.value },
+                  })
+                }
+              />
+              <input
+                aria-label={`${axis} label font size`}
+                type="number"
+                min={1}
+                value={spec.axes[axis].labelStyle.size}
+                onChange={(event) =>
+                  setAxis(axis, {
+                    labelStyle: {
+                      ...spec.axes[axis].labelStyle,
+                      size: Number(event.target.value),
+                    },
+                  })
+                }
+              />
+              <input
+                aria-label={`${axis} value font family`}
+                value={spec.axes[axis].valueStyle.family}
+                onChange={(event) =>
+                  setAxis(axis, {
+                    valueStyle: { ...spec.axes[axis].valueStyle, family: event.target.value },
+                  })
+                }
+              />
+              <input
+                aria-label={`${axis} value font size`}
+                type="number"
+                min={1}
+                value={spec.axes[axis].valueStyle.size}
+                onChange={(event) =>
+                  setAxis(axis, {
+                    valueStyle: {
+                      ...spec.axes[axis].valueStyle,
+                      size: Number(event.target.value),
+                    },
+                  })
+                }
+              />
+              <input
+                aria-label={`${axis} axis size`}
+                type="number"
+                min={1}
+                value={spec.axes[axis].size}
+                onChange={(event) => setAxis(axis, { size: Number(event.target.value) })}
+              />
+              <input
+                aria-label={`${axis} axis gap`}
+                type="number"
+                min={0}
+                value={spec.axes[axis].gap}
+                onChange={(event) => setAxis(axis, { gap: Number(event.target.value) })}
+              />
+              <input
+                aria-label={`${axis} label gap`}
+                type="number"
+                min={0}
+                value={spec.axes[axis].labelGap}
+                onChange={(event) => setAxis(axis, { labelGap: Number(event.target.value) })}
+              />
+              <input
+                aria-label={`${axis} label size`}
+                type="number"
+                min={1}
+                value={spec.axes[axis].labelSize}
+                onChange={(event) => setAxis(axis, { labelSize: Number(event.target.value) })}
+              />
+              <input
+                aria-label={`${axis} axis color`}
+                type="color"
+                value={spec.axes[axis].color}
+                onChange={(event) => setAxis(axis, { color: event.target.value })}
+              />
+              <input
+                aria-label={`${axis} grid color`}
+                type="color"
+                value={spec.axes[axis].gridColor}
+                onChange={(event) => setAxis(axis, { gridColor: event.target.value })}
+              />
+              <input
+                aria-label={`${axis} tick color`}
+                type="color"
+                value={spec.axes[axis].tickColor}
+                onChange={(event) => setAxis(axis, { tickColor: event.target.value })}
+              />
+              <input
+                aria-label={`${axis} tick length`}
+                type="number"
+                min={0}
+                value={spec.axes[axis].ticks.length}
+                onChange={(event) =>
+                  setAxis(axis, { ticks: { length: Number(event.target.value) } })
+                }
+              />
+              <label>
+                <input
+                  aria-label={`${axis} minor tick`}
+                  type="checkbox"
+                  checked={spec.axes[axis].ticks.minor}
+                  onChange={(event) => setAxis(axis, { ticks: { minor: event.target.checked } })}
+                />
+                Minor
+              </label>
             </div>
           ))}
         </div>
@@ -395,7 +609,19 @@ export function PlotConfigWindow() {
               >
                 <option value="circle">circle</option>
                 <option value="square">square</option>
+                <option value="triangle">triangle</option>
+                <option value="diamond">diamond</option>
+                <option value="cross">cross</option>
+                <option value="plus">plus</option>
               </select>
+              <input
+                aria-label={`Draw order ${series.y}`}
+                type="number"
+                value={series.drawOrder}
+                onChange={(event) =>
+                  updateSeries(series, { drawOrder: Number(event.target.value) })
+                }
+              />
               <button
                 type="button"
                 aria-label={`Remove ${series.y}`}
@@ -422,6 +648,75 @@ export function PlotConfigWindow() {
               Add
             </button>
           </div>
+        </div>
+      ) : null}
+      {activeTab === "annotations" ? (
+        <div className="plot-annotation-panel plot-config-section" role="tabpanel">
+          <div className="plot-annotation-add">
+            <input
+              aria-label="Annotation text"
+              value={annotationDraft.text}
+              onChange={(event) =>
+                setAnnotationDraft((current) => ({ ...current, text: event.target.value }))
+              }
+            />
+            {(["x", "y", "dx", "dy"] as const).map((field) => (
+              <input
+                key={field}
+                aria-label={`Annotation ${field}`}
+                type="number"
+                value={annotationDraft[field]}
+                onChange={(event) =>
+                  setAnnotationDraft((current) => ({ ...current, [field]: event.target.value }))
+                }
+              />
+            ))}
+            <button type="button" onClick={addAnnotation}>
+              Add annotation
+            </button>
+          </div>
+          {spec.annotations.map((annotation) => (
+            <div key={annotation.id} className="plot-annotation-row">
+              <input
+                aria-label={`Annotation label ${annotation.id}`}
+                value={annotation.text}
+                onChange={(event) => updateAnnotation(annotation, { text: event.target.value })}
+              />
+              <input
+                aria-label={`Annotation color ${annotation.id}`}
+                type="color"
+                value={annotation.color}
+                onChange={(event) => updateAnnotation(annotation, { color: event.target.value })}
+              />
+              <input
+                aria-label={`Annotation font family ${annotation.id}`}
+                value={annotation.font.family}
+                onChange={(event) =>
+                  updateAnnotation(annotation, {
+                    font: { ...annotation.font, family: event.target.value },
+                  })
+                }
+              />
+              <input
+                aria-label={`Annotation font size ${annotation.id}`}
+                type="number"
+                min={1}
+                value={annotation.font.size}
+                onChange={(event) =>
+                  updateAnnotation(annotation, {
+                    font: { ...annotation.font, size: Number(event.target.value) },
+                  })
+                }
+              />
+              <button
+                type="button"
+                aria-label={`Remove annotation ${annotation.id}`}
+                onClick={() => removeAnnotation(annotation)}
+              >
+                x
+              </button>
+            </div>
+          ))}
         </div>
       ) : null}
     </div>

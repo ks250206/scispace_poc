@@ -252,6 +252,9 @@ describe("Workbench UI", () => {
         height: 420,
       }),
     );
+    fireEvent.change(screen.getByLabelText("Plot font family"), { target: { value: "Arial" } });
+    fireEvent.change(screen.getByLabelText("Plot font size"), { target: { value: "14" } });
+    fireEvent.change(screen.getByLabelText("Plot padding left"), { target: { value: "18" } });
     expect(
       useScispaceStore.getState().windows.find((window) => window.id === "plot-seed"),
     ).toMatchObject({
@@ -259,14 +262,28 @@ describe("Workbench UI", () => {
       height: 420,
     });
 
+    await user.click(screen.getByRole("tab", { name: "Axes" }));
+    fireEvent.change(screen.getByLabelText("y axis label"), { target: { value: "Signal axis" } });
+    fireEvent.change(screen.getByLabelText("y tick length"), { target: { value: "10" } });
+    fireEvent.click(screen.getByLabelText("y minor tick"));
+    fireEvent.change(screen.getByLabelText("y axis color"), { target: { value: "#111827" } });
+
     await user.click(screen.getByRole("tab", { name: "Series" }));
     expect(screen.getByRole("tab", { name: "Series" })).toHaveAttribute("aria-selected", "true");
     await user.selectOptions(screen.getByLabelText("Add series"), "background");
     await user.click(screen.getByRole("button", { name: "Add" }));
     fireEvent.change(screen.getByLabelText("Color background"), { target: { value: "#dc2626" } });
+    await user.selectOptions(screen.getByLabelText("Marker shape background"), "triangle");
+    fireEvent.change(screen.getByLabelText("Draw order background"), { target: { value: "3" } });
     const backgroundLabel = screen.getByLabelText("Label background");
     await user.click(backgroundLabel);
     await user.keyboard("{Control>}a{/Control}Background");
+
+    await user.click(screen.getByRole("tab", { name: "Annotations" }));
+    fireEvent.change(screen.getByLabelText("Annotation text"), { target: { value: "Peak" } });
+    fireEvent.change(screen.getByLabelText("Annotation x"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Annotation y"), { target: { value: "0.5" } });
+    await user.click(screen.getByRole("button", { name: "Add annotation" }));
 
     const spec = useScispaceStore.getState().plotSpecs.find((plot) => plot.id === "seed-plot");
     expect(spec).toMatchObject({
@@ -275,6 +292,15 @@ describe("Workbench UI", () => {
       x: "index",
       zoomMode: "xy",
       size: { width: 720, height: 420 },
+      font: { family: "Arial", size: 14 },
+      padding: { left: 18 },
+      axes: {
+        y: {
+          label: "Signal axis",
+          color: "#111827",
+          ticks: { length: 10, minor: true },
+        },
+      },
     });
     expect(spec?.series).toEqual([
       {
@@ -284,6 +310,7 @@ describe("Workbench UI", () => {
         lineWidth: 2,
         markerSize: 6,
         markerShape: "circle",
+        drawOrder: 0,
       },
       {
         y: "background",
@@ -291,10 +318,13 @@ describe("Workbench UI", () => {
         color: "#dc2626",
         lineWidth: 2,
         markerSize: 6,
-        markerShape: "circle",
+        markerShape: "triangle",
+        drawOrder: 3,
       },
     ]);
+    expect(spec?.annotations[0]).toMatchObject({ text: "Peak", x: 1, y: 0.5 });
 
+    await user.click(screen.getByRole("tab", { name: "Series" }));
     await user.click(screen.getByRole("button", { name: "Remove background" }));
     expect(useScispaceStore.getState().plotSpecs[0]?.series).toHaveLength(1);
     expect(useScispaceStore.getState().commandHistory.some((entry) => entry.source === "gui")).toBe(
