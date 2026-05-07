@@ -65,13 +65,16 @@ interface ScispaceState {
   setViewport: (viewport: ViewportState) => void;
 }
 
+const centerTileX = 1920;
+const centerTileY = 1080;
+
 const initialWindows = (): WorkspaceWindow[] => [
   {
     id: "browser-main",
     kind: "browser",
     title: "Data Browser",
-    x: 64,
-    y: 72,
+    x: centerTileX + 64,
+    y: centerTileY + 72,
     width: 300,
     height: 440,
     zIndex: 1,
@@ -80,8 +83,8 @@ const initialWindows = (): WorkspaceWindow[] => [
     id: "table-seed",
     kind: "table",
     title: "Table - waveform.csv",
-    x: 396,
-    y: 88,
+    x: centerTileX + 396,
+    y: centerTileY + 88,
     width: 650,
     height: 420,
     zIndex: 2,
@@ -91,8 +94,8 @@ const initialWindows = (): WorkspaceWindow[] => [
     id: "plot-seed",
     kind: "plot",
     title: "Plot - waveform.csv",
-    x: 1088,
-    y: 88,
+    x: centerTileX + 1088,
+    y: centerTileY + 88,
     width: 640,
     height: 420,
     zIndex: 3,
@@ -103,8 +106,8 @@ const initialWindows = (): WorkspaceWindow[] => [
     id: "terminal-main",
     kind: "terminal",
     title: "Terminal",
-    x: 64,
-    y: 612,
+    x: centerTileX + 64,
+    y: centerTileY + 612,
     width: 1664,
     height: 300,
     zIndex: 4,
@@ -113,8 +116,8 @@ const initialWindows = (): WorkspaceWindow[] => [
     id: "history-main",
     kind: "history",
     title: "Command History",
-    x: 1760,
-    y: 88,
+    x: centerTileX + 1328,
+    y: centerTileY + 532,
     width: 420,
     height: 520,
     zIndex: 5,
@@ -131,8 +134,8 @@ const ensureWorkspaceWindows = (windows: WorkspaceWindow[]): WorkspaceWindow[] =
         id: "terminal-main",
         kind: "terminal",
         title: "Terminal",
-        x: 64,
-        y: 612,
+        x: centerTileX + 64,
+        y: centerTileY + 612,
         width: 1664,
         height: 300,
         zIndex,
@@ -147,8 +150,8 @@ const ensureWorkspaceWindows = (windows: WorkspaceWindow[]): WorkspaceWindow[] =
         id: "history-main",
         kind: "history",
         title: "Command History",
-        x: 1760,
-        y: 88,
+        x: centerTileX + 1328,
+        y: centerTileY + 532,
         width: 420,
         height: 520,
         zIndex,
@@ -188,7 +191,7 @@ const normalizePlotSpec = (spec: PlotSpec): PlotSpec => {
   return normalizePlotSpecForCommand(spec);
 };
 
-const initialViewport = (): ViewportState => ({ x: 0, y: 0, scale: 1 });
+const initialViewport = (): ViewportState => ({ x: -1920, y: -1080, scale: 1 });
 
 const makeFileRecord = (
   path: string,
@@ -338,7 +341,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     pendingImports: [],
     terminalEvents: [],
     commandHistory: [],
-    viewport: { x: 0, y: 0, scale: 1 },
+    viewport: initialViewport(),
 
     initialize: async () => {
       const [files, datasets, layout] = await Promise.all([

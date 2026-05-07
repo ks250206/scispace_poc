@@ -3,7 +3,7 @@ import type { Dataset, PersistedLayout, VirtualFile } from "../domain/types";
 
 const defaultLayout: PersistedLayout = {
   windows: [],
-  viewport: { x: 0, y: 0, scale: 1 },
+  viewport: { x: -1920, y: -1080, scale: 1 },
   plotSpecs: [],
   commandHistory: [],
 };

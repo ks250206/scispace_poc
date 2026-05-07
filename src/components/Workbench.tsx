@@ -4,6 +4,7 @@ import { useScispaceStore } from "../store/scispaceStore";
 
 const workspaceWidth = 1920 * 3;
 const workspaceHeight = 1080 * 3;
+const centerViewport = { x: -1920, y: -1080, scale: 1 };
 
 export function Workbench() {
   const viewport = useScispaceStore((state) => state.viewport);
@@ -27,10 +28,31 @@ export function Workbench() {
 
   const handleWheel = useCallback(
     (event: WheelEvent<HTMLDivElement>) => {
-      if (!event.metaKey && !event.ctrlKey) return;
+      const target = event.target as HTMLElement;
+      if (!event.metaKey && !event.ctrlKey && target.closest(".canvas-window")) return;
       event.preventDefault();
-      const nextScale = Math.min(1.8, Math.max(0.35, viewport.scale - event.deltaY * 0.001));
-      setViewport({ ...viewport, scale: Number(nextScale.toFixed(2)) });
+      if (event.metaKey || event.ctrlKey) {
+        const nextScale = Math.min(1.8, Math.max(0.35, viewport.scale - event.deltaY * 0.001));
+        const scale = Number(nextScale.toFixed(2));
+        const centerX = event.clientX;
+        const centerY = event.clientY;
+        const worldCenterX = (centerX - viewport.x) / viewport.scale;
+        const worldCenterY = (centerY - viewport.y) / viewport.scale;
+        setViewport({
+          ...viewport,
+          x: centerX - worldCenterX * scale,
+          y: centerY - worldCenterY * scale,
+          scale,
+        });
+        return;
+      }
+      const scale = Math.max(0.01, viewport.scale);
+      const horizontalDelta = event.shiftKey ? event.deltaY || event.deltaX : event.deltaX;
+      setViewport({
+        ...viewport,
+        x: viewport.x - horizontalDelta / scale,
+        y: viewport.y - (event.shiftKey ? 0 : event.deltaY / scale),
+      });
     },
     [setViewport, viewport],
   );
@@ -90,7 +112,7 @@ export function Workbench() {
           <button type="button" onClick={handleNewProject}>
             New Project
           </button>
-          <button type="button" onClick={() => setViewport({ x: 0, y: 0, scale: 1 })}>
+          <button type="button" onClick={() => setViewport(centerViewport)}>
             Reset View
           </button>
           <span>{Math.round(viewport.scale * 100)}%</span>

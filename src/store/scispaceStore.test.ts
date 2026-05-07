@@ -41,14 +41,21 @@ describe("scispace zustand store", () => {
       "terminal",
       "history",
     ]);
+    expect(state.windows.find((window) => window.kind === "browser")).toMatchObject({
+      x: 1984,
+      y: 1152,
+    });
     expect(state.windows.find((window) => window.kind === "terminal")).toMatchObject({
-      x: 64,
-      y: 612,
+      x: 1984,
+      y: 1692,
       height: 300,
     });
     expect(state.windows.find((window) => window.kind === "history")).toMatchObject({
       title: "Command History",
+      x: 3248,
+      y: 1612,
     });
+    expect(state.viewport).toEqual({ x: -1920, y: -1080, scale: 1 });
   });
 
   it("imports text files through Dexie and exposes parsed datasets", async () => {
@@ -347,7 +354,7 @@ describe("scispace zustand store", () => {
     expect(state.commandHistory).toHaveLength(0);
     expect(state.activeDatasetId).toBe("seed-waveform");
     expect(state.activeWindowId).toBeUndefined();
-    expect(state.viewport).toEqual({ x: 0, y: 0, scale: 1 });
+    expect(state.viewport).toEqual({ x: -1920, y: -1080, scale: 1 });
     expect(await db.files.get("~/raw/sample.csv")).toBeUndefined();
     expect((await db.datasets.toArray()).some((dataset) => dataset.name === "derived.csv")).toBe(
       false,

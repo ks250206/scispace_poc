@@ -37,7 +37,7 @@ describe("Workbench UI", () => {
       pointerId: 1,
     });
     fireEvent.pointerUp(document.querySelector(".workbench") as HTMLElement, { pointerId: 1 });
-    expect(useScispaceStore.getState().viewport).toMatchObject({ x: 32, y: 45 });
+    expect(useScispaceStore.getState().viewport).toMatchObject({ x: -1888, y: -1035 });
 
     useScispaceStore.getState().setViewport({ x: 0, y: 0, scale: 1 });
     fireEvent.pointerDown(windowFrame, { button: 0, clientX: 10, clientY: 10, pointerId: 2 });
@@ -48,6 +48,37 @@ describe("Workbench UI", () => {
     });
     fireEvent.pointerUp(document.querySelector(".workbench") as HTMLElement, { pointerId: 2 });
     expect(useScispaceStore.getState().viewport).toMatchObject({ x: 0, y: 0 });
+  });
+
+  it("pans the workspace with wheel and keeps ctrl wheel as zoom", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    const shell = document.querySelector(".canvas-shell") as HTMLElement;
+
+    fireEvent.wheel(shell, { deltaY: 120 });
+    expect(useScispaceStore.getState().viewport).toMatchObject({ x: -1920, y: -1200, scale: 1 });
+
+    await user.click(screen.getByRole("button", { name: "Reset View" }));
+    fireEvent.wheel(shell, { deltaY: 120, shiftKey: true });
+    expect(useScispaceStore.getState().viewport).toMatchObject({ x: -2040, y: -1080, scale: 1 });
+
+    await user.click(screen.getByRole("button", { name: "Reset View" }));
+    fireEvent.wheel(shell, { deltaX: 120, deltaY: 0, shiftKey: true });
+    expect(useScispaceStore.getState().viewport).toMatchObject({ x: -2040, y: -1080, scale: 1 });
+
+    await user.click(screen.getByRole("button", { name: "Reset View" }));
+    fireEvent.wheel(shell, { deltaX: 40 });
+    expect(useScispaceStore.getState().viewport).toMatchObject({ x: -1960, y: -1080, scale: 1 });
+
+    await user.click(screen.getByRole("button", { name: "Reset View" }));
+    fireEvent.wheel(shell, { clientX: 480, clientY: 320, deltaY: 100, ctrlKey: true });
+    expect(useScispaceStore.getState().viewport).toMatchObject({
+      x: -1680,
+      y: -940,
+      scale: 0.9,
+    });
   });
 
   it("opens the table path from the data browser selection", async () => {

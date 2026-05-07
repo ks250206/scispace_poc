@@ -14,6 +14,7 @@ interface CanvasWindowProps {
 
 export function CanvasWindow({ window }: CanvasWindowProps) {
   const activeWindowId = useScispaceStore((state) => state.activeWindowId);
+  const scale = useScispaceStore((state) => state.viewport.scale);
   const updateWindow = useScispaceStore((state) => state.updateWindow);
   const focusWindow = useScispaceStore((state) => state.focusWindow);
   const closeWindow = useScispaceStore((state) => state.closeWindow);
@@ -27,6 +28,7 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
       minWidth={260}
       minHeight={220}
       bounds="parent"
+      scale={scale}
       style={{ zIndex: window.zIndex }}
       dragHandleClassName="window-titlebar"
       onMouseDown={() => focusWindow(window.id)}
