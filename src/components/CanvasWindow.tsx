@@ -29,7 +29,6 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
       position={{ x: window.x, y: window.y }}
       minWidth={260}
       minHeight={220}
-      bounds="parent"
       scale={scale}
       style={{ zIndex: window.zIndex }}
       dragHandleClassName="window-titlebar"

@@ -7,6 +7,46 @@ import { defineCommand } from "just-bash";
 import { useScispaceStore } from "../store/scispaceStore";
 
 const toBashPath = (path: string): string => path.replace(/^~\//, "/home/user/");
+const deleteSequence = "\x1b[3~";
+
+type EditableBashShell = {
+  _cursor?: number;
+  _line?: string;
+  _write?: (data: string) => void;
+};
+
+export const handleForwardDelete = (shell: BashShell | null): void => {
+  const editableShell = shell as unknown as EditableBashShell | null;
+  if (
+    !editableShell ||
+    typeof editableShell._line !== "string" ||
+    typeof editableShell._cursor !== "number" ||
+    typeof editableShell._write !== "function" ||
+    editableShell._cursor >= editableShell._line.length
+  ) {
+    return;
+  }
+  const tail = editableShell._line.slice(editableShell._cursor + 1);
+  editableShell._line = editableShell._line.slice(0, editableShell._cursor) + tail;
+  editableShell._write(tail + "\x1b[K");
+  if (tail.length > 0) editableShell._write(`\x1b[${tail.length}D`);
+};
+
+export const handleTerminalInput = async (shell: BashShell | null, data: string): Promise<void> => {
+  if (!shell) return;
+  let remaining = data;
+  while (remaining.length > 0) {
+    const deleteIndex = remaining.indexOf(deleteSequence);
+    if (deleteIndex < 0) {
+      await shell.handleInput(remaining);
+      return;
+    }
+    const beforeDelete = remaining.slice(0, deleteIndex);
+    if (beforeDelete) await shell.handleInput(beforeDelete);
+    handleForwardDelete(shell);
+    remaining = remaining.slice(deleteIndex + deleteSequence.length);
+  }
+};
 
 export function TerminalPanel() {
   const { ref, write, resize } = useTerminal();
@@ -95,7 +135,7 @@ export function TerminalPanel() {
   );
 
   const handleData = useCallback((data: string) => {
-    void shellRef.current?.handleInput(data);
+    void handleTerminalInput(shellRef.current, data);
   }, []);
 
   useEffect(() => {

@@ -79,6 +79,12 @@ describe("Workbench UI", () => {
       y: -940,
       scale: 0.9,
     });
+
+    fireEvent.wheel(shell, { clientX: 480, clientY: 320, deltaY: 5000, ctrlKey: true });
+    expect(useScispaceStore.getState().viewport.scale).toBe(0.1);
+
+    fireEvent.wheel(shell, { clientX: 480, clientY: 320, deltaY: -5000, ctrlKey: true });
+    expect(useScispaceStore.getState().viewport.scale).toBe(3);
   });
 
   it("opens the table path from the data browser selection", async () => {

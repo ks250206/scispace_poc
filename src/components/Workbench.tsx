@@ -2,9 +2,9 @@ import { useCallback, useMemo, useRef, useState, type PointerEvent, type WheelEv
 import { CanvasWindow } from "./CanvasWindow";
 import { useScispaceStore } from "../store/scispaceStore";
 
-const workspaceWidth = 1920 * 3;
-const workspaceHeight = 1080 * 3;
 const centerViewport = { x: -1920, y: -1080, scale: 1 };
+const minScale = 0.1;
+const maxScale = 3;
 
 export function Workbench() {
   const viewport = useScispaceStore((state) => state.viewport);
@@ -19,8 +19,6 @@ export function Workbench() {
 
   const canvasStyle = useMemo(
     () => ({
-      width: workspaceWidth,
-      height: workspaceHeight,
       transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`,
     }),
     [viewport],
@@ -32,7 +30,10 @@ export function Workbench() {
       if (!event.metaKey && !event.ctrlKey && target.closest(".canvas-window")) return;
       event.preventDefault();
       if (event.metaKey || event.ctrlKey) {
-        const nextScale = Math.min(1.8, Math.max(0.35, viewport.scale - event.deltaY * 0.001));
+        const nextScale = Math.min(
+          maxScale,
+          Math.max(minScale, viewport.scale - event.deltaY * 0.001),
+        );
         const scale = Number(nextScale.toFixed(2));
         const centerX = event.clientX;
         const centerY = event.clientY;
