@@ -292,6 +292,62 @@ describe("scispace pseudo command interpreter", () => {
     expect(executeScispaceCommand("unknown", { datasets: [dataset] }).output).toContain("Unknown");
   });
 
+  it("parses virtual file operation commands", () => {
+    expect(executeScispaceCommand("file-mkdir ~/raw/analysis", { datasets: [] })).toMatchObject({
+      kind: "file-command",
+      action: "mkdir",
+      path: "~/raw/analysis",
+    });
+    expect(
+      executeScispaceCommand('file-rename ~/raw/waveform.csv name="renamed file.csv"', {
+        datasets: [],
+      }),
+    ).toMatchObject({
+      kind: "file-command",
+      action: "rename",
+      path: "~/raw/waveform.csv",
+      name: "renamed file.csv",
+    });
+    expect(
+      executeScispaceCommand("file-move ~/raw/waveform.csv to=~/raw/analysis", { datasets: [] }),
+    ).toMatchObject({
+      kind: "file-command",
+      action: "move",
+      path: "~/raw/waveform.csv",
+      targetDirectory: "~/raw/analysis",
+    });
+    expect(
+      executeScispaceCommand("file-delete ~/raw/waveform.csv", { datasets: [] }),
+    ).toMatchObject({
+      kind: "file-command",
+      action: "delete",
+      path: "~/raw/waveform.csv",
+    });
+    expect(executeScispaceCommand("file-list ~/raw", { datasets: [] })).toMatchObject({
+      kind: "file-command",
+      action: "list",
+      path: "~/raw",
+    });
+    expect(executeScispaceCommand("file-list", { datasets: [] })).toMatchObject({
+      kind: "file-command",
+      action: "list",
+      path: "~/raw",
+    });
+  });
+
+  it("reports malformed virtual file operation commands", () => {
+    expect(executeScispaceCommand("file-mkdir /tmp", { datasets: [] }).kind).toBe("error");
+    expect(executeScispaceCommand("file-rename ~/raw/a.csv", { datasets: [] }).kind).toBe("error");
+    expect(
+      executeScispaceCommand("file-rename ~/raw/a.csv name=../bad.csv", { datasets: [] }).kind,
+    ).toBe("error");
+    expect(executeScispaceCommand("file-move ~/raw/a.csv", { datasets: [] }).kind).toBe("error");
+    expect(executeScispaceCommand("file-move ~/raw/a.csv to=/tmp", { datasets: [] }).kind).toBe(
+      "error",
+    );
+    expect(executeScispaceCommand("file-delete", { datasets: [] }).kind).toBe("error");
+  });
+
   it("routes import preview and confirm through the scispace command path", () => {
     const pendingImport = {
       id: "import-1",

@@ -124,6 +124,14 @@ export type ScispaceCommandResult =
   | { kind: "plot-updated"; spec: PlotSpec; output: string }
   | { kind: "plot-series-updated"; spec: PlotSpec; output: string }
   | { kind: "plot-axis-updated"; spec: PlotSpec; output: string }
+  | {
+      kind: "file-command";
+      action: "mkdir" | "rename" | "move" | "delete" | "list";
+      path: string;
+      name?: string;
+      targetDirectory?: string;
+      output: string;
+    }
   | { kind: "import-preview"; importId: string; preview?: Dataset; error?: string; output: string }
   | {
       kind: "import-confirm";
