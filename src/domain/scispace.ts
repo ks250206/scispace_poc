@@ -389,6 +389,7 @@ export const executeScispaceCommand = (
         "  lsdata",
         "  table <dataset> columns=<column[,column...]>",
         "  table-edit <dataset> action=<delete-row|delete-column|set-cell> index=<n> row=<n> column=<col> value=<value>",
+        "  table-range <dataset> action=<clear|fill-down> r1=<n> c1=<col> r2=<n> c2=<col>",
         "  plot <dataset> x=<column> y=<column[,column...]> type=<line|line-marker|marker>",
         "  plot-set <plotId> title=<title> type=<line|line-marker|marker> border=<true|false> width=<n> height=<n> fontFamily=<name> fontSize=<n> padding=<t:r:b:l>",
         "  plot-axis <plotId> axis=<x|y> range=<auto|min:max> tick=<auto|interval> tickDir=<out|in|none> scale=<linear|log>",
@@ -580,6 +581,101 @@ export const executeScispaceCommand = (
       kind: "error",
       output:
         "Usage: table-edit <dataset> action=<delete-row|delete-column|set-cell> index=<n> row=<n> column=<col> value=<value>",
+    };
+  }
+
+  if (command === "table-range") {
+    const dataset = findDataset(context.datasets, args[0] ?? "");
+    if (!dataset) return { kind: "error", output: `Dataset not found: ${args[0] ?? ""}` };
+
+    const action = readOption(args, "action");
+    const r1Text = readOption(args, "r1") ?? "";
+    const r2Text = readOption(args, "r2") ?? "";
+    const r1 = Number(r1Text);
+    const r2 = Number(r2Text);
+    if (
+      !Number.isInteger(r1) ||
+      !Number.isInteger(r2) ||
+      r1 < 1 ||
+      r2 < 1 ||
+      r1 > dataset.rows.length ||
+      r2 > dataset.rows.length
+    ) {
+      return {
+        kind: "error",
+        output: `Invalid row range for ${dataset.name}: ${r1Text || "missing"}-${r2Text || "missing"}`,
+      };
+    }
+
+    const c1Token = readOption(args, "c1") ?? "";
+    const c2Token = readOption(args, "c2") ?? "";
+    const c1 = resolveDatasetColumnId(dataset, c1Token);
+    const c2 = resolveDatasetColumnId(dataset, c2Token);
+    if (!c1 || !c2) {
+      return {
+        kind: "error",
+        output: `Unknown column range for ${dataset.name}: ${c1Token || "missing"}-${c2Token || "missing"}`,
+      };
+    }
+
+    const c1Index = dataset.columns.findIndex((column) => column.id === c1);
+    const c2Index = dataset.columns.findIndex((column) => column.id === c2);
+    const minRow = Math.min(r1, r2) - 1;
+    const maxRow = Math.max(r1, r2) - 1;
+    const minColumn = Math.min(c1Index, c2Index);
+    const maxColumn = Math.max(c1Index, c2Index);
+    const rangeColumns = dataset.columns.slice(minColumn, maxColumn + 1).map((column) => column.id);
+    const rangeLabel = `rows ${minRow + 1}-${maxRow + 1} columns ${rangeColumns[0]}-${rangeColumns.at(
+      -1,
+    )}`;
+
+    if (action === "clear") {
+      const updatedDataset: Dataset = {
+        ...dataset,
+        rows: dataset.rows.map((row, index) =>
+          index < minRow || index > maxRow
+            ? row
+            : { ...row, ...Object.fromEntries(rangeColumns.map((column) => [column, ""])) },
+        ),
+      };
+      return {
+        kind: "dataset-updated",
+        datasetId: dataset.id,
+        dataset: updatedDataset,
+        output: `Cleared range ${rangeLabel} in ${dataset.name}`,
+      };
+    }
+
+    if (action === "fill-down") {
+      if (minRow === maxRow) {
+        return { kind: "error", output: "fill-down requires at least two rows" };
+      }
+      const anchorRow = dataset.rows[minRow] ?? {};
+      const updatedDataset: Dataset = {
+        ...dataset,
+        rows: dataset.rows.map((row, index) =>
+          index <= minRow || index > maxRow
+            ? row
+            : {
+                ...row,
+                ...Object.fromEntries(
+                  rangeColumns.map((column) => [column, anchorRow[column] ?? ""]),
+                ),
+              },
+        ),
+      };
+      return {
+        kind: "dataset-updated",
+        datasetId: dataset.id,
+        dataset: updatedDataset,
+        output: `Filled down range ${rangeLabel} in ${dataset.name}`,
+      };
+    }
+
+    return {
+      kind: "error",
+      output:
+        "Usage: table-range <dataset> action=<clear|fill-down> r1=<n> c1=<col> r2=<n> c2=<col>",
     };
   }
 

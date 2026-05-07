@@ -64,6 +64,74 @@ describe("scispace pseudo command interpreter", () => {
     }
   });
 
+  it("clears and fills table ranges through table-range commands", () => {
+    const cleared = executeScispaceCommand(
+      "table-range waveform.csv action=clear r1=1 c1=time r2=2 c2=signal",
+      { datasets: [dataset] },
+    );
+
+    expect(cleared.kind).toBe("dataset-updated");
+    if (cleared.kind === "dataset-updated") {
+      expect(cleared.dataset.rows[0]).toMatchObject({ time: "", signal: "", background: 7 });
+      expect(cleared.dataset.rows[1]).toMatchObject({
+        time: "",
+        signal: "",
+        background: dataset.rows[1]?.background,
+      });
+      expect(cleared.output).toBe("Cleared range rows 1-2 columns time-signal in waveform.csv");
+    }
+
+    const filled = executeScispaceCommand(
+      "table-range waveform.csv action=fill-down r1=1 c1=signal r2=3 c2=background",
+      { datasets: [dataset] },
+    );
+
+    expect(filled.kind).toBe("dataset-updated");
+    if (filled.kind === "dataset-updated") {
+      expect(filled.dataset.rows[0]?.signal).toBe(dataset.rows[0]?.signal);
+      expect(filled.dataset.rows[1]?.signal).toBe(dataset.rows[0]?.signal);
+      expect(filled.dataset.rows[2]?.signal).toBe(dataset.rows[0]?.signal);
+      expect(filled.dataset.rows[1]?.background).toBe(dataset.rows[0]?.background);
+      expect(filled.dataset.rows[2]?.background).toBe(dataset.rows[0]?.background);
+      expect(filled.output).toBe(
+        "Filled down range rows 1-3 columns signal-background in waveform.csv",
+      );
+    }
+  });
+
+  it("reports malformed table-range commands", () => {
+    expect(
+      executeScispaceCommand("table-range missing.csv action=clear r1=1 c1=time r2=2 c2=signal", {
+        datasets: [dataset],
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand("table-range waveform.csv action=clear r1=0 c1=time r2=2 c2=signal", {
+        datasets: [dataset],
+      }).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand(
+        "table-range waveform.csv action=clear r1=1 c1=missing r2=2 c2=signal",
+        { datasets: [dataset] },
+      ).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand(
+        "table-range waveform.csv action=fill-down r1=1 c1=time r2=1 c2=signal",
+        { datasets: [dataset] },
+      ).kind,
+    ).toBe("error");
+    expect(
+      executeScispaceCommand(
+        "table-range waveform.csv action=unknown r1=1 c1=time r2=2 c2=signal",
+        {
+          datasets: [dataset],
+        },
+      ).kind,
+    ).toBe("error");
+  });
+
   it("reports malformed table-edit commands", () => {
     const singleColumnDataset = { ...dataset, columns: [dataset.columns[0]], rows: [{ index: 0 }] };
     expect(

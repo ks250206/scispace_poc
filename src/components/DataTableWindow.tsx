@@ -151,6 +151,11 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     setEditingCell(undefined);
   };
 
+  const cellColumnIndex = useCallback(
+    (column: string): number => visibleDatasetColumns.findIndex((item) => item.id === column),
+    [visibleDatasetColumns],
+  );
+
   const startEdit = (rowIndex: number, column: string, value: unknown) => {
     setSelectedColumn(undefined);
     setSelectedCell({ rowIndex, column });
@@ -199,6 +204,81 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
       `table-edit ${quoteCommandArg(dataset.name)} action=delete-column column=${quoteCommandArg(
         selectedColumn,
       )}`,
+      { source: "gui" },
+    );
+  };
+
+  const selectedRangeBounds = () => {
+    if (!selectedRange) return undefined;
+    const anchorColumnIndex = cellColumnIndex(selectedRange.anchor.column);
+    const focusColumnIndex = cellColumnIndex(selectedRange.focus.column);
+    if (anchorColumnIndex < 0 || focusColumnIndex < 0) return undefined;
+    const minRow = Math.min(selectedRange.anchor.rowIndex, selectedRange.focus.rowIndex);
+    const maxRow = Math.max(selectedRange.anchor.rowIndex, selectedRange.focus.rowIndex);
+    const minColumn = Math.min(anchorColumnIndex, focusColumnIndex);
+    const maxColumn = Math.max(anchorColumnIndex, focusColumnIndex);
+    const rangeColumns = visibleDatasetColumns
+      .slice(minColumn, maxColumn + 1)
+      .map((column) => column.id);
+    const firstColumn = rangeColumns[0];
+    const lastColumn = rangeColumns.at(-1);
+    if (!firstColumn || !lastColumn) return undefined;
+    return { minRow, maxRow, firstColumn, lastColumn, rangeColumns };
+  };
+
+  const rangeBounds = selectedRangeBounds();
+  const hasSelectedRange = Boolean(rangeBounds);
+  const canFillDownRange = Boolean(rangeBounds && rangeBounds.maxRow > rangeBounds.minRow);
+
+  const copySelectedRange = () => {
+    if (!dataset || !rangeBounds) return;
+    const tsv = dataset.rows
+      .slice(rangeBounds.minRow, rangeBounds.maxRow + 1)
+      .map((row) =>
+        rangeBounds.rangeColumns.map((column) => formatCellValue(row[column])).join("\t"),
+      )
+      .join("\n");
+    void navigator.clipboard?.writeText(tsv);
+  };
+
+  const clearSelectedRange = () => {
+    if (!dataset || !rangeBounds) return;
+    if (
+      !window.confirm(
+        `Delete selected cells from rows ${rangeBounds.minRow + 1}-${rangeBounds.maxRow + 1} in ${dataset.name}?`,
+      )
+    ) {
+      return;
+    }
+    setSelectedCell(undefined);
+    setSelectedColumn(undefined);
+    setSelectedRange(undefined);
+    setEditingCell(undefined);
+    void runScispace(
+      `table-range ${quoteCommandArg(dataset.name)} action=clear r1=${rangeBounds.minRow + 1} c1=${quoteCommandArg(
+        rangeBounds.firstColumn,
+      )} r2=${rangeBounds.maxRow + 1} c2=${quoteCommandArg(rangeBounds.lastColumn)}`,
+      { source: "gui" },
+    );
+  };
+
+  const fillDownSelectedRange = () => {
+    if (!dataset || !rangeBounds || rangeBounds.maxRow <= rangeBounds.minRow) return;
+    if (
+      !window.confirm(
+        `Fill down rows ${rangeBounds.minRow + 1}-${rangeBounds.maxRow + 1} in ${dataset.name}?`,
+      )
+    ) {
+      return;
+    }
+    setSelectedCell(undefined);
+    setSelectedColumn(undefined);
+    setSelectedRange(undefined);
+    setEditingCell(undefined);
+    void runScispace(
+      `table-range ${quoteCommandArg(dataset.name)} action=fill-down r1=${rangeBounds.minRow + 1} c1=${quoteCommandArg(
+        rangeBounds.firstColumn,
+      )} r2=${rangeBounds.maxRow + 1} c2=${quoteCommandArg(rangeBounds.lastColumn)}`,
       { source: "gui" },
     );
   };
@@ -253,11 +333,6 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
       setEditingCell(undefined);
     }
   };
-
-  const cellColumnIndex = useCallback(
-    (column: string): number => visibleDatasetColumns.findIndex((item) => item.id === column),
-    [visibleDatasetColumns],
-  );
 
   const isCellInRange = (rowIndex: number, column: string): boolean => {
     if (!selectedRange) return false;
@@ -322,6 +397,15 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
       <div className="window-controls">
         <span>{dataset.rows.length} rows · virtualized</span>
         <div className="table-delete-actions">
+          <button type="button" disabled={!hasSelectedRange} onClick={copySelectedRange}>
+            Copy TSV
+          </button>
+          <button type="button" disabled={!hasSelectedRange} onClick={clearSelectedRange}>
+            Delete selected cells
+          </button>
+          <button type="button" disabled={!canFillDownRange} onClick={fillDownSelectedRange}>
+            Fill down
+          </button>
           <button type="button" disabled={!selectedCell} onClick={deleteSelectedRow}>
             Delete row
           </button>

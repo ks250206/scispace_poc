@@ -257,6 +257,53 @@ describe("Workbench UI", () => {
     expect(cells[15]).not.toHaveClass("range-selected");
   });
 
+  it("copies, clears, and fills selected table ranges through scispace commands", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Copy TSV" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete selected cells" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Fill down" })).toBeDisabled();
+
+    await waitFor(() =>
+      expect(document.querySelectorAll(".table-scroll tbody td").length).toBeGreaterThan(10),
+    );
+    const cells = document.querySelectorAll(".table-scroll tbody td");
+    await user.click(cells[1] as HTMLElement);
+    fireEvent.click(cells[6], { shiftKey: true });
+
+    await user.click(screen.getByRole("button", { name: "Copy TSV" }));
+    expect(writeText).toHaveBeenCalledWith("0\t3\n0.125\t4.4902");
+
+    await user.click(screen.getByRole("button", { name: "Delete selected cells" }));
+    await waitFor(() => expect(useScispaceStore.getState().datasets[0]?.rows[0]?.time).toBe(""));
+    expect(useScispaceStore.getState().datasets[0]?.rows[1]?.signal).toBe("");
+    expect(useScispaceStore.getState().commandHistory.at(-1)).toMatchObject({
+      command: "table-range waveform.csv action=clear r1=1 c1=time r2=2 c2=signal",
+      source: "gui",
+    });
+
+    await user.click(cells[3] as HTMLElement);
+    fireEvent.click(cells[11], { shiftKey: true });
+    await user.click(screen.getByRole("button", { name: "Fill down" }));
+    await waitFor(() =>
+      expect(useScispaceStore.getState().datasets[0]?.rows[1]?.background).toBe(7),
+    );
+    expect(useScispaceStore.getState().datasets[0]?.rows[2]?.background).toBe(7);
+    expect(useScispaceStore.getState().commandHistory.at(-1)).toMatchObject({
+      command: "table-range waveform.csv action=fill-down r1=1 c1=background r2=3 c2=background",
+      source: "gui",
+    });
+    expect(confirm).toHaveBeenCalledTimes(2);
+  });
+
   it("deletes selected table rows and columns through scispace commands", async () => {
     const user = userEvent.setup();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);

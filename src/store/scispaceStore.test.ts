@@ -160,6 +160,42 @@ describe("scispace zustand store", () => {
     expect(store.getState().currentPlotId).toBeUndefined();
   });
 
+  it("runs table-range edits through scispace and rewrites backing files", async () => {
+    const { db, store } = await makeStore();
+
+    const cleared = await store
+      .getState()
+      .runScispace("table-range waveform.csv action=clear r1=1 c1=time r2=2 c2=signal", {
+        source: "gui",
+      });
+    expect(cleared.kind).toBe("dataset-updated");
+    expect(store.getState().datasets[0]?.rows[0]).toMatchObject({ time: "", signal: "" });
+    expect((await db.files.get("~/raw/waveform.csv"))?.text?.split("\n")[1]).toBe("0,,,7");
+    expect(store.getState().commandHistory.at(-1)).toMatchObject({
+      command: "table-range waveform.csv action=clear r1=1 c1=time r2=2 c2=signal",
+      source: "gui",
+      status: "success",
+    });
+
+    const filled = await store
+      .getState()
+      .runScispace(
+        "table-range waveform.csv action=fill-down r1=1 c1=background r2=3 c2=background",
+        {
+          source: "history",
+        },
+      );
+    expect(filled.kind).toBe("dataset-updated");
+    expect(store.getState().datasets[0]?.rows[1]?.background).toBe(7);
+    expect(store.getState().datasets[0]?.rows[2]?.background).toBe(7);
+    expect((await db.datasets.get("seed-waveform"))?.rows[2]?.background).toBe(7);
+    expect(store.getState().commandHistory.at(-1)).toMatchObject({
+      command: "table-range waveform.csv action=fill-down r1=1 c1=background r2=3 c2=background",
+      source: "history",
+      status: "success",
+    });
+  });
+
   it("opens an import dialog before persisting dropped files and confirms through settings", async () => {
     const { db, store } = await makeStore();
     const importId = store
