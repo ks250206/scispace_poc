@@ -5,13 +5,9 @@ import { BashShell } from "@wterm/just-bash";
 import { defineCommand } from "just-bash";
 import { useScispaceStore } from "../store/scispaceStore";
 
-interface TerminalPanelProps {
-  height: number;
-}
-
 const toBashPath = (path: string): string => path.replace(/^~\//, "/home/user/");
 
-export function TerminalPanel({ height }: TerminalPanelProps) {
+export function TerminalPanel() {
   const { ref, write } = useTerminal();
   const shellRef = useRef<BashShell | null>(null);
   const files = useScispaceStore((state) => state.files);
@@ -66,9 +62,9 @@ export function TerminalPanel({ height }: TerminalPanelProps) {
   }, [files]);
 
   return (
-    <section className="terminal-panel" style={{ height }}>
+    <section className="terminal-panel">
       <header className="terminal-header">
-        <span>Terminal</span>
+        <span>scispace shell</span>
         <span>wterm + just-bash</span>
       </header>
       <Terminal

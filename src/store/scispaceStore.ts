@@ -76,7 +76,35 @@ const initialWindows = (): WorkspaceWindow[] => [
     datasetId: "seed-waveform",
     plotId: "seed-plot",
   },
+  {
+    id: "terminal-main",
+    kind: "terminal",
+    title: "Terminal",
+    x: 64,
+    y: 612,
+    width: 1664,
+    height: 300,
+    zIndex: 4,
+  },
 ];
+
+const ensureTerminalWindow = (windows: WorkspaceWindow[]): WorkspaceWindow[] => {
+  if (windows.some((window) => window.kind === "terminal")) return windows;
+  const zIndex = Math.max(0, ...windows.map((window) => window.zIndex)) + 1;
+  return [
+    ...windows,
+    {
+      id: "terminal-main",
+      kind: "terminal",
+      title: "Terminal",
+      x: 64,
+      y: 612,
+      width: 1664,
+      height: 300,
+      zIndex,
+    },
+  ];
+};
 
 const seedPlot = (): PlotSpec => ({
   id: "seed-plot",
@@ -140,7 +168,8 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         initialized: true,
         files: nextFiles,
         datasets: nextDatasets,
-        windows: layout.windows.length > 0 ? layout.windows : initialWindows(),
+        windows:
+          layout.windows.length > 0 ? ensureTerminalWindow(layout.windows) : initialWindows(),
         plotSpecs: [seedPlot()],
         viewport: layout.viewport,
         terminalHeight: layout.terminalHeight,

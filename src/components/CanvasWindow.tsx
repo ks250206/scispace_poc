@@ -2,6 +2,7 @@ import { Rnd } from "react-rnd";
 import { DataBrowser } from "./DataBrowser";
 import { DataTableWindow } from "./DataTableWindow";
 import { PlotWindow } from "./PlotWindow";
+import { TerminalPanel } from "./TerminalPanel";
 import type { WorkspaceWindow } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
 
@@ -47,6 +48,7 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
             <DataTableWindow datasetId={window.datasetId} />
           ) : null}
           {window.kind === "plot" && window.plotId ? <PlotWindow plotId={window.plotId} /> : null}
+          {window.kind === "terminal" ? <TerminalPanel /> : null}
         </div>
       </article>
     </Rnd>

@@ -1,4 +1,4 @@
-export type WindowKind = "browser" | "table" | "plot";
+export type WindowKind = "browser" | "table" | "plot" | "terminal";
 
 export interface ViewportState {
   x: number;

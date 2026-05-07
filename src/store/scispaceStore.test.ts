@@ -17,7 +17,17 @@ describe("scispace zustand store", () => {
 
     expect(state.datasets[0]?.id).toBe("seed-waveform");
     expect(state.files[0]?.path).toBe("~/raw/waveform.csv");
-    expect(state.windows.map((window) => window.kind)).toEqual(["browser", "table", "plot"]);
+    expect(state.windows.map((window) => window.kind)).toEqual([
+      "browser",
+      "table",
+      "plot",
+      "terminal",
+    ]);
+    expect(state.windows.find((window) => window.kind === "terminal")).toMatchObject({
+      x: 64,
+      y: 612,
+      height: 300,
+    });
   });
 
   it("imports text files through Dexie and exposes parsed datasets", async () => {
@@ -80,5 +90,34 @@ describe("scispace zustand store", () => {
       x: 120,
       y: 140,
     });
+  });
+
+  it("adds a terminal window when loading an older persisted layout", async () => {
+    const db = new SciSpaceDatabase(`test-${crypto.randomUUID()}`);
+    await db.open();
+    await db.layout.put({
+      id: "main",
+      value: {
+        windows: [
+          {
+            id: "browser-main",
+            kind: "browser",
+            title: "Data Browser",
+            x: 64,
+            y: 72,
+            width: 300,
+            height: 440,
+            zIndex: 1,
+          },
+        ],
+        viewport: { x: 0, y: 0, scale: 1 },
+        terminalHeight: 280,
+      },
+    });
+
+    const store = createScispaceStore(db);
+    await store.getState().initialize();
+
+    expect(store.getState().windows.some((window) => window.kind === "terminal")).toBe(true);
   });
 });

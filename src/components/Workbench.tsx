@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useRef, type PointerEvent, type WheelEvent } from "react";
 import { CanvasWindow } from "./CanvasWindow";
-import { TerminalPanel } from "./TerminalPanel";
 import { useScispaceStore } from "../store/scispaceStore";
 
 const workspaceWidth = 1920 * 3;
@@ -10,13 +9,10 @@ export function Workbench() {
   const viewport = useScispaceStore((state) => state.viewport);
   const setViewport = useScispaceStore((state) => state.setViewport);
   const windows = useScispaceStore((state) => state.windows);
-  const terminalHeight = useScispaceStore((state) => state.terminalHeight);
-  const setTerminalHeight = useScispaceStore((state) => state.setTerminalHeight);
   const importTextFile = useScispaceStore((state) => state.importTextFile);
   const canvasDrag = useRef<{ x: number; y: number; originX: number; originY: number } | null>(
     null,
   );
-  const terminalDrag = useRef<{ startY: number; height: number } | null>(null);
 
   const canvasStyle = useMemo(
     () => ({
@@ -57,16 +53,10 @@ export function Workbench() {
         y: drag.originY + event.clientY - drag.y,
       });
     }
-
-    if (terminalDrag.current) {
-      const drag = terminalDrag.current;
-      setTerminalHeight(drag.height + drag.startY - event.clientY);
-    }
   };
 
   const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
     canvasDrag.current = null;
-    terminalDrag.current = null;
     event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
@@ -89,7 +79,6 @@ export function Workbench() {
       </div>
       <section
         className="canvas-shell"
-        style={{ bottom: terminalHeight }}
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onDragOver={(event) => event.preventDefault()}
@@ -101,15 +90,6 @@ export function Workbench() {
           ))}
         </div>
       </section>
-      <div
-        className="terminal-resizer"
-        style={{ bottom: terminalHeight }}
-        onPointerDown={(event) => {
-          terminalDrag.current = { startY: event.clientY, height: terminalHeight };
-          event.currentTarget.setPointerCapture(event.pointerId);
-        }}
-      />
-      <TerminalPanel height={terminalHeight} />
     </main>
   );
 }
