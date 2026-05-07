@@ -131,8 +131,38 @@ export const detectImportPreset = (
   text: string,
   fileName: string,
 ): DetectedImportPreset | undefined => {
-  if (!/\.mpt$/i.test(fileName) && !text.startsWith("EC-Lab ASCII FILE")) return undefined;
   const lines = text.split(/\r?\n/);
+  if (/\.ras$/i.test(fileName) || lines.some((line) => line.trim() === "*RAS_INT_START")) {
+    const startIndex = lines.findIndex((line) => line.trim() === "*RAS_INT_START");
+    const endIndex = lines.findIndex((line) => line.trim() === "*RAS_INT_END");
+    if (startIndex < 0 || endIndex <= startIndex) return undefined;
+    const metadata = Object.fromEntries(
+      lines
+        .slice(0, startIndex)
+        .filter((line) => line.startsWith("*"))
+        .map((line) => {
+          const match = line.match(/^\*(\S+)\s+"?([^"]*)"?/);
+          return match ? [match[1], match[2].trim()] : undefined;
+        })
+        .filter((entry): entry is [string, string] => Boolean(entry)),
+    );
+
+    return {
+      id: "rigaku-ras",
+      label: "Rigaku RAS",
+      dataStartLine: startIndex + 2,
+      options: {
+        skipRows: startIndex + 1,
+        delimiter: "space",
+        commentPrefix: "*",
+        hasHeader: false,
+        columnNames: ["angle", "intensity", "attenuation"],
+      },
+      metadata,
+    };
+  }
+
+  if (!/\.mpt$/i.test(fileName) && !text.startsWith("EC-Lab ASCII FILE")) return undefined;
   const headerLine = lines.find((line) => /^Nb header lines\s*:/i.test(line.trim()));
   const headerLineCount = Number(headerLine?.split(":").at(1)?.trim());
   if (!Number.isInteger(headerLineCount) || headerLineCount < 1) return undefined;

@@ -31,6 +31,35 @@ describe("csv domain", () => {
     expect(detectImportPreset("x,y\n1,2", "sample.csv")).toBeUndefined();
   });
 
+  it("detects Rigaku ras import presets from intensity markers", () => {
+    const preset = detectImportPreset(
+      [
+        '*MEAS_SCAN_UNIT_X "deg"',
+        '*MEAS_SCAN_UNIT_Y "counts"',
+        "*RAS_HEADER_END",
+        "*RAS_INT_START",
+        "10.0000 3.9658 1.0000",
+        "10.0200 1.0105 1.0000",
+        "*RAS_INT_END",
+      ].join("\n"),
+      "sample.ras",
+    );
+
+    expect(preset).toMatchObject({
+      id: "rigaku-ras",
+      label: "Rigaku RAS",
+      dataStartLine: 5,
+      options: {
+        skipRows: 4,
+        delimiter: "space",
+        commentPrefix: "*",
+        hasHeader: false,
+        columnNames: ["angle", "intensity", "attenuation"],
+      },
+      metadata: { MEAS_SCAN_UNIT_X: "deg", MEAS_SCAN_UNIT_Y: "counts" },
+    });
+  });
+
   it("parses CSV text into typed dataset rows", () => {
     const dataset = parseDelimitedText(
       "time,signal,label\n0,1.5,a\n1,2.25,b",

@@ -348,6 +348,43 @@ describe("scispace zustand store", () => {
     });
   });
 
+  it("applies Rigaku ras presets when opening imports", async () => {
+    const { store } = await makeStore();
+    const text = [
+      '*MEAS_SCAN_UNIT_X "deg"',
+      '*MEAS_SCAN_UNIT_Y "counts"',
+      "*RAS_HEADER_END",
+      "*RAS_INT_START",
+      "10.0000 3.9658 1.0000",
+      "10.0200 1.0105 1.0000",
+      "*RAS_INT_END",
+    ].join("\n");
+    const importId = store.getState().openImportDialog("sample.ras", text);
+
+    expect(store.getState().pendingImports[0]).toMatchObject({
+      id: importId,
+      detectedPreset: { id: "rigaku-ras", label: "Rigaku RAS", dataStartLine: 5 },
+      options: {
+        skipRows: 4,
+        delimiter: "space",
+        commentPrefix: "*",
+        hasHeader: false,
+        columnNames: ["angle", "intensity", "attenuation"],
+      },
+      preview: {
+        columns: [
+          { id: "angle", name: "angle" },
+          { id: "intensity", name: "intensity" },
+          { id: "attenuation", name: "attenuation" },
+        ],
+        rows: [
+          { angle: 10, intensity: 3.9658, attenuation: 1 },
+          { angle: 10.02, intensity: 1.0105, attenuation: 1 },
+        ],
+      },
+    });
+  });
+
   it("updates import settings through scispace commands", async () => {
     const { store } = await makeStore();
     const importId = store

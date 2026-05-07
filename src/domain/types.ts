@@ -19,10 +19,15 @@ export interface ImportParseOptions {
 }
 
 export interface DetectedImportPreset {
-  id: "ec-lab-mpt";
+  id: "ec-lab-mpt" | "rigaku-ras";
   label: string;
   dataStartLine: number;
-  options: Pick<ImportParseOptions, "skipRows" | "delimiter" | "commentPrefix" | "hasHeader">;
+  options: Partial<
+    Pick<
+      ImportParseOptions,
+      "skipRows" | "delimiter" | "commentPrefix" | "hasHeader" | "columnNames"
+    >
+  >;
   metadata: Record<string, string>;
 }
 
