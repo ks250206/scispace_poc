@@ -427,11 +427,13 @@ describe("Workbench UI", () => {
 
   it("uses the whole import body for raw text mode", async () => {
     let importId = "";
-    act(() => {
+    await act(async () => {
       importId = useScispaceStore
         .getState()
         .openImportDialog("notes.mpt", "EC-Lab ASCII FILE\nNb header lines : 70\n\nmetadata");
-      useScispaceStore.getState().updateImportMode(importId, "raw");
+      await useScispaceStore
+        .getState()
+        .runScispace(`import-set ${importId} mode=raw`, { source: "gui" });
     });
     render(<ImportSettingsWindow importId={importId} />);
 

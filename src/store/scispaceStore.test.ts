@@ -170,12 +170,12 @@ describe("scispace zustand store", () => {
     expect(store.getState().windows.some((window) => window.kind === "import")).toBe(true);
     expect(await db.files.get("~/raw/configured.csv")).toBeUndefined();
 
-    store.getState().updateImportOptions(importId, {
-      skipRows: 1,
-      delimiter: "semicolon",
-      commentPrefix: "#",
-      hasHeader: true,
-    });
+    await store
+      .getState()
+      .runScispace(
+        `import-set ${importId} skipRows=1 delimiter=semicolon commentPrefix=# hasHeader=true`,
+        { source: "gui" },
+      );
     expect(store.getState().pendingImports[0]?.preview?.rows[0]).toEqual({ x: 1, y: 10 });
 
     const result = await store.getState().confirmImport(importId);
@@ -190,7 +190,7 @@ describe("scispace zustand store", () => {
     const { db, store } = await makeStore();
     const importId = store.getState().openImportDialog("cancel.csv", "x,y\n1,2");
 
-    store.getState().cancelImport(importId);
+    await store.getState().runScispace(`import-cancel ${importId}`, { source: "gui" });
 
     expect(store.getState().pendingImports).toHaveLength(0);
     expect(await db.files.get("~/raw/cancel.csv")).toBeUndefined();
@@ -200,7 +200,9 @@ describe("scispace zustand store", () => {
     const { store } = await makeStore();
     const importId = store.getState().openImportDialog("no-header.csv", "1,2\n3,4");
 
-    store.getState().updateImportOptions(importId, { hasHeader: false });
+    await store.getState().runScispace(`import-set ${importId} hasHeader=false`, {
+      source: "gui",
+    });
 
     const preview = store.getState().pendingImports[0]?.preview;
     expect(preview).toBeDefined();
@@ -215,8 +217,12 @@ describe("scispace zustand store", () => {
     const { store } = await makeStore();
     const importId = store.getState().openImportDialog("no-header.csv", "1,2\n3,4");
 
-    store.getState().updateImportOptions(importId, { hasHeader: false });
-    store.getState().updateImportOptions(importId, { columnNames: ["energy", "intensity"] });
+    await store.getState().runScispace(`import-set ${importId} hasHeader=false`, {
+      source: "gui",
+    });
+    await store.getState().runScispace(`import-set ${importId} columnNames=energy,intensity`, {
+      source: "gui",
+    });
     const result = await store.getState().confirmImport(importId);
 
     expect(result?.dataset ? datasetColumnNames(result.dataset) : []).toEqual([
@@ -364,7 +370,7 @@ describe("scispace zustand store", () => {
     const { db, store } = await makeStore();
     const importId = store.getState().openImportDialog("notes.txt", "raw notes");
 
-    store.getState().updateImportMode(importId, "raw");
+    await store.getState().runScispace(`import-set ${importId} mode=raw`, { source: "gui" });
     const result = await store.getState().confirmImport(importId);
 
     expect(result?.dataset).toBeUndefined();
@@ -450,8 +456,9 @@ describe("scispace zustand store", () => {
     const { store } = await makeStore();
     const importId = store.getState().openImportDialog("notes.txt", "x y\n1 2");
 
-    store.getState().updateImportMode(importId, "tabular");
-    store.getState().updateImportOptions(importId, { delimiter: "space" });
+    await store.getState().runScispace(`import-set ${importId} mode=tabular delimiter=space`, {
+      source: "gui",
+    });
     const result = await store.getState().confirmImport(importId);
 
     expect(result?.parseError).toBeUndefined();

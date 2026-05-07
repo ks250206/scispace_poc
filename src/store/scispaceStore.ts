@@ -46,10 +46,7 @@ interface ScispaceState {
   initialize: () => Promise<void>;
   importTextFile: (name: string, text: string) => Promise<ImportFileResult>;
   openImportDialog: (fileName: string, text: string) => string;
-  updateImportOptions: (importId: string, options: Partial<ImportParseOptions>) => void;
-  updateImportMode: (importId: string, mode: "tabular" | "raw") => void;
   confirmImport: (importId: string) => Promise<ImportFileResult | undefined>;
-  cancelImport: (importId: string) => void;
   setDatasetColumnSelection: (datasetId: string, columnIds: string[]) => void;
   toggleDatasetColumn: (datasetId: string, columnId: string) => void;
   selectDataset: (datasetId: string) => Promise<void>;
@@ -545,36 +542,6 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       return id;
     },
 
-    updateImportOptions: (importId, options) => {
-      set((state) => ({
-        pendingImports: state.pendingImports.map((pendingImport) => {
-          if (pendingImport.id !== importId) return pendingImport;
-          const nextOptions = { ...pendingImport.options, ...options };
-          const { allPreview, preview, error } = createPreviews(
-            pendingImport.id,
-            pendingImport.fileName,
-            pendingImport.text,
-            nextOptions,
-          );
-          return {
-            ...pendingImport,
-            options: normalizeColumnNames(nextOptions, allPreview),
-            allPreview,
-            preview,
-            error,
-          };
-        }),
-      }));
-    },
-
-    updateImportMode: (importId, mode) => {
-      set((state) => ({
-        pendingImports: state.pendingImports.map((pendingImport) =>
-          pendingImport.id === importId ? { ...pendingImport, mode } : pendingImport,
-        ),
-      }));
-    },
-
     confirmImport: async (importId) => {
       const pendingImport = get().pendingImports.find((item) => item.id === importId);
       if (!pendingImport) return undefined;
@@ -592,14 +559,6 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           : undefined;
       const parseError = result.kind === "import-confirm" ? result.parseError : result.output;
       return { file, dataset, parseError };
-    },
-
-    cancelImport: (importId) => {
-      set((state) => ({
-        pendingImports: state.pendingImports.filter((item) => item.id !== importId),
-        windows: state.windows.filter((window) => window.importId !== importId),
-      }));
-      persistLayout(db, get());
     },
 
     setDatasetColumnSelection: (datasetId, columnIds) => {
