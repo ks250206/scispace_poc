@@ -15,6 +15,23 @@ type EditableBashShell = {
   _write?: (data: string) => void;
 };
 
+export const scrollTerminalToBottom = (
+  terminalElement?: HTMLElement | null,
+  viewportElement?: HTMLElement | null,
+): void => {
+  const scrollTargets = [
+    terminalElement,
+    terminalElement?.querySelector<HTMLElement>("[data-terminal-viewport]"),
+    viewportElement,
+  ].filter((element): element is HTMLElement => Boolean(element));
+
+  window.requestAnimationFrame(() => {
+    for (const element of scrollTargets) {
+      element.scrollTop = element.scrollHeight;
+    }
+  });
+};
+
 export const handleForwardDelete = (shell: BashShell | null): void => {
   const editableShell = shell as unknown as EditableBashShell | null;
   if (
@@ -107,6 +124,11 @@ export function TerminalPanel() {
     resize(cols, rows);
   }, [ref, resize]);
 
+  const scrollToBottom = useCallback(() => {
+    const terminalElement = terminalRef.current?.element ?? ref.current?.instance?.element;
+    scrollTerminalToBottom(terminalElement, viewportRef.current);
+  }, [ref]);
+
   const handleReady = useCallback(
     async (terminal: WTerm) => {
       terminalRef.current = terminal;
@@ -119,10 +141,14 @@ export function TerminalPanel() {
         prompt: (cwd) => `scispace:${cwd.replace("/home/user", "~")}$ `,
       });
       shellRef.current = shell;
-      await shell.attach((data) => write(data));
+      await shell.attach((data) => {
+        write(data);
+        scrollToBottom();
+      });
       shell.bash?.registerCommand(
         defineCommand("scispace", async (args) => {
           const result = await runScispace(args.join(" "), { source: "terminal" });
+          scrollToBottom();
           return {
             stdout: `${result.output}\n`,
             stderr: result.kind === "error" ? `${result.output}\n` : "",
@@ -131,12 +157,15 @@ export function TerminalPanel() {
         }),
       );
     },
-    [initialFiles, runScispace, syncTerminalSize, write],
+    [initialFiles, runScispace, scrollToBottom, syncTerminalSize, write],
   );
 
-  const handleData = useCallback((data: string) => {
-    void handleTerminalInput(shellRef.current, data);
-  }, []);
+  const handleData = useCallback(
+    (data: string) => {
+      void handleTerminalInput(shellRef.current, data).then(scrollToBottom);
+    },
+    [scrollToBottom],
+  );
 
   useEffect(() => {
     const shell = shellRef.current;
@@ -162,8 +191,10 @@ export function TerminalPanel() {
     if (!terminalCommandLineRequest || !shellRef.current) return;
     if (commandLineRequestIdRef.current === terminalCommandLineRequest.id) return;
     commandLineRequestIdRef.current = terminalCommandLineRequest.id;
-    void shellRef.current.handleInput(`scispace ${terminalCommandLineRequest.command}`);
-  }, [terminalCommandLineRequest]);
+    void shellRef.current
+      .handleInput(`scispace ${terminalCommandLineRequest.command}`)
+      .then(scrollToBottom);
+  }, [scrollToBottom, terminalCommandLineRequest]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
