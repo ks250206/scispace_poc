@@ -1,11 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type {
-  PlotAxisSpec,
-  PlotMarkerShape,
-  PlotSeries,
-  PlotType,
-  PlotZoomMode,
-} from "../domain/types";
+import type { PlotAxisSpec, PlotMarkerShape, PlotSeries, PlotType } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
 
 type AxisPatch = Omit<Partial<PlotAxisSpec>, "ticks"> & {
@@ -71,8 +65,6 @@ export function PlotConfigWindow() {
     runPlotCommand(`plot-set ${currentPlotId} type=${plotType}`);
   const setBorder = (border: boolean) =>
     runPlotCommand(`plot-set ${currentPlotId} border=${border}`);
-  const setZoomMode = (zoomMode: PlotZoomMode) =>
-    runPlotCommand(`plot-set ${currentPlotId} zoom=${zoomMode}`);
   const setTitle = (title: string) =>
     runPlotCommand(`plot-set ${currentPlotId} title=${quoteArg(title)}`);
   const setPlotSize = (patch: Partial<typeof spec.size>) => {
@@ -179,18 +171,6 @@ export function PlotConfigWindow() {
                 ))}
               </select>
             </label>
-            <div className="segmented">
-              {(["x", "y", "xy"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  className={spec.zoomMode === mode ? "active" : ""}
-                  onClick={() => setZoomMode(mode)}
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
           </div>
           <div className="plot-style-panel">
             <label>

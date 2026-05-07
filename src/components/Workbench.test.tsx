@@ -227,7 +227,6 @@ describe("Workbench UI", () => {
       expect(useScispaceStore.getState().plotSpecs[0]?.title).toBe("Custom plot"),
     );
     await user.selectOptions(screen.getByLabelText("Plot x column"), "index");
-    await user.click(screen.getByRole("button", { name: "x" }));
     fireEvent.change(screen.getByLabelText("Plot width"), { target: { value: "720" } });
     fireEvent.change(screen.getByLabelText("Plot height"), { target: { value: "420" } });
     expect(useScispaceStore.getState().plotSpecs[0]?.size).toEqual({ width: 640, height: 360 });
@@ -253,7 +252,7 @@ describe("Workbench UI", () => {
       title: "Custom plot",
       titleEdited: true,
       x: "index",
-      zoomMode: "x",
+      zoomMode: "xy",
       size: { width: 720, height: 420 },
     });
     expect(spec?.series).toEqual([

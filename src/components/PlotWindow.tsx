@@ -8,6 +8,13 @@ interface PlotWindowProps {
   plotId: string;
 }
 
+const zoomAxisFromDrag = (width: number, height: number): "x" | "y" | "xy" | undefined => {
+  const minDrag = 8;
+  if (width < minDrag && height < minDrag) return undefined;
+  if (width >= 24 && height >= 24) return "xy";
+  return width >= height ? "x" : "y";
+};
+
 export function PlotWindow({ plotId }: PlotWindowProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
@@ -48,7 +55,7 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
         width: spec.size.width,
         height: spec.size.height,
         title: spec.title,
-        cursor: { drag: { x: spec.zoomMode !== "y", y: spec.zoomMode !== "x" } },
+        cursor: { drag: { x: false, y: false, setScale: false } },
         scales: {
           x: {
             time: false,
@@ -78,7 +85,90 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
       containerRef.current,
     );
 
-    return () => plotRef.current?.destroy();
+    const plot = plotRef.current;
+    let dragStart: { left: number; top: number } | undefined;
+    const clampPosition = (position: { left: number; top: number }) => {
+      plot.syncRect(false);
+      const rect = plot.rect;
+      return {
+        left: Math.max(0, Math.min(rect.width, position.left)),
+        top: Math.max(0, Math.min(rect.height, position.top)),
+      };
+    };
+    const positionFromEvent = (event: MouseEvent) => {
+      plot.syncRect(false);
+      const rect = plot.rect;
+      return {
+        left: event.clientX - rect.left,
+        top: event.clientY - rect.top,
+      };
+    };
+    const updateSelection = (position: { left: number; top: number }) => {
+      if (!dragStart) return;
+      const start = clampPosition(dragStart);
+      const end = clampPosition(position);
+      plot.setSelect(
+        {
+          left: Math.min(start.left, end.left),
+          top: Math.min(start.top, end.top),
+          width: Math.abs(end.left - start.left),
+          height: Math.abs(end.top - start.top),
+        },
+        false,
+      );
+    };
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!dragStart) return;
+      event.preventDefault();
+      updateSelection(positionFromEvent(event));
+    };
+    const handleMouseUp = (event: MouseEvent) => {
+      if (!dragStart) return;
+      event.preventDefault();
+      const start = dragStart;
+      const end = positionFromEvent(event);
+      updateSelection(end);
+      const width = Math.abs(end.left - start.left);
+      const height = Math.abs(end.top - start.top);
+      const zoomAxis = zoomAxisFromDrag(width, height);
+      if (zoomAxis) {
+        plot.batch(() => {
+          if (zoomAxis === "x" || zoomAxis === "xy") {
+            plot.setScale("x", {
+              min: plot.posToVal(Math.min(start.left, end.left), "x"),
+              max: plot.posToVal(Math.max(start.left, end.left), "x"),
+            });
+          }
+          if (zoomAxis === "y" || zoomAxis === "xy") {
+            plot.setScale("y", {
+              min: plot.posToVal(Math.max(start.top, end.top), "y"),
+              max: plot.posToVal(Math.min(start.top, end.top), "y"),
+            });
+          }
+        });
+      }
+      plot.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false);
+      dragStart = undefined;
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      dragStart = positionFromEvent(event);
+      plot.setSelect({ left: dragStart.left, top: dragStart.top, width: 0, height: 0 }, false);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    };
+    plot.over.addEventListener("mousedown", handleMouseDown, { capture: true });
+
+    return () => {
+      plot.over.removeEventListener("mousedown", handleMouseDown, { capture: true });
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      plot.destroy();
+    };
   }, [plotData, spec]);
 
   if (!spec || !dataset) return <div className="empty-state">Plot source not found.</div>;
