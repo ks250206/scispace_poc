@@ -1,4 +1,12 @@
-import { useCallback, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent,
+  type WheelEvent,
+} from "react";
 import { CanvasWindow } from "./CanvasWindow";
 import { useScispaceStore } from "../store/scispaceStore";
 
@@ -6,6 +14,7 @@ const centerViewport = { x: -1920, y: -1080, scale: 1 };
 const minScale = 0.1;
 const maxScale = 3;
 const wheelPanSensitivity = 0.75;
+const baseDotSpacing = 24;
 
 export function Workbench() {
   const viewport = useScispaceStore((state) => state.viewport);
@@ -22,6 +31,16 @@ export function Workbench() {
     () => ({
       transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`,
     }),
+    [viewport],
+  );
+
+  const canvasShellStyle = useMemo(
+    () =>
+      ({
+        "--canvas-dot-step": `${Number((baseDotSpacing * viewport.scale).toFixed(2))}px`,
+        "--canvas-dot-x": `${Number(viewport.x.toFixed(2))}px`,
+        "--canvas-dot-y": `${Number(viewport.y.toFixed(2))}px`,
+      }) as CSSProperties,
     [viewport],
   );
 
@@ -123,6 +142,7 @@ export function Workbench() {
       <section
         className="canvas-shell"
         data-panning={isPanning}
+        style={canvasShellStyle}
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onDragOver={(event) => event.preventDefault()}

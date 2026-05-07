@@ -65,6 +65,9 @@
   position: absolute;
   inset: 40px 0 0;
   overflow: hidden;
+  background-image: radial-gradient(circle, rgba(100, 116, 139, 0.42) 1px, transparent 1.4px);
+  background-position: var(--canvas-dot-x, 0) var(--canvas-dot-y, 0);
+  background-size: var(--canvas-dot-step, 24px) var(--canvas-dot-step, 24px);
   cursor: grab;
 }
 
@@ -77,9 +80,6 @@
   top: 0;
   left: 0;
   transform-origin: 0 0;
-  background:
-    linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px) 0 0 / 240px 240px,
-    linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px) 0 0 / 240px 240px;
 }
 
 .canvas-window {
