@@ -1153,6 +1153,24 @@
   flex: 0 0 auto;
 }
 
+.import-preset-banner {
+  display: flex;
+  min-height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #bfdbfe;
+  background: #eff6ff;
+  gap: 12px;
+  padding: 7px 12px;
+  color: #1e3a8a;
+  font-size: 12px;
+}
+
+.import-preset-banner span {
+  color: #475569;
+}
+
 .import-error {
   border-bottom: 1px solid #fecaca;
   background: #fef2f2;
@@ -1325,6 +1343,15 @@
 
 .raw-text-table tr.skipped-row .raw-line-input {
   color: #94a3b8;
+}
+
+.raw-text-table tr.data-start-row td {
+  box-shadow: inset 3px 0 0 var(--blue);
+}
+
+.raw-text-table tr.data-start-row .raw-line-input {
+  color: var(--text);
+  font-weight: 600;
 }
 
 .raw-line-input {

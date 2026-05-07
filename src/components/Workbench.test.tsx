@@ -472,6 +472,31 @@ describe("Workbench UI", () => {
     ).toEqual(["gui", "gui"]);
   });
 
+  it("shows detected import presets and highlights data start lines", async () => {
+    let importId = "";
+    act(() => {
+      importId = useScispaceStore
+        .getState()
+        .openImportDialog(
+          "sample.ras",
+          [
+            '*MEAS_SCAN_UNIT_X "deg"',
+            '*MEAS_SCAN_UNIT_Y "counts"',
+            "*RAS_HEADER_END",
+            "*RAS_INT_START",
+            "10.0000 3.9658 1.0000",
+            "*RAS_INT_END",
+          ].join("\n"),
+        );
+    });
+    render(<ImportSettingsWindow importId={importId} />);
+
+    await waitFor(() => expect(screen.getByText("Detected: Rigaku RAS")).toBeInTheDocument());
+    expect(screen.getByText("Data starts at line 5")).toBeInTheDocument();
+    expect(screen.getByLabelText("Raw line 5")).toHaveValue("10.0000 3.9658 1.0000");
+    expect(document.querySelector(".raw-text-table tbody tr.data-start-row")).toBeInTheDocument();
+  });
+
   it("uses the whole import body for raw text mode", async () => {
     let importId = "";
     await act(async () => {

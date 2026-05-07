@@ -230,6 +230,12 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
         <span className="import-file-name">{pendingImport.fileName}</span>
         <span className="import-file-meta">{importStatus}</span>
       </div>
+      {pendingImport.detectedPreset ? (
+        <div className="import-preset-banner">
+          <strong>{`Detected: ${pendingImport.detectedPreset.label}`}</strong>
+          <span>{`Data starts at line ${pendingImport.detectedPreset.dataStartLine}`}</span>
+        </div>
+      ) : null}
       {pendingImport.error && !preview ? (
         <div className="import-error">{pendingImport.error}</div>
       ) : null}
@@ -331,7 +337,14 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
                   <tr
                     key={virtualRow.key}
                     className={
-                      virtualRow.index < pendingImport.options.skipRows ? "skipped-row" : undefined
+                      [
+                        virtualRow.index < pendingImport.options.skipRows ? "skipped-row" : "",
+                        pendingImport.detectedPreset?.dataStartLine === virtualRow.index + 1
+                          ? "data-start-row"
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ") || undefined
                     }
                     style={{ width: rawTableWidth, transform: `translateY(${virtualRow.start}px)` }}
                   >
