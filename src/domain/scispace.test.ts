@@ -12,7 +12,10 @@ describe("scispace pseudo command interpreter", () => {
   });
 
   it("prints help and empty dataset states", () => {
-    expect(executeScispaceCommand("help", { datasets: [] }).output).toContain("scispace commands");
+    const help = executeScispaceCommand("help", { datasets: [] }).output;
+    expect(help).toContain("scispace commands");
+    expect(help).toContain("file-list [path]");
+    expect(help).toContain("file-rename <path> name=<newName>");
     expect(executeScispaceCommand("lsdata", { datasets: [] }).output).toBe("No datasets loaded");
   });
 
@@ -346,6 +349,44 @@ describe("scispace pseudo command interpreter", () => {
       "error",
     );
     expect(executeScispaceCommand("file-delete", { datasets: [] }).kind).toBe("error");
+  });
+
+  it("prints virtual file lists with parsed and raw statuses", () => {
+    const result = executeScispaceCommand("file-list ~/raw", {
+      datasets: [dataset],
+      files: [
+        {
+          id: "~/raw/analysis",
+          path: "~/raw/analysis",
+          name: "analysis",
+          kind: "directory",
+          createdAt: 1,
+        },
+        {
+          id: "~/raw/waveform.csv",
+          path: "~/raw/waveform.csv",
+          name: "waveform.csv",
+          kind: "file",
+          datasetId: "seed-waveform",
+          text: "index,time\n0,0",
+          createdAt: 1,
+        },
+        {
+          id: "~/raw/notes.txt",
+          path: "~/raw/notes.txt",
+          name: "notes.txt",
+          kind: "file",
+          text: "hello",
+          parseError: "Raw file stored without tabular parsing",
+          createdAt: 1,
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({ kind: "file-command", action: "list" });
+    expect(result.output).toContain("[dir] ~/raw/analysis");
+    expect(result.output).toContain("[dataset] ~/raw/waveform.csv -> waveform.csv (160 rows)");
+    expect(result.output).toContain("[raw] ~/raw/notes.txt");
   });
 
   it("routes import preview and confirm through the scispace command path", () => {

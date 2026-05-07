@@ -10,10 +10,12 @@ import type {
   PlotTickDirection,
   PlotType,
   ScispaceCommandResult,
+  VirtualFile,
 } from "./types";
 
 export interface CommandContext {
   datasets: Dataset[];
+  files?: VirtualFile[];
   pendingImports?: PendingImport[];
   plotSpecs?: PlotSpec[];
 }
@@ -69,6 +71,27 @@ const isVirtualRawPath = (path: string | undefined): path is string =>
 const isSafeFileName = (name: string | undefined): name is string => {
   if (!name?.trim()) return false;
   return !name.includes("/") && !name.includes("\\") && name !== "." && name !== "..";
+};
+
+const formatVirtualFileList = (
+  path: string,
+  files: VirtualFile[] | undefined,
+  datasets: Dataset[],
+): string => {
+  const listedFiles = (files ?? [])
+    .filter((file) => file.path === path || file.path.startsWith(`${path}/`))
+    .sort((left, right) => left.path.localeCompare(right.path));
+  if (listedFiles.length === 0) return `No files under ${path}`;
+  return listedFiles
+    .map((file) => {
+      if (file.kind === "directory") return `[dir] ${file.path}`;
+      const dataset = datasets.find((item) => item.id === file.datasetId);
+      if (dataset) {
+        return `[dataset] ${file.path} -> ${dataset.name} (${dataset.rows.length} rows)`;
+      }
+      return `[raw] ${file.path}${file.parseError ? ` (${file.parseError})` : ""}`;
+    })
+    .join("\n");
 };
 
 const plotSpecSchema = {
@@ -211,6 +234,11 @@ export const executeScispaceCommand = (
         "  plot-grid <plotId> x=<true|false> y=<true|false>",
         "  plot-series <plotId> y=<column> action=<add|remove>",
         "  plot-schema [plotId]",
+        "  file-list [path]",
+        "  file-mkdir <path>",
+        "  file-rename <path> name=<newName>",
+        "  file-move <path> to=<directory>",
+        "  file-delete <path>",
         "  import-preview <importId>",
         "  import-confirm <importId> path=<virtualPath>",
         "  elt <dataset> as <newName>",
@@ -269,7 +297,12 @@ export const executeScispaceCommand = (
     const path = args[0] ?? "~/raw";
     if (!isVirtualRawPath(path))
       return { kind: "error", output: "Usage: file-list [~/raw/<path>]" };
-    return { kind: "file-command", action: "list", path, output: `Listing: ${path}` };
+    return {
+      kind: "file-command",
+      action: "list",
+      path,
+      output: formatVirtualFileList(path, context.files, context.datasets),
+    };
   }
 
   if (command === "table") {

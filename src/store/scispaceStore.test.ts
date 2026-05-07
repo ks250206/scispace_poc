@@ -304,6 +304,20 @@ describe("scispace zustand store", () => {
     });
   });
 
+  it("lists virtual files through terminal-sourced scispace commands", async () => {
+    const { store } = await makeStore();
+
+    const result = await store.getState().runScispace("file-list ~/raw");
+
+    expect(result.output).toContain("[dataset] ~/raw/waveform.csv -> waveform.csv (160 rows)");
+    expect(store.getState().terminalEvents.at(-1)).toContain("[dataset] ~/raw/waveform.csv");
+    expect(store.getState().commandHistory[0]).toMatchObject({
+      command: "file-list ~/raw",
+      source: "terminal",
+      status: "success",
+    });
+  });
+
   it("handles layout actions and existing table focus", async () => {
     const { store } = await makeStore();
 

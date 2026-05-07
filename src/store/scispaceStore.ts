@@ -678,6 +678,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     runScispace: async (input, options) => {
       let result = executeScispaceCommand(input, {
         datasets: get().datasets,
+        files: get().files,
         plotSpecs: get().plotSpecs,
       });
 
