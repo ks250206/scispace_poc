@@ -25,6 +25,10 @@ export function Workbench() {
   const windows = useScispaceStore((state) => state.windows);
   const runScispace = useScispaceStore((state) => state.runScispace);
   const createNewProject = useScispaceStore((state) => state.createNewProject);
+  const undoStackLength = useScispaceStore((state) => state.undoStack.length);
+  const redoStackLength = useScispaceStore((state) => state.redoStack.length);
+  const undo = useScispaceStore((state) => state.undo);
+  const redo = useScispaceStore((state) => state.redo);
   const [isPanning, setIsPanning] = useState(false);
   const canvasDrag = useRef<{ x: number; y: number; originX: number; originY: number } | null>(
     null,
@@ -141,6 +145,12 @@ export function Workbench() {
       <div className="topbar">
         <div className="brand">SciSpace</div>
         <div className="toolbar-group">
+          <button type="button" disabled={undoStackLength === 0} onClick={() => void undo()}>
+            Undo
+          </button>
+          <button type="button" disabled={redoStackLength === 0} onClick={() => void redo()}>
+            Redo
+          </button>
           <button type="button" onClick={handleNewProject}>
             New Project
           </button>

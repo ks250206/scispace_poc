@@ -196,6 +196,46 @@ describe("scispace zustand store", () => {
     });
   });
 
+  it("undoes and redoes destructive table edits from snapshots", async () => {
+    const { db, store } = await makeStore();
+
+    await store
+      .getState()
+      .runScispace("table-edit waveform.csv action=set-cell row=1 column=signal value=42.5");
+    expect(store.getState().datasets[0]?.rows[0]?.signal).toBe(42.5);
+    expect(store.getState().undoStack).toHaveLength(1);
+    expect(store.getState().redoStack).toHaveLength(0);
+
+    await store.getState().undo();
+    expect(store.getState().datasets[0]?.rows[0]?.signal).toBe(3);
+    expect((await db.files.get("~/raw/waveform.csv"))?.text?.split("\n")[1]).toBe("0,0,3,7");
+    expect(store.getState().undoStack).toHaveLength(0);
+    expect(store.getState().redoStack).toHaveLength(1);
+
+    await store.getState().redo();
+    expect(store.getState().datasets[0]?.rows[0]?.signal).toBe(42.5);
+    expect((await db.files.get("~/raw/waveform.csv"))?.text?.split("\n")[1]).toBe("0,0,42.5,7");
+    expect(store.getState().undoStack).toHaveLength(1);
+    expect(store.getState().redoStack).toHaveLength(0);
+  });
+
+  it("undoes and redoes destructive file commands", async () => {
+    const { db, store } = await makeStore();
+
+    await store.getState().runScispace("file-delete ~/raw/waveform.csv", { source: "gui" });
+    expect(store.getState().files.some((file) => file.path === "~/raw/waveform.csv")).toBe(false);
+    expect(store.getState().datasets).toHaveLength(0);
+
+    await store.getState().undo();
+    expect(store.getState().files.some((file) => file.path === "~/raw/waveform.csv")).toBe(true);
+    expect(store.getState().datasets[0]?.id).toBe("seed-waveform");
+    expect(await db.files.get("~/raw/waveform.csv")).toBeDefined();
+
+    await store.getState().redo();
+    expect(store.getState().files.some((file) => file.path === "~/raw/waveform.csv")).toBe(false);
+    expect(await db.files.get("~/raw/waveform.csv")).toBeUndefined();
+  });
+
   it("opens an import dialog before persisting dropped files and confirms through settings", async () => {
     const { db, store } = await makeStore();
     const importId = store

@@ -37,6 +37,8 @@ interface ScispaceState {
   pendingImports: PendingImport[];
   terminalEvents: string[];
   commandHistory: CommandHistoryEntry[];
+  undoStack: UndoHistoryEntry[];
+  redoStack: UndoHistoryEntry[];
   terminalCommandLineRequest?: { id: string; command: string };
   columnSelections: Record<string, string[]>;
   activeDatasetId?: string;
@@ -57,6 +59,8 @@ interface ScispaceState {
     input: string,
     options?: { source?: CommandHistorySource },
   ) => Promise<ScispaceCommandResult>;
+  undo: () => Promise<void>;
+  redo: () => Promise<void>;
   closeWindow: (id: string) => void;
   createNewProject: () => Promise<void>;
   createDirectory: (name: string, parentPath?: string) => Promise<VirtualFile | undefined>;
@@ -70,6 +74,27 @@ interface ScispaceState {
   focusWindow: (id: string) => void;
   setViewport: (viewport: ViewportState) => void;
   sendCommandToTerminalLine: (command: string) => void;
+}
+
+interface ProjectSnapshot {
+  files: VirtualFile[];
+  datasets: Dataset[];
+  windows: WorkspaceWindow[];
+  plotSpecs: PlotSpec[];
+  pendingImports: PendingImport[];
+  columnSelections: Record<string, string[]>;
+  activeDatasetId?: string;
+  activeWindowId?: string;
+  currentPlotId?: string;
+  viewport: ViewportState;
+}
+
+interface UndoHistoryEntry {
+  id: string;
+  command: string;
+  before: ProjectSnapshot;
+  after: ProjectSnapshot;
+  createdAt: number;
 }
 
 const centerTileX = 1920;
@@ -284,6 +309,33 @@ const createInitialProject = () => {
   };
 };
 
+const cloneState = <T>(value: T): T => structuredClone(value);
+
+const captureSnapshot = (state: ScispaceState): ProjectSnapshot => ({
+  files: cloneState(state.files),
+  datasets: cloneState(state.datasets),
+  windows: cloneState(state.windows),
+  plotSpecs: cloneState(state.plotSpecs),
+  pendingImports: cloneState(state.pendingImports),
+  columnSelections: cloneState(state.columnSelections),
+  activeDatasetId: state.activeDatasetId,
+  activeWindowId: state.activeWindowId,
+  currentPlotId: state.currentPlotId,
+  viewport: cloneState(state.viewport),
+});
+
+const isUndoableCommand = (input: string): boolean => {
+  const command = input.trim();
+  if (/^table-edit\s/.test(command)) {
+    return /(?:^|\s)action=(set-cell|delete-row|delete-column)(?:\s|$)/.test(command);
+  }
+  if (/^table-range\s/.test(command)) {
+    return /(?:^|\s)action=(clear|fill-down)(?:\s|$)/.test(command);
+  }
+  if (/^import-confirm\s/.test(command)) return true;
+  return /^file-(delete|rename|move)\s/.test(command);
+};
+
 const persistLayout = (db: SciSpaceDatabase, state: ScispaceState): void => {
   void writePersistedLayout(db, {
     windows: state.windows.filter((window) => window.kind !== "import"),
@@ -291,6 +343,29 @@ const persistLayout = (db: SciSpaceDatabase, state: ScispaceState): void => {
     plotSpecs: state.plotSpecs.map(normalizePlotSpec),
     commandHistory: state.commandHistory,
     columnSelections: state.columnSelections,
+  });
+};
+
+const restoreSnapshot = async (
+  db: SciSpaceDatabase,
+  snapshot: ProjectSnapshot,
+  commandHistory: CommandHistoryEntry[],
+): Promise<void> => {
+  await db.transaction("rw", db.files, db.datasets, db.layout, async () => {
+    await db.files.clear();
+    await db.datasets.clear();
+    await db.files.bulkPut(snapshot.files);
+    await db.datasets.bulkPut(snapshot.datasets);
+    await db.layout.put({
+      id: "main",
+      value: {
+        windows: snapshot.windows.filter((window) => window.kind !== "import"),
+        viewport: snapshot.viewport,
+        plotSpecs: snapshot.plotSpecs.map(normalizePlotSpec),
+        commandHistory,
+        columnSelections: snapshot.columnSelections,
+      },
+    });
   });
 };
 
@@ -403,6 +478,8 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     pendingImports: [],
     terminalEvents: [],
     commandHistory: [],
+    undoStack: [],
+    redoStack: [],
     terminalCommandLineRequest: undefined,
     columnSelections: {},
     currentPlotId: undefined,
@@ -694,6 +771,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     },
 
     runScispace: async (input, options) => {
+      const undoBefore = isUndoableCommand(input) ? captureSnapshot(get()) : undefined;
       let result = executeScispaceCommand(input, {
         datasets: get().datasets,
         files: get().files,
@@ -988,9 +1066,69 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       set((state) => ({
         terminalEvents: [...state.terminalEvents, result.output],
         commandHistory: [...state.commandHistory, commandHistoryEntry],
+        undoStack:
+          undoBefore && result.kind !== "error"
+            ? [
+                ...state.undoStack,
+                {
+                  id: crypto.randomUUID(),
+                  command: input,
+                  before: undoBefore,
+                  after: captureSnapshot(get()),
+                  createdAt: Date.now(),
+                },
+              ]
+            : state.undoStack,
+        redoStack: undoBefore && result.kind !== "error" ? [] : state.redoStack,
       }));
       persistLayout(db, get());
       return result;
+    },
+
+    undo: async () => {
+      const entry = get().undoStack.at(-1);
+      if (!entry) return;
+      const commandHistory = get().commandHistory;
+      await restoreSnapshot(db, entry.before, commandHistory);
+      set((state) => ({
+        files: cloneState(entry.before.files),
+        datasets: cloneState(entry.before.datasets),
+        windows: ensureWorkspaceWindows(cloneState(entry.before.windows)),
+        plotSpecs: cloneState(entry.before.plotSpecs).map(normalizePlotSpec),
+        pendingImports: cloneState(entry.before.pendingImports),
+        columnSelections: cloneState(entry.before.columnSelections),
+        activeDatasetId: entry.before.activeDatasetId,
+        activeWindowId: entry.before.activeWindowId,
+        currentPlotId: entry.before.currentPlotId,
+        viewport: cloneState(entry.before.viewport),
+        terminalEvents: [...state.terminalEvents, `Undo: ${entry.command}`],
+        undoStack: state.undoStack.slice(0, -1),
+        redoStack: [...state.redoStack, entry],
+      }));
+      persistLayout(db, get());
+    },
+
+    redo: async () => {
+      const entry = get().redoStack.at(-1);
+      if (!entry) return;
+      const commandHistory = get().commandHistory;
+      await restoreSnapshot(db, entry.after, commandHistory);
+      set((state) => ({
+        files: cloneState(entry.after.files),
+        datasets: cloneState(entry.after.datasets),
+        windows: ensureWorkspaceWindows(cloneState(entry.after.windows)),
+        plotSpecs: cloneState(entry.after.plotSpecs).map(normalizePlotSpec),
+        pendingImports: cloneState(entry.after.pendingImports),
+        columnSelections: cloneState(entry.after.columnSelections),
+        activeDatasetId: entry.after.activeDatasetId,
+        activeWindowId: entry.after.activeWindowId,
+        currentPlotId: entry.after.currentPlotId,
+        viewport: cloneState(entry.after.viewport),
+        terminalEvents: [...state.terminalEvents, `Redo: ${entry.command}`],
+        undoStack: [...state.undoStack, entry],
+        redoStack: state.redoStack.slice(0, -1),
+      }));
+      persistLayout(db, get());
     },
 
     closeWindow: (id) => {
@@ -1048,6 +1186,8 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         pendingImports: [],
         terminalEvents: [],
         commandHistory: [],
+        undoStack: [],
+        redoStack: [],
         columnSelections: initialProject.columnSelections,
         terminalCommandLineRequest: undefined,
         activeDatasetId: initialProject.datasets[0]?.id,

@@ -669,6 +669,38 @@ describe("Workbench UI", () => {
     );
   });
 
+  it("undoes and redoes destructive commands from the topbar", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Redo" })).toBeDisabled();
+
+    await act(async () => {
+      await useScispaceStore
+        .getState()
+        .runScispace("table-edit waveform.csv action=set-cell row=1 column=signal value=42.5", {
+          source: "gui",
+        });
+    });
+    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Redo" })).toBeDisabled();
+    expect(useScispaceStore.getState().datasets[0]?.rows[0]?.signal).toBe(42.5);
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(useScispaceStore.getState().datasets[0]?.rows[0]?.signal).toBe(3));
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Redo" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "Redo" }));
+    await waitFor(() =>
+      expect(useScispaceStore.getState().datasets[0]?.rows[0]?.signal).toBe(42.5),
+    );
+    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Redo" })).toBeDisabled();
+  });
+
   it("resets the workspace after confirming New Project", async () => {
     const user = userEvent.setup();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
