@@ -371,6 +371,33 @@ describe("scispace zustand store", () => {
     expect(store.getState().viewport).toEqual({ x: 12, y: 24, scale: 0.75 });
   });
 
+  it("opens new import, table, and plot windows inside the current viewport", async () => {
+    const { store } = await makeStore();
+
+    store.getState().setViewport({ x: -3200, y: -1800, scale: 2 });
+    const visibleOrigin = { x: 1600, y: 900 };
+
+    const importId = store.getState().openImportDialog("visible.csv", "x,y\n1,2");
+    const importWindow = store.getState().windows.find((window) => window.importId === importId);
+    expect(importWindow).toMatchObject({ x: expect.any(Number), y: expect.any(Number) });
+    expect(importWindow?.x).toBeGreaterThan(visibleOrigin.x);
+    expect(importWindow?.y).toBeGreaterThan(visibleOrigin.y);
+
+    await store.getState().runScispace("elt waveform.csv as derived.csv");
+    const derived = store.getState().datasets.find((dataset) => dataset.name === "derived.csv");
+    await store.getState().openTable(derived?.id ?? "");
+    const tableWindow = store.getState().windows.find((window) => window.datasetId === derived?.id);
+    expect(tableWindow?.x).toBeGreaterThan(visibleOrigin.x);
+    expect(tableWindow?.y).toBeGreaterThan(visibleOrigin.y);
+
+    await store.getState().runScispace("plot waveform.csv x=time y=signal");
+    const plotWindow = store
+      .getState()
+      .windows.find((window) => window.kind === "plot" && window.id !== "plot-seed");
+    expect(plotWindow?.x).toBeGreaterThan(visibleOrigin.x);
+    expect(plotWindow?.y).toBeGreaterThan(visibleOrigin.y);
+  });
+
   it("creates derived datasets through command execution", async () => {
     const { db, store } = await makeStore();
     const result = await store.getState().runScispace("elt waveform.csv as derived.csv");

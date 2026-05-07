@@ -99,8 +99,21 @@ describe("Workbench UI", () => {
     expect(screen.getByText("Table - waveform.csv")).toBeInTheDocument();
   });
 
-  it("resizes the table window when changing visible row count", async () => {
+  it("collapses and expands dataset columns in the data browser", async () => {
     const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
+    expect(document.querySelectorAll(".tree-row.column")).toHaveLength(4);
+
+    await user.click(screen.getByRole("button", { name: "Collapse waveform.csv" }));
+    expect(document.querySelectorAll(".tree-row.column")).toHaveLength(0);
+
+    await user.click(screen.getByRole("button", { name: "Expand waveform.csv" }));
+    expect(document.querySelectorAll(".tree-row.column")).toHaveLength(4);
+  });
+
+  it("resizes the table window when changing visible row count", async () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
@@ -113,7 +126,7 @@ describe("Workbench UI", () => {
       height: 424,
     });
 
-    await user.selectOptions(screen.getByLabelText("Visible rows"), "50");
+    fireEvent.change(screen.getByLabelText("Visible rows"), { target: { value: "50" } });
 
     expect(tableScroll.style.getPropertyValue("--table-visible-height")).toBe("1632px");
     await waitFor(() =>

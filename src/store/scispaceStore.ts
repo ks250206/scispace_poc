@@ -90,6 +90,26 @@ const plotWindowChromeHeight = 94;
 const tableWindowHeightForRows = (visibleRows: 10 | 20 | 50): number =>
   34 + 38 + 32 + visibleRows * 32;
 const plotWindowHeightForSpec = (height: number): number => height + plotWindowChromeHeight;
+const visibleWorkspaceOrigin = (viewport: ViewportState): { x: number; y: number } => {
+  const scale = Math.max(0.01, viewport.scale);
+  return {
+    x: -viewport.x / scale,
+    y: -viewport.y / scale,
+  };
+};
+
+const newWindowPosition = (
+  state: Pick<ScispaceState, "viewport" | "windows">,
+  offsetX: number,
+  offsetY: number,
+): { x: number; y: number } => {
+  const origin = visibleWorkspaceOrigin(state.viewport);
+  const cascade = state.windows.length % 8;
+  return {
+    x: Math.round(origin.x + offsetX + cascade * 24),
+    y: Math.round(origin.y + offsetY + cascade * 20),
+  };
+};
 
 const initialWindows = (): WorkspaceWindow[] => [
   {
@@ -477,12 +497,13 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           preview,
           error,
         };
+        const position = newWindowPosition(state, 72, 84);
         const window: WorkspaceWindow = {
           id: `import-${id}`,
           kind: "import",
           title: `Import - ${fileName}`,
-          x: 360 + state.pendingImports.length * 24,
-          y: 130 + state.pendingImports.length * 20,
+          x: position.x,
+          y: position.y,
           width: 820,
           height: 540,
           zIndex,
@@ -641,8 +662,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           id: `table-${datasetId}`,
           kind: "table",
           title: `Table - ${dataset.name}`,
-          x: 420 + state.windows.length * 18,
-          y: 102 + state.windows.length * 14,
+          ...newWindowPosition(state, 96, 96),
           width: 650,
           height: tableWindowHeightForRows(10),
           zIndex,
@@ -681,8 +701,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
               id: `plot-${normalizedSpec.id}`,
               kind: "plot",
               title: normalizedSpec.title,
-              x: 760 + state.windows.length * 20,
-              y: 116 + state.windows.length * 16,
+              ...newWindowPosition(state, 128, 112),
               width: normalizedSpec.size.width,
               height: plotWindowHeightForSpec(normalizedSpec.size.height),
               zIndex,
@@ -708,8 +727,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           id: "plot-config-main",
           kind: "plot-config",
           title: "Plot Config",
-          x: centerTileX + 1180,
-          y: centerTileY + 128,
+          ...newWindowPosition(state, 760, 88),
           width: 520,
           height: 680,
           zIndex,

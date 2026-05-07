@@ -1,4 +1,4 @@
-import { useMemo, useRef, type CSSProperties } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { datasetColumnIds } from "../domain/csv";
 import type { VirtualFile } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
@@ -24,6 +24,7 @@ const quoteCommandArg = (value: string): string =>
 
 export function DataBrowser() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [collapsedDatasetIds, setCollapsedDatasetIds] = useState<Set<string>>(() => new Set());
   const files = useScispaceStore((state) => state.files);
   const datasets = useScispaceStore((state) => state.datasets);
   const activeDatasetId = useScispaceStore((state) => state.activeDatasetId);
@@ -88,6 +89,18 @@ export function DataBrowser() {
     );
   };
 
+  const toggleDatasetCollapse = (datasetId: string) => {
+    setCollapsedDatasetIds((current) => {
+      const next = new Set(current);
+      if (next.has(datasetId)) {
+        next.delete(datasetId);
+      } else {
+        next.add(datasetId);
+      }
+      return next;
+    });
+  };
+
   return (
     <div
       className="data-browser"
@@ -104,91 +117,107 @@ export function DataBrowser() {
           +
         </button>
       </div>
-      {rawFiles.map((file) => {
-        const dataset = datasets.find((item) => item.id === file.datasetId);
-        const selected = dataset?.id === activeDatasetId;
-        const isDirectory = file.kind === "directory";
-        const selectedColumns = dataset ? (columnSelections[dataset.id] ?? []) : [];
-        return (
-          <div key={file.id} className="tree-node">
-            <div
-              className={`tree-row file ${selected ? "selected" : ""} ${dataset ? "parsed" : "raw-only"} ${isDirectory ? "directory" : ""}`}
-              style={{ "--tree-depth": depthOf(file.path) } as CSSProperties}
-            >
-              <span className="tree-indent" />
-              <button
-                type="button"
-                className="tree-item-main"
-                disabled={!dataset}
-                title={file.parseError}
-                onClick={() => {
-                  if (dataset) handleOpenTable(dataset.id, dataset.name);
-                }}
+      <div className="tree-scroll">
+        {rawFiles.map((file) => {
+          const dataset = datasets.find((item) => item.id === file.datasetId);
+          const selected = dataset?.id === activeDatasetId;
+          const isDirectory = file.kind === "directory";
+          const selectedColumns = dataset ? (columnSelections[dataset.id] ?? []) : [];
+          const isCollapsed = dataset ? collapsedDatasetIds.has(dataset.id) : true;
+          return (
+            <div key={file.id} className="tree-node">
+              <div
+                className={`tree-row file ${selected ? "selected" : ""} ${dataset ? "parsed" : "raw-only"} ${isDirectory ? "directory" : ""}`}
+                style={{ "--tree-depth": depthOf(file.path) } as CSSProperties}
               >
-                <span className="file-icon">{isDirectory ? "▸" : dataset ? "▦" : "◇"}</span>
-                <span className="file-name">{file.name}</span>
-              </button>
-              <span className="file-meta">
-                {dataset ? `${dataset.rows.length}r · ${dataset.columns.length}c` : "raw"}
-              </span>
-              <div className="tree-actions">
-                {!dataset && file.kind === "file" ? (
+                <span className="tree-indent" />
+                <button
+                  type="button"
+                  className="tree-fold"
+                  disabled={!dataset}
+                  aria-label={
+                    dataset ? `${isCollapsed ? "Expand" : "Collapse"} ${file.name}` : undefined
+                  }
+                  onClick={() => {
+                    if (dataset) toggleDatasetCollapse(dataset.id);
+                  }}
+                >
+                  {dataset ? (isCollapsed ? "▸" : "▾") : isDirectory ? "▸" : "◇"}
+                </button>
+                <button
+                  type="button"
+                  className="tree-item-main"
+                  disabled={!dataset}
+                  title={file.parseError}
+                  onClick={() => {
+                    if (dataset) handleOpenTable(dataset.id, dataset.name);
+                  }}
+                >
+                  <span className="file-icon">{dataset ? "▦" : isDirectory ? "▸" : "◇"}</span>
+                  <span className="file-name">{file.name}</span>
+                </button>
+                <span className="file-meta">
+                  {dataset ? `${dataset.rows.length}r · ${dataset.columns.length}c` : "raw"}
+                </span>
+                <div className="tree-actions">
+                  {!dataset && file.kind === "file" ? (
+                    <button
+                      type="button"
+                      aria-label={`Parse ${file.name}`}
+                      className="tree-action"
+                      onClick={() => openImportDialog(file.name, file.text ?? "")}
+                    >
+                      ⇄
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    aria-label={`Parse ${file.name}`}
+                    aria-label={`Move ${file.name}`}
                     className="tree-action"
-                    onClick={() => openImportDialog(file.name, file.text ?? "")}
+                    onClick={() => handleMove(file)}
                   >
-                    ⇄
+                    ↵
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  aria-label={`Move ${file.name}`}
-                  className="tree-action"
-                  onClick={() => handleMove(file)}
-                >
-                  ↵
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Rename ${file.name}`}
-                  className="tree-action"
-                  onClick={() => handleRename(file)}
-                >
-                  ✎
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Delete ${file.name}`}
-                  className="tree-action"
-                  onClick={() => handleDelete(file)}
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-            {dataset
-              ? dataset.columns.map((column) => (
-                  <label
-                    key={column.id}
-                    className="tree-row column"
-                    style={{ "--tree-depth": depthOf(file.path) + 1 } as CSSProperties}
+                  <button
+                    type="button"
+                    aria-label={`Rename ${file.name}`}
+                    className="tree-action"
+                    onClick={() => handleRename(file)}
                   >
-                    <span className="tree-indent" />
-                    <input
-                      type="checkbox"
-                      checked={selectedColumns.includes(column.id)}
-                      onChange={() => toggleDatasetColumn(dataset.id, column.id)}
-                    />
-                    <span className="file-name">{column.name}</span>
-                    <span className="file-meta">{column.dataType}</span>
-                  </label>
-                ))
-              : null}
-          </div>
-        );
-      })}
+                    ✎
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${file.name}`}
+                    className="tree-action"
+                    onClick={() => handleDelete(file)}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              {dataset && !isCollapsed
+                ? dataset.columns.map((column) => (
+                    <label
+                      key={column.id}
+                      className="tree-row column"
+                      style={{ "--tree-depth": depthOf(file.path) + 1 } as CSSProperties}
+                    >
+                      <span className="tree-indent" />
+                      <input
+                        type="checkbox"
+                        checked={selectedColumns.includes(column.id)}
+                        onChange={() => toggleDatasetColumn(dataset.id, column.id)}
+                      />
+                      <span className="file-name">{column.name}</span>
+                      <span className="file-meta">{column.dataType}</span>
+                    </label>
+                  ))
+                : null}
+            </div>
+          );
+        })}
+      </div>
       <button
         type="button"
         className="drop-hint"
