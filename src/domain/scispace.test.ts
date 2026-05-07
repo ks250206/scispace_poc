@@ -615,6 +615,25 @@ describe("scispace pseudo command interpreter", () => {
     if (confirmed.kind === "import-confirm") expect(confirmed.dataset?.name).toBe("configured.csv");
   });
 
+  it("opens pending imports through commands", () => {
+    const opened = executeScispaceCommand(
+      `import-open import-1 name=configured.csv text=${encodeURIComponent("x,y\n1,2")}`,
+      { datasets: [] },
+    );
+    const missingName = executeScispaceCommand("import-open import-1 text=abc", { datasets: [] });
+
+    expect(opened).toMatchObject({
+      kind: "import-open",
+      importId: "import-1",
+      pendingImport: {
+        fileName: "configured.csv",
+        text: "x,y\n1,2",
+        mode: "tabular",
+      },
+    });
+    expect(missingName).toMatchObject({ kind: "error" });
+  });
+
   it("updates import settings and column exclusions through commands", () => {
     const pendingImport = {
       id: "import-1",

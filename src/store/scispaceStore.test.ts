@@ -303,6 +303,33 @@ describe("scispace zustand store", () => {
     });
   });
 
+  it("opens import dialogs through scispace commands", async () => {
+    const { store } = await makeStore();
+    await store
+      .getState()
+      .runScispace(`import-open import-1 name=opened.csv text=${encodeURIComponent("x,y\n1,2")}`, {
+        source: "gui",
+      });
+
+    expect(store.getState().pendingImports).toHaveLength(1);
+    expect(store.getState().pendingImports[0]).toMatchObject({
+      id: "import-1",
+      fileName: "opened.csv",
+      preview: { rows: [{ x: 1, y: 2 }] },
+    });
+    expect(store.getState().windows.find((window) => window.importId === "import-1")).toMatchObject(
+      {
+        title: "Import - opened.csv",
+        kind: "import",
+      },
+    );
+    expect(store.getState().commandHistory.at(-1)).toMatchObject({
+      command: `import-open import-1 name=opened.csv text=${encodeURIComponent("x,y\n1,2")}`,
+      source: "gui",
+      status: "success",
+    });
+  });
+
   it("opens raw import dialogs and confirms them without datasets", async () => {
     const { db, store } = await makeStore();
     const importId = store.getState().openImportDialog("notes.txt", "raw notes");

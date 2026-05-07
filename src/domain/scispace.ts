@@ -1,6 +1,7 @@
 import {
   datasetColumnIds,
   datasetColumnNames,
+  defaultImportParseOptions,
   normalizeDataValue,
   normalizeVirtualPath,
   parseDelimitedText,
@@ -400,6 +401,7 @@ export const executeScispaceCommand = (
         "  file-rename <path> name=<newName>",
         "  file-move <path> to=<directory>",
         "  file-delete <path>",
+        "  import-open <importId> name=<fileName> text=<encodedText>",
         "  import-preview <importId>",
         "  import-set <importId> skipRows=<n> delimiter=<auto|comma|tab|space|semicolon> hasHeader=<true|false> mode=<tabular|raw>",
         "  import-column <importId> column=<col> action=<include|exclude>",
@@ -1028,6 +1030,32 @@ export const executeScispaceCommand = (
       kind: "plot-annotation-updated",
       spec,
       output: `Plot annotation updated: ${spec.title}`,
+    };
+  }
+
+  if (command === "import-open") {
+    const importId = args[0] ?? "";
+    const fileName = readOption(args, "name");
+    const text = readOption(args, "text");
+    const mode = readOption(args, "mode") ?? "tabular";
+    if (!importId) return { kind: "error", output: "importId is required" };
+    if (!fileName) return { kind: "error", output: "name is required" };
+    if (text === undefined) return { kind: "error", output: "text is required" };
+    if (mode !== "tabular" && mode !== "raw") {
+      return { kind: "error", output: "mode must be tabular or raw" };
+    }
+    const pendingImport: PendingImport = {
+      id: importId,
+      fileName,
+      text: decodeURIComponent(text),
+      mode,
+      options: defaultImportParseOptions,
+    };
+    return {
+      kind: "import-open",
+      importId,
+      pendingImport,
+      output: `Import opened: ${fileName}`,
     };
   }
 

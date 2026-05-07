@@ -16,12 +16,14 @@ const maxScale = 3;
 const wheelPanSensitivity = 0.75;
 const baseDotSpacing = 24;
 const baseMajorGridSpacing = 240;
+const quoteCommandArg = (value: string): string =>
+  /\s|["']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
 
 export function Workbench() {
   const viewport = useScispaceStore((state) => state.viewport);
   const setViewport = useScispaceStore((state) => state.setViewport);
   const windows = useScispaceStore((state) => state.windows);
-  const openImportDialog = useScispaceStore((state) => state.openImportDialog);
+  const runScispace = useScispaceStore((state) => state.runScispace);
   const createNewProject = useScispaceStore((state) => state.createNewProject);
   const [isPanning, setIsPanning] = useState(false);
   const canvasDrag = useRef<{ x: number; y: number; originX: number; originY: number } | null>(
@@ -118,7 +120,14 @@ export function Workbench() {
     event.preventDefault();
     const files = Array.from(event.dataTransfer.files);
     for (const file of files) {
-      openImportDialog(file.name, await file.text());
+      const importId = crypto.randomUUID();
+      const text = await file.text();
+      void runScispace(
+        `import-open ${importId} name=${quoteCommandArg(file.name)} text=${encodeURIComponent(
+          text,
+        )}`,
+        { source: "gui" },
+      );
     }
   };
 

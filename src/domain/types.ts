@@ -189,6 +189,7 @@ export type ScispaceCommandResult =
       output: string;
     }
   | { kind: "import-preview"; importId: string; preview?: Dataset; error?: string; output: string }
+  | { kind: "import-open"; importId: string; pendingImport: PendingImport; output: string }
   | { kind: "import-updated"; importId: string; pendingImport: PendingImport; output: string }
   | {
       kind: "import-confirm";

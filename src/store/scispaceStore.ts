@@ -770,6 +770,61 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         });
         persistLayout(db, get());
       }
+      if (result.kind === "import-open") {
+        const importId = result.importId;
+        const initialPreview = createPreviews(
+          importId,
+          result.pendingImport.fileName,
+          result.pendingImport.text,
+          result.pendingImport.options,
+        );
+        const options = {
+          ...result.pendingImport.options,
+          excludedColumnIds: emptyColumnIds(initialPreview.allPreview),
+        };
+        const { allPreview, preview, error } = createPreviews(
+          importId,
+          result.pendingImport.fileName,
+          result.pendingImport.text,
+          options,
+        );
+        const pendingImport: PendingImport = {
+          ...result.pendingImport,
+          options,
+          allPreview,
+          preview,
+          error,
+        };
+        set((state) => {
+          const existingWindow = state.windows.find((window) => window.importId === importId);
+          const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
+          const position = newWindowPosition(state, 72, 84);
+          const window: WorkspaceWindow = {
+            id: `import-${importId}`,
+            kind: "import",
+            title: `Import - ${pendingImport.fileName}`,
+            x: position.x,
+            y: position.y,
+            width: 820,
+            height: 540,
+            zIndex,
+            importId,
+          };
+          return {
+            pendingImports: [
+              ...state.pendingImports.filter((item) => item.id !== importId),
+              pendingImport,
+            ],
+            windows: existingWindow
+              ? state.windows.map((item) =>
+                  item.id === existingWindow.id ? { ...item, zIndex } : item,
+                )
+              : [...state.windows, window],
+            activeWindowId: existingWindow?.id ?? window.id,
+          };
+        });
+        result = { ...result, pendingImport };
+      }
       if (result.kind === "dataset-updated") {
         const dataset = result.dataset;
         const validColumnIds = new Set(datasetColumnIds(dataset));

@@ -40,7 +40,14 @@ export function DataBrowser() {
 
   const openFiles = async (loadedFiles: File[]) => {
     for (const file of loadedFiles) {
-      openImportDialog(file.name, await file.text());
+      const importId = crypto.randomUUID();
+      const text = await file.text();
+      void runScispace(
+        `import-open ${importId} name=${quoteCommandArg(file.name)} text=${encodeURIComponent(
+          text,
+        )}`,
+        { source: "gui" },
+      );
     }
   };
 
