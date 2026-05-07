@@ -8,6 +8,8 @@ import { useScispaceStore } from "../store/scispaceStore";
 
 const toBashPath = (path: string): string => path.replace(/^~\//, "/home/user/");
 const deleteSequence = "\x1b[3~";
+const clearVisibleScreenSequence = "\x1b[2J\x1b[H";
+const clearScrollbackSequence = "\x1b[3J";
 
 type EditableBashShell = {
   _cursor?: number;
@@ -30,6 +32,34 @@ export const scrollTerminalToBottom = (
       element.scrollTop = element.scrollHeight;
     }
   });
+};
+
+export const normalizeTerminalOutput = (data: string): string =>
+  data.replaceAll(
+    clearVisibleScreenSequence,
+    `${clearScrollbackSequence}${clearVisibleScreenSequence}`,
+  );
+
+export const clearTerminalScrollbackRows = (terminalElement?: HTMLElement | null): void => {
+  terminalElement
+    ?.querySelectorAll<HTMLElement>(".term-scrollback-row")
+    .forEach((row) => row.remove());
+};
+
+export const writeTerminalOutput = (
+  data: string,
+  write: (data: string) => void,
+  terminalElement?: HTMLElement | null,
+  viewportElement?: HTMLElement | null,
+): void => {
+  const output = normalizeTerminalOutput(data);
+  write(output);
+  if (output.includes(clearScrollbackSequence)) {
+    clearTerminalScrollbackRows(terminalElement);
+    if (terminalElement) terminalElement.scrollTop = 0;
+    if (viewportElement) viewportElement.scrollTop = 0;
+  }
+  scrollTerminalToBottom(terminalElement, viewportElement);
 };
 
 export const handleForwardDelete = (shell: BashShell | null): void => {
@@ -129,6 +159,14 @@ export function TerminalPanel() {
     scrollTerminalToBottom(terminalElement, viewportRef.current);
   }, [ref]);
 
+  const writeOutput = useCallback(
+    (data: string) => {
+      const terminalElement = terminalRef.current?.element ?? ref.current?.instance?.element;
+      writeTerminalOutput(data, write, terminalElement, viewportRef.current);
+    },
+    [ref, write],
+  );
+
   const handleReady = useCallback(
     async (terminal: WTerm) => {
       terminalRef.current = terminal;
@@ -141,10 +179,7 @@ export function TerminalPanel() {
         prompt: (cwd) => `scispace:${cwd.replace("/home/user", "~")}$ `,
       });
       shellRef.current = shell;
-      await shell.attach((data) => {
-        write(data);
-        scrollToBottom();
-      });
+      await shell.attach(writeOutput);
       shell.bash?.registerCommand(
         defineCommand("scispace", async (args) => {
           const result = await runScispace(args.join(" "), { source: "terminal" });
@@ -157,7 +192,7 @@ export function TerminalPanel() {
         }),
       );
     },
-    [initialFiles, runScispace, scrollToBottom, syncTerminalSize, write],
+    [initialFiles, runScispace, scrollToBottom, syncTerminalSize, writeOutput],
   );
 
   const handleData = useCallback(
