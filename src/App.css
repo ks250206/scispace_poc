@@ -336,20 +336,6 @@
   border-color: rgba(220, 38, 38, 0.32);
 }
 
-.history-entry-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-.history-entry-meta span {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 1px 6px;
-}
-
 .history-entry code {
   overflow: hidden;
   color: var(--text);
@@ -358,19 +344,9 @@
   white-space: nowrap;
 }
 
-.history-entry p {
-  display: -webkit-box;
-  overflow: hidden;
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.35;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
 .history-entry-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   justify-content: flex-end;
 }

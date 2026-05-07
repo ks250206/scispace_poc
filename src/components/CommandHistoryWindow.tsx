@@ -1,16 +1,10 @@
 import { useMemo } from "react";
 import { useScispaceStore } from "../store/scispaceStore";
 
-const formatTime = (timestamp: number): string =>
-  new Intl.DateTimeFormat(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(timestamp);
-
 export function CommandHistoryWindow() {
   const history = useScispaceStore((state) => state.commandHistory);
   const runScispace = useScispaceStore((state) => state.runScispace);
+  const sendCommandToTerminalLine = useScispaceStore((state) => state.sendCommandToTerminalLine);
   const entries = useMemo(() => [...history].reverse(), [history]);
 
   const copyCommand = (command: string) => {
@@ -25,14 +19,7 @@ export function CommandHistoryWindow() {
         <ol className="history-list" aria-label="Command history">
           {entries.map((entry) => (
             <li key={entry.id} className={`history-entry ${entry.status}`}>
-              <div className="history-entry-meta">
-                <span>{formatTime(entry.createdAt)}</span>
-                <span>{entry.source}</span>
-                <span>{entry.kind}</span>
-                <span>{entry.status}</span>
-              </div>
               <code>{entry.command}</code>
-              <p>{entry.output}</p>
               <div className="history-entry-actions">
                 <button
                   type="button"
@@ -47,6 +34,13 @@ export function CommandHistoryWindow() {
                   onClick={() => copyCommand(entry.command)}
                 >
                   Copy
+                </button>
+                <button
+                  type="button"
+                  aria-label={`To command line ${entry.command}`}
+                  onClick={() => sendCommandToTerminalLine(entry.command)}
+                >
+                  To cmd line
                 </button>
               </div>
             </li>

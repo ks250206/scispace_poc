@@ -35,6 +35,7 @@ interface ScispaceState {
   pendingImports: PendingImport[];
   terminalEvents: string[];
   commandHistory: CommandHistoryEntry[];
+  terminalCommandLineRequest?: { id: string; command: string };
   activeDatasetId?: string;
   activeWindowId?: string;
   viewport: ViewportState;
@@ -63,6 +64,7 @@ interface ScispaceState {
   ) => void;
   focusWindow: (id: string) => void;
   setViewport: (viewport: ViewportState) => void;
+  sendCommandToTerminalLine: (command: string) => void;
 }
 
 const centerTileX = 1920;
@@ -343,6 +345,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     pendingImports: [],
     terminalEvents: [],
     commandHistory: [],
+    terminalCommandLineRequest: undefined,
     viewport: initialViewport(),
 
     initialize: async () => {
@@ -705,6 +708,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         pendingImports: [],
         terminalEvents: [],
         commandHistory: [],
+        terminalCommandLineRequest: undefined,
         activeDatasetId: initialProject.datasets[0]?.id,
         activeWindowId: undefined,
         viewport: initialProject.viewport,
@@ -914,6 +918,10 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     setViewport: (viewport) => {
       set({ viewport });
       persistLayout(db, get());
+    },
+
+    sendCommandToTerminalLine: (command) => {
+      set({ terminalCommandLineRequest: { id: crypto.randomUUID(), command } });
     },
   }));
 

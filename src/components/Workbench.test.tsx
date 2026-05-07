@@ -146,7 +146,7 @@ describe("Workbench UI", () => {
 
     await user.click(screen.getByRole("button", { name: "Close Table - waveform.csv" }));
 
-    expect(screen.queryByText("Table - waveform.csv")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("Table - waveform.csv")).not.toBeInTheDocument());
     expect(document.querySelector(".tree-row.file")).toBeInTheDocument();
   });
 
@@ -260,13 +260,18 @@ describe("Workbench UI", () => {
     );
     const historyEntry = document.querySelector(".history-entry");
     expect(historyEntry).toHaveTextContent("table waveform.csv");
-    const [runButton, copyButton] = Array.from(
+    const [runButton, copyButton, toCommandLineButton] = Array.from(
       historyEntry?.querySelectorAll("button") ?? [],
     ) as HTMLButtonElement[];
     expect(runButton).toHaveTextContent("Run");
     expect(copyButton).toHaveTextContent("Copy");
+    expect(toCommandLineButton).toHaveTextContent("To cmd line");
     await user.click(copyButton);
     expect(writeText).toHaveBeenCalledWith("table waveform.csv");
+    await user.click(toCommandLineButton);
+    expect(useScispaceStore.getState().terminalCommandLineRequest).toMatchObject({
+      command: "table waveform.csv",
+    });
 
     await user.click(runButton);
     await waitFor(() =>

@@ -10,8 +10,10 @@ const toBashPath = (path: string): string => path.replace(/^~\//, "/home/user/")
 export function TerminalPanel() {
   const { ref, write } = useTerminal();
   const shellRef = useRef<BashShell | null>(null);
+  const commandLineRequestIdRef = useRef<string | undefined>(undefined);
   const files = useScispaceStore((state) => state.files);
   const runScispace = useScispaceStore((state) => state.runScispace);
+  const terminalCommandLineRequest = useScispaceStore((state) => state.terminalCommandLineRequest);
 
   const initialFiles = useMemo(
     () =>
@@ -69,6 +71,13 @@ export function TerminalPanel() {
       );
     })();
   }, [files]);
+
+  useEffect(() => {
+    if (!terminalCommandLineRequest || !shellRef.current) return;
+    if (commandLineRequestIdRef.current === terminalCommandLineRequest.id) return;
+    commandLineRequestIdRef.current = terminalCommandLineRequest.id;
+    void shellRef.current.handleInput(`scispace ${terminalCommandLineRequest.command}`);
+  }, [terminalCommandLineRequest]);
 
   return (
     <section className="terminal-panel">
