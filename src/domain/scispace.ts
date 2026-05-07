@@ -1,4 +1,10 @@
-import { normalizeVirtualPath, parseDelimitedText } from "./csv";
+import {
+  datasetColumnIds,
+  datasetColumnNames,
+  normalizeVirtualPath,
+  parseDelimitedText,
+  resolveDatasetColumnId,
+} from "./csv";
 import type {
   Dataset,
   PendingImport,
@@ -55,6 +61,8 @@ const readOption = (tokens: string[], key: string): string | undefined => {
   return tokens.find((token) => token.startsWith(prefix))?.slice(prefix.length);
 };
 
+const isString = (value: string | undefined): value is string => Boolean(value);
+
 const parseBooleanOption = (tokens: string[], key: string): boolean =>
   readOption(tokens, key) === "true";
 
@@ -101,7 +109,7 @@ const formatVirtualFileList = (
       if (file.kind === "directory") return `[dir] ${file.path}`;
       const dataset = datasets.find((item) => item.id === file.datasetId);
       if (dataset) {
-        return `[dataset] ${file.path} -> ${dataset.name} (${dataset.rows.length} rows)`;
+        return `[dataset] ${file.path} -> ${dataset.name} (${dataset.rows.length} rows, ${dataset.columns.length} cols)`;
       }
       return `[raw] ${file.path}${file.parseError ? ` (${file.parseError})` : ""}`;
     })
@@ -376,7 +384,7 @@ export const executeScispaceCommand = (
       output: [
         "scispace commands:",
         "  lsdata",
-        "  table <dataset>",
+        "  table <dataset> columns=<column[,column...]>",
         "  plot <dataset> x=<column> y=<column[,column...]> type=<line|line-marker|marker>",
         "  plot-set <plotId> title=<title> type=<line|line-marker|marker> border=<true|false> width=<n> height=<n> fontFamily=<name> fontSize=<n> padding=<t:r:b:l>",
         "  plot-axis <plotId> axis=<x|y> range=<auto|min:max> tick=<auto|interval> tickDir=<out|in|none> scale=<linear|log>",
@@ -390,7 +398,7 @@ export const executeScispaceCommand = (
         "  file-move <path> to=<directory>",
         "  file-delete <path>",
         "  import-preview <importId>",
-        "  import-confirm <importId> path=<virtualPath>",
+        "  import-confirm <importId> mode=<tabular|raw> path=<virtualPath>",
         "  elt <dataset> as <newName>",
       ].join("\n"),
     };
@@ -400,7 +408,7 @@ export const executeScispaceCommand = (
     const output = context.datasets
       .map(
         (dataset) =>
-          `${dataset.name}\t${dataset.rows.length} rows\tcolumns: ${dataset.columns.join(", ")}`,
+          `${dataset.name}\t${dataset.rows.length} rows\tcolumns: ${datasetColumnNames(dataset).join(", ")}`,
       )
       .join("\n");
     return { kind: "text", output: output || "No datasets loaded" };
@@ -458,9 +466,23 @@ export const executeScispaceCommand = (
   if (command === "table") {
     const dataset = findDataset(context.datasets, args[0] ?? "");
     if (!dataset) return { kind: "error", output: `Dataset not found: ${args[0] ?? ""}` };
+    const requestedColumns = readOption(args, "columns")
+      ?.split(",")
+      .map((column) => column.trim())
+      .filter(Boolean);
+    const columnIds = requestedColumns?.map((column) => resolveDatasetColumnId(dataset, column));
+    const unknownColumns = requestedColumns?.filter((_, index) => !columnIds?.[index]) ?? [];
+    if (unknownColumns.length > 0) {
+      return {
+        kind: "error",
+        output: `Unknown table columns for ${dataset.name}: ${unknownColumns.join(", ")}`,
+      };
+    }
+    const resolvedColumnIds = columnIds?.filter((column): column is string => Boolean(column));
     return {
       kind: "open-table",
       datasetId: dataset.id,
+      columnIds: resolvedColumnIds && resolvedColumnIds.length > 0 ? resolvedColumnIds : undefined,
       output: `Table opened: ${dataset.name} (${dataset.rows.length} rows)`,
     };
   }
@@ -469,12 +491,23 @@ export const executeScispaceCommand = (
     const dataset = findDataset(context.datasets, args[0] ?? "");
     if (!dataset) return { kind: "error", output: `Dataset not found: ${args[0] ?? ""}` };
 
-    const x = readOption(args, "x") ?? dataset.columns[0];
-    const yColumns = (readOption(args, "y") ?? dataset.columns[1] ?? "")
+    const columnIds = datasetColumnIds(dataset);
+    const requestedX = readOption(args, "x");
+    const x = requestedX ? resolveDatasetColumnId(dataset, requestedX) : columnIds[0];
+    const yColumns = (readOption(args, "y") ?? columnIds[1] ?? "")
       .split(",")
       .map((column) => column.trim())
-      .filter(Boolean);
-    const unknownColumns = [x, ...yColumns].filter((column) => !dataset.columns.includes(column));
+      .map((column) => resolveDatasetColumnId(dataset, column))
+      .filter(isString);
+    const requestedPlotColumns = [
+      requestedX ?? columnIds[0],
+      ...(readOption(args, "y") ?? columnIds[1] ?? "").split(",").map((column) => column.trim()),
+    ].filter(Boolean);
+    const resolvedPlotColumns = [x, ...yColumns].filter(Boolean);
+    const unknownColumns =
+      requestedPlotColumns.length === resolvedPlotColumns.length
+        ? []
+        : requestedPlotColumns.filter((column) => !resolveDatasetColumnId(dataset, column));
     if (yColumns.length === 0 || unknownColumns.length > 0) {
       return {
         kind: "error",
@@ -498,14 +531,14 @@ export const executeScispaceCommand = (
       type: "line",
       plotType: plotType as PlotType,
       source: dataset.id,
-      x,
+      x: x ?? "",
       y: series[0]?.y,
       title: `${dataset.name}: ${series.map((item) => item.y).join(", ")} vs ${x}`,
       series,
       zoomMode: "xy",
-      axisLabels: { x, y: series.map((item) => item.label).join(", ") },
+      axisLabels: { x: x ?? "", y: series.map((item) => item.label).join(", ") },
       axes: {
-        x: defaultPlotAxis(x),
+        x: defaultPlotAxis(x ?? ""),
         y: defaultPlotAxis(series.map((item) => item.label).join(", ")),
       },
       grid: { x: true, y: true },
@@ -553,8 +586,9 @@ export const executeScispaceCommand = (
       patch.plotType = type as PlotType;
     }
     if (x !== undefined) {
-      if (!dataset?.columns.includes(x)) return { kind: "error", output: `Unknown x column: ${x}` };
-      patch.x = x;
+      const resolvedX = dataset ? resolveDatasetColumnId(dataset, x) : undefined;
+      if (!resolvedX) return { kind: "error", output: `Unknown x column: ${x}` };
+      patch.x = resolvedX;
     }
     if (zoom !== undefined) {
       if (zoom !== "x" && zoom !== "y" && zoom !== "xy")
@@ -745,9 +779,9 @@ export const executeScispaceCommand = (
     if (!plot) return { kind: "error", output: `Plot not found: ${args[0] ?? ""}` };
     const current = normalizePlotSpecForCommand(plot);
     const dataset = findDataset(context.datasets, current.source);
-    const y = readOption(args, "y");
-    if (!y || !dataset?.columns.includes(y))
-      return { kind: "error", output: `Unknown series column: ${y ?? ""}` };
+    const requestedY = readOption(args, "y");
+    const y = dataset ? resolveDatasetColumnId(dataset, requestedY) : undefined;
+    if (!y) return { kind: "error", output: `Unknown series column: ${requestedY ?? ""}` };
     const action = readOption(args, "action");
     let series = current.series;
     if (action === "add") {
@@ -935,12 +969,15 @@ export const executeScispaceCommand = (
     const importId = args[0] ?? "";
     const pathOption = readOption(args, "path");
     const path = pathOption ? decodeURIComponent(pathOption) : undefined;
-    const rawOnly = parseBooleanOption(args, "raw");
+    const mode = readOption(args, "mode") ?? (parseBooleanOption(args, "raw") ? "raw" : "tabular");
     const pendingImport = context.pendingImports?.find((item) => item.id === importId);
     if (!pendingImport) return { kind: "error", output: `Pending import not found: ${importId}` };
     if (!path)
       return { kind: "error", output: "Usage: import-confirm <importId> path=<virtualPath>" };
-    if (rawOnly) {
+    if (mode !== "tabular" && mode !== "raw") {
+      return { kind: "error", output: "mode must be tabular or raw" };
+    }
+    if (mode === "raw") {
       return {
         kind: "import-confirm",
         importId,

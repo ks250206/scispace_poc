@@ -33,6 +33,7 @@ export interface WorkspaceWindow {
   height: number;
   zIndex: number;
   datasetId?: string;
+  columnIds?: string[];
   plotId?: string;
   importId?: string;
 }
@@ -63,11 +64,18 @@ export interface VirtualFile {
 
 export type DataValue = number | string;
 
+export interface DatasetColumn {
+  id: string;
+  name: string;
+  sourceName?: string;
+  dataType: "number" | "string" | "mixed";
+}
+
 export interface Dataset {
   id: string;
   name: string;
   sourcePath: string;
-  columns: string[];
+  columns: DatasetColumn[];
   rows: Record<string, DataValue>[];
   createdBy: "seed" | "upload" | "elt";
   createdAt: number;
@@ -163,7 +171,7 @@ export interface PlotSpec {
 
 export type ScispaceCommandResult =
   | { kind: "text"; output: string }
-  | { kind: "open-table"; datasetId: string; output: string }
+  | { kind: "open-table"; datasetId: string; columnIds?: string[]; output: string }
   | { kind: "plot"; spec: PlotSpec; output: string }
   | { kind: "plot-created"; spec: PlotSpec; output: string }
   | { kind: "plot-updated"; spec: PlotSpec; output: string }
@@ -194,6 +202,7 @@ export interface PersistedLayout {
   viewport: ViewportState;
   plotSpecs?: PlotSpec[];
   commandHistory?: CommandHistoryEntry[];
+  columnSelections?: Record<string, string[]>;
 }
 
 export interface ImportFileResult {
@@ -206,6 +215,7 @@ export interface PendingImport {
   id: string;
   fileName: string;
   text: string;
+  mode: "tabular" | "raw";
   options: ImportParseOptions;
   preview?: Dataset;
   error?: string;

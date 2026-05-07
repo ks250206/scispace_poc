@@ -1,4 +1,10 @@
-import type { Dataset, ImportDelimiter, ImportParseOptions } from "./types";
+import type {
+  DataValue,
+  Dataset,
+  DatasetColumn,
+  ImportDelimiter,
+  ImportParseOptions,
+} from "./types";
 
 export const defaultImportParseOptions: ImportParseOptions = {
   skipRows: 0,
@@ -16,6 +22,102 @@ export const normalizeDataValue = (value: string): number | string => {
     ? numeric
     : trimmed;
 };
+
+const inferColumnType = (values: DataValue[]): DatasetColumn["dataType"] => {
+  const nonEmptyValues = values.filter((value) => value !== "");
+  if (nonEmptyValues.length === 0) return "string";
+  const hasNumber = nonEmptyValues.some((value) => typeof value === "number");
+  const hasString = nonEmptyValues.some((value) => typeof value === "string");
+  if (hasNumber && hasString) return "mixed";
+  return hasNumber ? "number" : "string";
+};
+
+const uniqueColumnId = (name: string, index: number, usedIds: Set<string>): string => {
+  const fallback = `column_${index + 1}`;
+  const base =
+    name
+      .trim()
+      .replace(/\s+/g, "_")
+      .replace(/[^\w.-]/g, "_") || fallback;
+  let candidate = base;
+  let suffix = 1;
+  while (usedIds.has(candidate)) {
+    candidate = `${base}_${suffix}`;
+    suffix += 1;
+  }
+  usedIds.add(candidate);
+  return candidate;
+};
+
+export const createDatasetColumns = (
+  names: string[],
+  rows: Record<string, DataValue>[] = [],
+): DatasetColumn[] => {
+  const usedIds = new Set<string>();
+  return names.map((name, index) => {
+    const displayName = name.trim() || `column_${index + 1}`;
+    const id = uniqueColumnId(displayName, index, usedIds);
+    return {
+      id,
+      name: displayName,
+      sourceName: displayName,
+      dataType: inferColumnType(rows.map((row) => row[id] ?? row[displayName] ?? "")),
+    };
+  });
+};
+
+export const normalizeDataset = (dataset: Dataset): Dataset => {
+  const legacyColumns = dataset.columns as unknown[];
+  if (legacyColumns.length > 0 && typeof legacyColumns[0] !== "string") {
+    const usedIds = new Set<string>();
+    const columns = dataset.columns.map((column, index) => ({
+      id: column.id || uniqueColumnId(column.name, index, usedIds),
+      name: column.name || column.id || `column_${index + 1}`,
+      sourceName: column.sourceName ?? column.name ?? column.id,
+      dataType: column.dataType ?? inferColumnType(dataset.rows.map((row) => row[column.id] ?? "")),
+    }));
+    return { ...dataset, columns };
+  }
+
+  const usedIds = new Set<string>();
+  const columns = (legacyColumns as string[]).map((name, index) => {
+    const displayName = String(name || `column_${index + 1}`);
+    const id = uniqueColumnId(displayName, index, usedIds);
+    return {
+      id,
+      name: displayName,
+      sourceName: displayName,
+      dataType: inferColumnType(dataset.rows.map((row) => row[displayName] ?? "")),
+    };
+  });
+  const rows = dataset.rows.map((row) =>
+    Object.fromEntries(
+      columns.map((column) => [
+        column.id,
+        row[column.sourceName ?? column.name] ?? row[column.id] ?? "",
+      ]),
+    ),
+  );
+  return { ...dataset, columns, rows };
+};
+
+export const datasetColumnIds = (dataset: Dataset): string[] =>
+  normalizeDataset(dataset).columns.map((column) => column.id);
+
+export const datasetColumnNames = (dataset: Dataset): string[] =>
+  normalizeDataset(dataset).columns.map((column) => column.name);
+
+export const resolveDatasetColumnId = (
+  dataset: Dataset,
+  token: string | undefined,
+): string | undefined => {
+  if (!token) return undefined;
+  const normalized = normalizeDataset(dataset);
+  return normalized.columns.find((column) => column.id === token || column.name === token)?.id;
+};
+
+export const datasetColumnLabel = (dataset: Dataset, columnId: string): string =>
+  normalizeDataset(dataset).columns.find((column) => column.id === columnId)?.name ?? columnId;
 
 export const normalizeVirtualPath = (fileName: string, directory = "~/raw"): string => {
   const safeName = fileName.trim().replaceAll("\\", "/").split("/").filter(Boolean).at(-1);
@@ -92,18 +194,30 @@ export const parseDelimitedText = (
       });
   const dataLines = resolvedOptions.hasHeader ? lines.slice(1) : lines;
 
+  const usedIds = new Set<string>();
+  const columns = headers.map((header, index) => ({
+    id: uniqueColumnId(header, index, usedIds),
+    name: header,
+    sourceName: header,
+    dataType: "string" as const,
+  }));
+
   const rows = dataLines.map((line) => {
     const cells = splitDelimitedLine(line, delimiter);
     return Object.fromEntries(
-      headers.map((header, index) => [header, normalizeDataValue(cells[index] ?? "")]),
+      columns.map((column, index) => [column.id, normalizeDataValue(cells[index] ?? "")]),
     );
   });
+  const typedColumns = columns.map((column) => ({
+    ...column,
+    dataType: inferColumnType(rows.map((row) => row[column.id] ?? "")),
+  }));
 
   return {
     id: crypto.randomUUID(),
     name,
     sourcePath,
-    columns: headers,
+    columns: typedColumns,
     rows,
     createdBy: "upload",
     createdAt: now,
@@ -125,7 +239,7 @@ export const createSeedDataset = (now = Date.now()): Dataset => {
     id: "seed-waveform",
     name: "waveform.csv",
     sourcePath: "~/raw/waveform.csv",
-    columns: ["index", "time", "signal", "background"],
+    columns: createDatasetColumns(["index", "time", "signal", "background"], rows),
     rows,
     createdBy: "seed",
     createdAt: now,
@@ -133,8 +247,9 @@ export const createSeedDataset = (now = Date.now()): Dataset => {
 };
 
 export const datasetToDelimitedText = (dataset: Dataset): string => {
-  const body = dataset.rows.map((row) =>
-    dataset.columns.map((column) => String(row[column] ?? "")).join(","),
+  const normalized = normalizeDataset(dataset);
+  const body = normalized.rows.map((row) =>
+    normalized.columns.map((column) => String(row[column.id] ?? "")).join(","),
   );
-  return [dataset.columns.join(","), ...body].join("\n");
+  return [normalized.columns.map((column) => column.name).join(","), ...body].join("\n");
 };

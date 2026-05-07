@@ -83,7 +83,9 @@ export function PlotConfigWindow() {
   const availableSeriesColumns = useMemo(() => {
     if (!dataset || !spec) return [];
     const activeColumns = new Set(spec.series.map((series) => series.y));
-    return dataset.columns.filter((column) => column !== spec.x && !activeColumns.has(column));
+    return dataset.columns.filter(
+      (column) => column.id !== spec.x && !activeColumns.has(column.id),
+    );
   }, [dataset, spec]);
 
   useEffect(() => {
@@ -91,8 +93,8 @@ export function PlotConfigWindow() {
       if (seriesToAdd) setSeriesToAdd("");
       return;
     }
-    if (!availableSeriesColumns.includes(seriesToAdd)) {
-      setSeriesToAdd(availableSeriesColumns[0] ?? "");
+    if (!availableSeriesColumns.some((column) => column.id === seriesToAdd)) {
+      setSeriesToAdd(availableSeriesColumns[0]?.id ?? "");
     }
   }, [availableSeriesColumns, seriesToAdd]);
 
@@ -262,8 +264,8 @@ export function PlotConfigWindow() {
                     }
                   >
                     {dataset.columns.map((column) => (
-                      <option key={column} value={column}>
-                        {column}
+                      <option key={column.id} value={column.id}>
+                        {column.name}
                       </option>
                     ))}
                   </select>
@@ -683,8 +685,8 @@ export function PlotConfigWindow() {
                   onChange={(event) => setSeriesToAdd(event.target.value)}
                 >
                   {availableSeriesColumns.map((column) => (
-                    <option key={column} value={column}>
-                      {column}
+                    <option key={column.id} value={column.id}>
+                      {column.name}
                     </option>
                   ))}
                 </select>

@@ -1,11 +1,13 @@
 import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { datasetColumnIds } from "../domain/csv";
 import { useScispaceStore } from "../store/scispaceStore";
 
 interface DataTableWindowProps {
   datasetId: string;
   windowId: string;
+  columnIds?: string[];
 }
 
 export type TableVisibleRows = 10 | 20 | 50;
@@ -29,7 +31,7 @@ const tableScrollHeight = (visibleRows: TableVisibleRows): number =>
 export const tableWindowHeightForRows = (visibleRows: TableVisibleRows): number =>
   tableTitlebarHeight + tableControlsHeight + tableScrollHeight(visibleRows);
 
-export function DataTableWindow({ datasetId, windowId }: DataTableWindowProps) {
+export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWindowProps) {
   const dataset = useScispaceStore((state) => state.datasets.find((item) => item.id === datasetId));
   const updateWindow = useScispaceStore((state) => state.updateWindow);
   const updateDatasetCell = useScispaceStore((state) => state.updateDatasetCell);
@@ -43,15 +45,19 @@ export function DataTableWindow({ datasetId, windowId }: DataTableWindowProps) {
   }>();
   const parentRef = useRef<HTMLDivElement>(null);
 
-  const columns = useMemo(
-    () =>
-      (dataset?.columns ?? []).map((column) => ({
-        accessorKey: column,
-        header: column,
-        cell: (info: { getValue: () => unknown }) => formatCellValue(info.getValue()),
-      })),
-    [dataset],
-  );
+  const columns = useMemo(() => {
+    if (!dataset) return [];
+    const requestedColumnIds =
+      columnIds && columnIds.length > 0 ? columnIds : datasetColumnIds(dataset);
+    const visibleColumns = dataset.columns.filter((column) =>
+      requestedColumnIds.includes(column.id),
+    );
+    return visibleColumns.map((column) => ({
+      accessorKey: column.id,
+      header: column.name,
+      cell: (info: { getValue: () => unknown }) => formatCellValue(info.getValue()),
+    }));
+  }, [columnIds, dataset]);
 
   const data = useMemo(() => dataset?.rows ?? [], [dataset]);
   const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel() });

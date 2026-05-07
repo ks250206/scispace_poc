@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSeedDataset, datasetToDelimitedText } from "../domain/csv";
+import { createSeedDataset, datasetColumnNames, datasetToDelimitedText } from "../domain/csv";
 import { createScispaceStore } from "./scispaceStore";
 import { SciSpaceDatabase } from "./db";
 
@@ -150,7 +150,9 @@ describe("scispace zustand store", () => {
 
     store.getState().updateImportOptions(importId, { hasHeader: false });
 
-    expect(store.getState().pendingImports[0]?.preview?.columns).toEqual(["column_1", "column_2"]);
+    const preview = store.getState().pendingImports[0]?.preview;
+    expect(preview).toBeDefined();
+    expect(preview ? datasetColumnNames(preview) : []).toEqual(["column_1", "column_2"]);
     expect(store.getState().pendingImports[0]?.preview?.rows[0]).toEqual({
       column_1: 1,
       column_2: 2,
@@ -165,7 +167,10 @@ describe("scispace zustand store", () => {
     store.getState().updateImportOptions(importId, { columnNames: ["energy", "intensity"] });
     const result = await store.getState().confirmImport(importId);
 
-    expect(result?.dataset?.columns).toEqual(["energy", "intensity"]);
+    expect(result?.dataset ? datasetColumnNames(result.dataset) : []).toEqual([
+      "energy",
+      "intensity",
+    ]);
     expect(result?.dataset?.rows[0]).toEqual({ energy: 1, intensity: 2 });
   });
 
@@ -173,7 +178,7 @@ describe("scispace zustand store", () => {
     const { db, store } = await makeStore();
     const importId = store.getState().openImportDialog("notes.txt", "raw notes");
 
-    expect(store.getState().pendingImports[0]?.error).toContain("Raw file stored");
+    expect(store.getState().pendingImports[0]).toMatchObject({ mode: "raw" });
     const result = await store.getState().confirmImport(importId);
 
     expect(result?.dataset).toBeUndefined();
@@ -215,6 +220,38 @@ describe("scispace zustand store", () => {
       status: "success",
       source: "terminal",
     });
+  });
+
+  it("opens existing table windows with selected command columns", async () => {
+    const { db, store } = await makeStore();
+
+    store.getState().setDatasetColumnSelection("seed-waveform", ["time", "signal"]);
+    await store.getState().selectDataset("seed-waveform");
+
+    expect(store.getState().windows.find((window) => window.id === "table-seed")).toMatchObject({
+      columnIds: ["time", "signal"],
+    });
+    expect(store.getState().commandHistory.at(-1)).toMatchObject({
+      command: "table waveform.csv columns=time,signal",
+      source: "gui",
+    });
+    expect((await db.layout.get("main"))?.value.columnSelections).toEqual({
+      "seed-waveform": ["time", "signal"],
+    });
+  });
+
+  it("lets raw text imports become tabular datasets after switching mode", async () => {
+    const { store } = await makeStore();
+    const importId = store.getState().openImportDialog("notes.txt", "x y\n1 2");
+
+    store.getState().updateImportMode(importId, "tabular");
+    store.getState().updateImportOptions(importId, { delimiter: "space" });
+    const result = await store.getState().confirmImport(importId);
+
+    expect(result?.parseError).toBeUndefined();
+    expect(result?.dataset?.name).toBe("notes.txt");
+    expect(result?.dataset ? datasetColumnNames(result.dataset) : []).toEqual(["x", "y"]);
+    expect(result?.dataset?.rows[0]).toEqual({ x: 1, y: 2 });
   });
 
   it("records command history errors, sources, replay, and layout persistence", async () => {
@@ -309,7 +346,9 @@ describe("scispace zustand store", () => {
 
     const result = await store.getState().runScispace("file-list ~/raw");
 
-    expect(result.output).toContain("[dataset] ~/raw/waveform.csv -> waveform.csv (160 rows)");
+    expect(result.output).toContain(
+      "[dataset] ~/raw/waveform.csv -> waveform.csv (160 rows, 4 cols)",
+    );
     expect(store.getState().terminalEvents.at(-1)).toContain("[dataset] ~/raw/waveform.csv");
     expect(store.getState().commandHistory[0]).toMatchObject({
       command: "file-list ~/raw",

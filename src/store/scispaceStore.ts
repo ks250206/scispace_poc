@@ -3,9 +3,12 @@ import {
   createSeedDataset,
   datasetToDelimitedText,
   defaultImportParseOptions,
+  datasetColumnIds,
+  normalizeDataset,
   normalizeDataValue,
   normalizeVirtualPath,
   parseDelimitedText,
+  resolveDatasetColumnId,
 } from "../domain/csv";
 import {
   defaultPlotAxis,
@@ -37,6 +40,7 @@ interface ScispaceState {
   terminalEvents: string[];
   commandHistory: CommandHistoryEntry[];
   terminalCommandLineRequest?: { id: string; command: string };
+  columnSelections: Record<string, string[]>;
   activeDatasetId?: string;
   activeWindowId?: string;
   currentPlotId?: string;
@@ -45,10 +49,14 @@ interface ScispaceState {
   importTextFile: (name: string, text: string) => Promise<ImportFileResult>;
   openImportDialog: (fileName: string, text: string) => string;
   updateImportOptions: (importId: string, options: Partial<ImportParseOptions>) => void;
+  updateImportText: (importId: string, text: string) => void;
+  updateImportMode: (importId: string, mode: "tabular" | "raw") => void;
   confirmImport: (importId: string) => Promise<ImportFileResult | undefined>;
   cancelImport: (importId: string) => void;
+  setDatasetColumnSelection: (datasetId: string, columnIds: string[]) => void;
+  toggleDatasetColumn: (datasetId: string, columnId: string) => void;
   selectDataset: (datasetId: string) => Promise<void>;
-  openTable: (datasetId: string) => Promise<void>;
+  openTable: (datasetId: string, columnIds?: string[]) => Promise<void>;
   openPlot: (spec: PlotSpec) => Promise<void>;
   openPlotConfig: (plotId: string) => void;
   updateDatasetCell: (
@@ -264,6 +272,7 @@ const createInitialProject = () => {
     plotSpecs: [seedPlot()],
     viewport: initialViewport(),
     commandHistory: [],
+    columnSelections: {},
   };
 };
 
@@ -273,6 +282,7 @@ const persistLayout = (db: SciSpaceDatabase, state: ScispaceState): void => {
     viewport: state.viewport,
     plotSpecs: state.plotSpecs.map(normalizePlotSpec),
     commandHistory: state.commandHistory,
+    columnSelections: state.columnSelections,
   });
 };
 
@@ -325,13 +335,9 @@ const createPreview = (
   text: string,
   options: ImportParseOptions,
 ): { preview?: Dataset; error?: string } => {
-  if (!canParseAsTable(fileName)) {
-    return { error: "Raw file stored without tabular parsing" };
-  }
-
   const result = executeScispaceCommand(`import-preview ${id}`, {
     datasets: [],
-    pendingImports: [{ id, fileName, text, options }],
+    pendingImports: [{ id, fileName, text, mode: "tabular", options }],
   });
   if (result.kind === "import-preview") {
     return { preview: result.preview, error: result.error };
@@ -345,7 +351,7 @@ const normalizeColumnNames = (
 ): ImportParseOptions => {
   if (options.hasHeader || !preview) return options;
   const columnNames = preview.columns.map(
-    (column, index) => options.columnNames[index]?.trim() || column || `column_${index + 1}`,
+    (column, index) => options.columnNames[index]?.trim() || column.name || `column_${index + 1}`,
   );
   return { ...options, columnNames };
 };
@@ -361,6 +367,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     terminalEvents: [],
     commandHistory: [],
     terminalCommandLineRequest: undefined,
+    columnSelections: {},
     currentPlotId: undefined,
     viewport: initialViewport(),
 
@@ -370,7 +377,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         db.datasets.toArray(),
         readPersistedLayout(db),
       ]);
-      let nextDatasets = datasets;
+      let nextDatasets = datasets.map(normalizeDataset);
       let nextFiles = files;
 
       if (nextDatasets.length === 0) {
@@ -381,6 +388,8 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         });
         nextDatasets = initialProject.datasets;
         nextFiles = initialProject.files;
+      } else if (nextDatasets.some((dataset, index) => dataset !== datasets[index])) {
+        await db.datasets.bulkPut(nextDatasets);
       }
 
       const nextPlotSpecs =
@@ -400,6 +409,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         windows: nextWindows,
         plotSpecs: nextPlotSpecs,
         commandHistory: layout.commandHistory ?? [],
+        columnSelections: layout.columnSelections ?? {},
         viewport: layout.viewport,
         activeDatasetId: nextDatasets[0]?.id,
         currentPlotId:
@@ -458,7 +468,15 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
 
       set((state) => {
         const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
-        const pendingImport: PendingImport = { id, fileName, text, options, preview, error };
+        const pendingImport: PendingImport = {
+          id,
+          fileName,
+          text,
+          mode: canParseAsTable(fileName) ? "tabular" : "raw",
+          options,
+          preview,
+          error,
+        };
         const window: WorkspaceWindow = {
           id: `import-${id}`,
           kind: "import",
@@ -502,6 +520,29 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       }));
     },
 
+    updateImportText: (importId, text) => {
+      set((state) => ({
+        pendingImports: state.pendingImports.map((pendingImport) => {
+          if (pendingImport.id !== importId) return pendingImport;
+          const { preview, error } = createPreview(
+            pendingImport.id,
+            pendingImport.fileName,
+            text,
+            pendingImport.options,
+          );
+          return { ...pendingImport, text, preview, error };
+        }),
+      }));
+    },
+
+    updateImportMode: (importId, mode) => {
+      set((state) => ({
+        pendingImports: state.pendingImports.map((pendingImport) =>
+          pendingImport.id === importId ? { ...pendingImport, mode } : pendingImport,
+        ),
+      }));
+    },
+
     confirmImport: async (importId) => {
       const pendingImport = get().pendingImports.find((item) => item.id === importId);
       if (!pendingImport) return undefined;
@@ -510,7 +551,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       let parseError: string | undefined;
       let dataset: Dataset | undefined;
       const result = executeScispaceCommand(
-        `import-confirm ${importId} path=${encodeURIComponent(path)} raw=${String(!canParseAsTable(pendingImport.fileName))}`,
+        `import-confirm ${importId} path=${encodeURIComponent(path)} mode=${pendingImport.mode}`,
         { datasets: get().datasets, pendingImports: [pendingImport] },
       );
       if (result.kind === "import-confirm") {
@@ -552,14 +593,44 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       persistLayout(db, get());
     },
 
-    selectDataset: async (datasetId) => {
-      set({ activeDatasetId: datasetId });
-      await get().openTable(datasetId);
-    },
-
-    openTable: async (datasetId) => {
+    setDatasetColumnSelection: (datasetId, columnIds) => {
       const dataset = get().datasets.find((item) => item.id === datasetId);
       if (!dataset) return;
+      const validColumns = new Set(datasetColumnIds(dataset));
+      const nextColumnIds = columnIds.filter((columnId) => validColumns.has(columnId));
+      set((state) => ({
+        columnSelections: { ...state.columnSelections, [datasetId]: nextColumnIds },
+      }));
+      persistLayout(db, get());
+    },
+
+    toggleDatasetColumn: (datasetId, columnId) => {
+      const current = get().columnSelections[datasetId] ?? [];
+      const next = current.includes(columnId)
+        ? current.filter((item) => item !== columnId)
+        : [...current, columnId];
+      get().setDatasetColumnSelection(datasetId, next);
+    },
+
+    selectDataset: async (datasetId) => {
+      set({ activeDatasetId: datasetId });
+      const dataset = get().datasets.find((item) => item.id === datasetId);
+      if (!dataset) return;
+      const selectedColumns = get().columnSelections[datasetId] ?? [];
+      const columns = selectedColumns.length > 0 ? selectedColumns : datasetColumnIds(dataset);
+      await get().runScispace(`table ${dataset.name} columns=${columns.join(",")}`, {
+        source: "gui",
+      });
+    },
+
+    openTable: async (datasetId, columnIds) => {
+      const dataset = get().datasets.find((item) => item.id === datasetId);
+      if (!dataset) return;
+      const validColumns = new Set(datasetColumnIds(dataset));
+      const resolvedColumnIds =
+        columnIds && columnIds.length > 0
+          ? columnIds.filter((columnId) => validColumns.has(columnId))
+          : datasetColumnIds(dataset);
 
       set((state) => {
         const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
@@ -576,13 +647,20 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           height: tableWindowHeightForRows(10),
           zIndex,
           datasetId,
+          columnIds: resolvedColumnIds,
         };
         const windows = existing
           ? state.windows.map((window) =>
-              window.id === existing.id ? { ...window, zIndex } : window,
+              window.id === existing.id
+                ? { ...window, zIndex, columnIds: resolvedColumnIds }
+                : window,
             )
           : [...state.windows, nextWindow];
-        return { windows, activeWindowId: existing?.id ?? `table-${datasetId}` };
+        return {
+          windows,
+          activeWindowId: existing?.id ?? `table-${datasetId}`,
+          activeDatasetId: datasetId,
+        };
       });
       persistLayout(db, get());
     },
@@ -652,13 +730,14 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
 
     updateDatasetCell: async (datasetId, rowIndex, column, value) => {
       const dataset = get().datasets.find((item) => item.id === datasetId);
-      if (!dataset || !dataset.columns.includes(column) || rowIndex < 0) return;
+      if (!dataset || !resolveDatasetColumnId(dataset, column) || rowIndex < 0) return;
       if (rowIndex >= dataset.rows.length) return;
+      const columnId = resolveDatasetColumnId(dataset, column) ?? column;
 
       const updatedDataset: Dataset = {
         ...dataset,
         rows: dataset.rows.map((row, index) =>
-          index === rowIndex ? { ...row, [column]: normalizeDataValue(value) } : row,
+          index === rowIndex ? { ...row, [columnId]: normalizeDataValue(value) } : row,
         ),
       };
       const sourceFile = get().files.find(
@@ -688,7 +767,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         plotSpecs: get().plotSpecs,
       });
 
-      if (result.kind === "open-table") await get().openTable(result.datasetId);
+      if (result.kind === "open-table") await get().openTable(result.datasetId, result.columnIds);
       if (result.kind === "plot" || result.kind === "plot-created")
         await get().openPlot(result.spec);
       if (
@@ -836,6 +915,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
             viewport: initialProject.viewport,
             plotSpecs: initialProject.plotSpecs,
             commandHistory: initialProject.commandHistory,
+            columnSelections: initialProject.columnSelections,
           },
         });
       });
@@ -849,6 +929,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         pendingImports: [],
         terminalEvents: [],
         commandHistory: [],
+        columnSelections: initialProject.columnSelections,
         terminalCommandLineRequest: undefined,
         activeDatasetId: initialProject.datasets[0]?.id,
         activeWindowId: undefined,
@@ -1025,6 +1106,11 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         datasets,
         plotSpecs,
         windows,
+        columnSelections: Object.fromEntries(
+          Object.entries(state.columnSelections).filter(
+            ([datasetId]) => !removedDatasetIds.has(datasetId),
+          ),
+        ),
         activeDatasetId: nextActiveDatasetId(datasets, state.activeDatasetId),
         currentPlotId:
           state.currentPlotId && plotSpecs.some((plot) => plot.id === state.currentPlotId)

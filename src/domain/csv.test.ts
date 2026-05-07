@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   createSeedDataset,
   datasetToDelimitedText,
+  datasetColumnNames,
   normalizeVirtualPath,
+  normalizeDataset,
   parseDelimitedText,
 } from "./csv";
 
@@ -20,7 +22,8 @@ describe("csv domain", () => {
       10,
     );
 
-    expect(dataset.columns).toEqual(["time", "signal", "label"]);
+    expect(datasetColumnNames(dataset)).toEqual(["time", "signal", "label"]);
+    expect(dataset.columns[0]).toMatchObject({ id: "time", dataType: "number" });
     expect(dataset.rows).toEqual([
       { time: 0, signal: 1.5, label: "a" },
       { time: 1, signal: 2.25, label: "b" },
@@ -35,7 +38,7 @@ describe("csv domain", () => {
       "~/raw/sample.tsv",
     );
 
-    expect(dataset.columns).toEqual(["x", "y"]);
+    expect(datasetColumnNames(dataset)).toEqual(["x", "y"]);
     expect(dataset.rows[0]).toEqual({ x: 1, y: 'two "quoted"' });
   });
 
@@ -46,7 +49,7 @@ describe("csv domain", () => {
       "~/raw/blank-header.csv",
     );
 
-    expect(dataset.columns).toEqual(["column_1", "signal"]);
+    expect(datasetColumnNames(dataset)).toEqual(["column_1", "signal"]);
     expect(() => parseDelimitedText("\n", "empty.csv", "~/raw/empty.csv")).toThrow(
       "Empty tabular file",
     );
@@ -61,7 +64,7 @@ describe("csv domain", () => {
       { skipRows: 1, delimiter: "semicolon", commentPrefix: "#" },
     );
 
-    expect(dataset.columns).toEqual(["x", "y"]);
+    expect(datasetColumnNames(dataset)).toEqual(["x", "y"]);
     expect(dataset.rows).toEqual([
       { x: 1, y: 10 },
       { x: 2, y: 20 },
@@ -86,7 +89,7 @@ describe("csv domain", () => {
   it("auto-detects semicolon delimiters", () => {
     const dataset = parseDelimitedText("x;y\n1;2", "semi.csv", "~/raw/semi.csv", 10);
 
-    expect(dataset.columns).toEqual(["x", "y"]);
+    expect(datasetColumnNames(dataset)).toEqual(["x", "y"]);
     expect(dataset.rows[0]).toEqual({ x: 1, y: 2 });
   });
 
@@ -95,7 +98,7 @@ describe("csv domain", () => {
       hasHeader: false,
     });
 
-    expect(dataset.columns).toEqual(["column_1", "column_2"]);
+    expect(datasetColumnNames(dataset)).toEqual(["column_1", "column_2"]);
     expect(dataset.rows).toEqual([
       { column_1: 1, column_2: 2 },
       { column_1: 3, column_2: 4 },
@@ -108,7 +111,7 @@ describe("csv domain", () => {
       columnNames: ["energy", "intensity"],
     });
 
-    expect(dataset.columns).toEqual(["energy", "intensity"]);
+    expect(datasetColumnNames(dataset)).toEqual(["energy", "intensity"]);
     expect(dataset.rows[0]).toEqual({ energy: 1, intensity: 2 });
   });
 
@@ -118,5 +121,23 @@ describe("csv domain", () => {
 
     expect(dataset.rows).toHaveLength(160);
     expect(text.split("\n")[0]).toBe("index,time,signal,background");
+  });
+
+  it("normalizes legacy string columns into column objects", () => {
+    const dataset = normalizeDataset({
+      id: "legacy",
+      name: "legacy.csv",
+      sourcePath: "~/raw/legacy.csv",
+      columns: ["x", "signal"] as never,
+      rows: [{ x: 1, signal: 2 }],
+      createdBy: "upload",
+      createdAt: 10,
+    });
+
+    expect(dataset.columns).toEqual([
+      { id: "x", name: "x", sourceName: "x", dataType: "number" },
+      { id: "signal", name: "signal", sourceName: "signal", dataType: "number" },
+    ]);
+    expect(dataset.rows[0]).toEqual({ x: 1, signal: 2 });
   });
 });

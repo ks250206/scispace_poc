@@ -506,7 +506,9 @@ describe("scispace pseudo command interpreter", () => {
 
     expect(result).toMatchObject({ kind: "file-command", action: "list" });
     expect(result.output).toContain("[dir] ~/raw/analysis");
-    expect(result.output).toContain("[dataset] ~/raw/waveform.csv -> waveform.csv (160 rows)");
+    expect(result.output).toContain(
+      "[dataset] ~/raw/waveform.csv -> waveform.csv (160 rows, 4 cols)",
+    );
     expect(result.output).toContain("[raw] ~/raw/notes.txt");
   });
 
@@ -515,6 +517,7 @@ describe("scispace pseudo command interpreter", () => {
       id: "import-1",
       fileName: "configured.csv",
       text: "# ignored\nx;y\n1;2",
+      mode: "tabular" as const,
       options: {
         skipRows: 0,
         delimiter: "semicolon" as const,
@@ -547,6 +550,7 @@ describe("scispace pseudo command interpreter", () => {
       id: "import-raw",
       fileName: "notes.txt",
       text: "hello",
+      mode: "raw" as const,
       options: {
         skipRows: 0,
         delimiter: "auto" as const,
@@ -582,6 +586,7 @@ describe("scispace pseudo command interpreter", () => {
       id: "bad-import",
       fileName: "bad.csv",
       text: "\n",
+      mode: "tabular" as const,
       options: {
         skipRows: 0,
         delimiter: "auto" as const,

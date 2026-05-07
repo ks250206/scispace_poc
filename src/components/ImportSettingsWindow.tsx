@@ -29,6 +29,8 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
     state.pendingImports.find((item) => item.id === importId),
   );
   const updateImportOptions = useScispaceStore((state) => state.updateImportOptions);
+  const updateImportText = useScispaceStore((state) => state.updateImportText);
+  const updateImportMode = useScispaceStore((state) => state.updateImportMode);
   const confirmImport = useScispaceStore((state) => state.confirmImport);
   const cancelImport = useScispaceStore((state) => state.cancelImport);
   const parentRef = useRef<HTMLDivElement>(null);
@@ -36,8 +38,8 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   const columns = useMemo(
     () =>
       (preview?.columns ?? []).map((column) => ({
-        accessorKey: column,
-        header: column,
+        accessorKey: column.id,
+        header: column.name,
         cell: (info: { getValue: () => unknown }) => formatCellValue(info.getValue()),
       })),
     [preview],
@@ -107,6 +109,18 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
           />
           <span>Header row</span>
         </label>
+        <label>
+          <span>Mode</span>
+          <select
+            value={pendingImport.mode}
+            onChange={(event) =>
+              updateImportMode(importId, event.currentTarget.value as "tabular" | "raw")
+            }
+          >
+            <option value="tabular">Tabular</option>
+            <option value="raw">Raw</option>
+          </select>
+        </label>
         <div className="import-actions">
           <button type="button" onClick={() => cancelImport(importId)}>
             Cancel
@@ -118,7 +132,13 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
       </div>
       <div className="import-summary">
         <span>{pendingImport.fileName}</span>
-        <span>{preview ? `${preview.rows.length} preview rows` : pendingImport.error}</span>
+        <span>
+          {pendingImport.mode === "raw"
+            ? "raw text import"
+            : preview
+              ? `${preview.rows.length} preview rows`
+              : pendingImport.error}
+        </span>
       </div>
       {pendingImport.error && !preview ? (
         <div className="import-error">{pendingImport.error}</div>
@@ -126,10 +146,10 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
       {!pendingImport.options.hasHeader && preview ? (
         <div className="column-name-editor">
           {preview.columns.map((column, index) => (
-            <label key={`${column}-${index}`}>
+            <label key={`${column.id}-${index}`}>
               <span>{`Column ${index + 1}`}</span>
               <input
-                value={pendingImport.options.columnNames[index] ?? column}
+                value={pendingImport.options.columnNames[index] ?? column.name}
                 onChange={(event) => {
                   const columnNames = [...pendingImport.options.columnNames];
                   columnNames[index] = event.currentTarget.value;
@@ -140,39 +160,49 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
           ))}
         </div>
       ) : null}
-      <div
-        ref={parentRef}
-        className="table-scroll import-preview"
-        style={{ "--table-visible-height": "320px" } as CSSProperties}
-      >
-        <table>
-          <thead>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <th key={header.id}>
-                    {flexRender(header.column.columnDef.header, header.getContext())}
-                  </th>
-                ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody style={{ height: rowVirtualizer.getTotalSize() }}>
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const row = rows[virtualRow.index];
-              if (!row) return null;
-              return (
-                <tr key={row.id} style={{ transform: `translateY(${virtualRow.start}px)` }}>
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
+      <div className="import-editor-grid">
+        <label className="raw-text-editor">
+          <span>Raw text</span>
+          <textarea
+            spellCheck={false}
+            value={pendingImport.text}
+            onChange={(event) => updateImportText(importId, event.currentTarget.value)}
+          />
+        </label>
+        <div
+          ref={parentRef}
+          className="table-scroll import-preview"
+          style={{ "--table-visible-height": "320px" } as CSSProperties}
+        >
+          <table>
+            <thead>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <th key={header.id}>
+                      {flexRender(header.column.columnDef.header, header.getContext())}
+                    </th>
                   ))}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              ))}
+            </thead>
+            <tbody style={{ height: rowVirtualizer.getTotalSize() }}>
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const row = rows[virtualRow.index];
+                if (!row) return null;
+                return (
+                  <tr key={row.id} style={{ transform: `translateY(${virtualRow.start}px)` }}>
+                    {row.getVisibleCells().map((cell) => (
+                      <td key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

@@ -32,6 +32,7 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
       scale={scale}
       style={{ zIndex: window.zIndex }}
       dragHandleClassName="window-titlebar"
+      cancel=".window-close, button, input, select, textarea"
       onMouseDown={() => focusWindow(window.id)}
       onDragStop={(_, data) => updateWindow(window.id, { x: data.x, y: data.y })}
       onResizeStop={(_, __, ref, ___, position) =>
@@ -57,6 +58,10 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
                 event.stopPropagation();
                 closeWindow(window.id);
               }}
+              onMouseDown={(event) => {
+                event.stopPropagation();
+                closeWindow(window.id);
+              }}
               onPointerDown={(event) => event.stopPropagation()}
             >
               ×
@@ -66,7 +71,11 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
         <div className="window-body">
           {window.kind === "browser" ? <DataBrowser /> : null}
           {window.kind === "table" && window.datasetId ? (
-            <DataTableWindow datasetId={window.datasetId} windowId={window.id} />
+            <DataTableWindow
+              datasetId={window.datasetId}
+              windowId={window.id}
+              columnIds={window.columnIds}
+            />
           ) : null}
           {window.kind === "plot" && window.plotId ? <PlotWindow plotId={window.plotId} /> : null}
           {window.kind === "plot-config" ? <PlotConfigWindow /> : null}

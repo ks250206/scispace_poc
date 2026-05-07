@@ -1,4 +1,5 @@
 import { useMemo, type CSSProperties } from "react";
+import { datasetColumnIds } from "../domain/csv";
 import type { VirtualFile } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
 
@@ -25,7 +26,8 @@ export function DataBrowser() {
   const files = useScispaceStore((state) => state.files);
   const datasets = useScispaceStore((state) => state.datasets);
   const activeDatasetId = useScispaceStore((state) => state.activeDatasetId);
-  const selectDataset = useScispaceStore((state) => state.selectDataset);
+  const columnSelections = useScispaceStore((state) => state.columnSelections);
+  const toggleDatasetColumn = useScispaceStore((state) => state.toggleDatasetColumn);
   const openImportDialog = useScispaceStore((state) => state.openImportDialog);
   const runScispace = useScispaceStore((state) => state.runScispace);
 
@@ -71,6 +73,17 @@ export function DataBrowser() {
     if (confirmed) void runScispace(`file-delete ${quoteCommandArg(file.path)}`, { source: "gui" });
   };
 
+  const handleOpenTable = (datasetId: string, datasetName: string) => {
+    const dataset = datasets.find((item) => item.id === datasetId);
+    if (!dataset) return;
+    const selectedColumns = columnSelections[datasetId] ?? [];
+    const columns = selectedColumns.length > 0 ? selectedColumns : datasetColumnIds(dataset);
+    void runScispace(
+      `table ${quoteCommandArg(datasetName)} columns=${columns.map(quoteCommandArg).join(",")}`,
+      { source: "gui" },
+    );
+  };
+
   return (
     <div
       className="data-browser"
@@ -91,52 +104,84 @@ export function DataBrowser() {
         const dataset = datasets.find((item) => item.id === file.datasetId);
         const selected = dataset?.id === activeDatasetId;
         const isDirectory = file.kind === "directory";
+        const selectedColumns = dataset ? (columnSelections[dataset.id] ?? []) : [];
         return (
-          <div
-            key={file.id}
-            className={`tree-row file ${selected ? "selected" : ""} ${dataset ? "parsed" : "raw-only"} ${isDirectory ? "directory" : ""}`}
-            style={{ "--tree-depth": depthOf(file.path) } as CSSProperties}
-          >
-            <span className="tree-indent" />
-            <button
-              type="button"
-              className="tree-item-main"
-              disabled={!dataset}
-              title={file.parseError}
-              onClick={() => {
-                if (dataset) void selectDataset(dataset.id);
-              }}
+          <div key={file.id} className="tree-node">
+            <div
+              className={`tree-row file ${selected ? "selected" : ""} ${dataset ? "parsed" : "raw-only"} ${isDirectory ? "directory" : ""}`}
+              style={{ "--tree-depth": depthOf(file.path) } as CSSProperties}
             >
-              <span className="file-icon">{isDirectory ? "▸" : dataset ? "▦" : "◇"}</span>
-              <span className="file-name">{file.name}</span>
-            </button>
-            <span className="file-meta">{dataset ? `${dataset.rows.length}r` : "raw"}</span>
-            <div className="tree-actions">
+              <span className="tree-indent" />
               <button
                 type="button"
-                aria-label={`Move ${file.name}`}
-                className="tree-action"
-                onClick={() => handleMove(file)}
+                className="tree-item-main"
+                disabled={!dataset}
+                title={file.parseError}
+                onClick={() => {
+                  if (dataset) handleOpenTable(dataset.id, dataset.name);
+                }}
               >
-                ↵
+                <span className="file-icon">{isDirectory ? "▸" : dataset ? "▦" : "◇"}</span>
+                <span className="file-name">{file.name}</span>
               </button>
-              <button
-                type="button"
-                aria-label={`Rename ${file.name}`}
-                className="tree-action"
-                onClick={() => handleRename(file)}
-              >
-                ✎
-              </button>
-              <button
-                type="button"
-                aria-label={`Delete ${file.name}`}
-                className="tree-action"
-                onClick={() => handleDelete(file)}
-              >
-                ×
-              </button>
+              <span className="file-meta">
+                {dataset ? `${dataset.rows.length}r · ${dataset.columns.length}c` : "raw"}
+              </span>
+              <div className="tree-actions">
+                {!dataset && file.kind === "file" ? (
+                  <button
+                    type="button"
+                    aria-label={`Parse ${file.name}`}
+                    className="tree-action"
+                    onClick={() => openImportDialog(file.name, file.text ?? "")}
+                  >
+                    ⇄
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  aria-label={`Move ${file.name}`}
+                  className="tree-action"
+                  onClick={() => handleMove(file)}
+                >
+                  ↵
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Rename ${file.name}`}
+                  className="tree-action"
+                  onClick={() => handleRename(file)}
+                >
+                  ✎
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Delete ${file.name}`}
+                  className="tree-action"
+                  onClick={() => handleDelete(file)}
+                >
+                  ×
+                </button>
+              </div>
             </div>
+            {dataset
+              ? dataset.columns.map((column) => (
+                  <label
+                    key={column.id}
+                    className="tree-row column"
+                    style={{ "--tree-depth": depthOf(file.path) + 1 } as CSSProperties}
+                  >
+                    <span className="tree-indent" />
+                    <input
+                      type="checkbox"
+                      checked={selectedColumns.includes(column.id)}
+                      onChange={() => toggleDatasetColumn(dataset.id, column.id)}
+                    />
+                    <span className="file-name">{column.name}</span>
+                    <span className="file-meta">{column.dataType}</span>
+                  </label>
+                ))
+              : null}
           </div>
         );
       })}
