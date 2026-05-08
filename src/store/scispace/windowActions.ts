@@ -33,6 +33,7 @@ export const createWindowActions = ({
       return {
         windows,
         plotSpecs,
+        projectDirty: true,
         activeWindowId: state.activeWindowId === id ? undefined : state.activeWindowId,
         currentPlotId:
           target.kind === "plot" && target.plotId === state.currentPlotId
@@ -46,6 +47,7 @@ export const createWindowActions = ({
   updateWindow: (id, patch) => {
     set((state) => ({
       windows: state.windows.map((window) => (window.id === id ? { ...window, ...patch } : window)),
+      projectDirty: true,
     }));
     persistLayout(db, get());
   },
@@ -65,7 +67,7 @@ export const createWindowActions = ({
   },
 
   setViewport: (viewport) => {
-    set({ viewport });
+    set({ viewport, projectDirty: true });
     persistLayout(db, get());
   },
 

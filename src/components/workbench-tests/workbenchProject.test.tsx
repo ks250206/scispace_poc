@@ -56,4 +56,33 @@ describe("Workbench project UI", () => {
     expect(confirm).toHaveBeenCalled();
     expect(prompt).toHaveBeenCalled();
   });
+
+  it("shows unsaved project state, clears it on save, and confirms dirty switches", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.spyOn(window, "prompt").mockReturnValue("Main Project");
+    await renderWorkbench();
+
+    expect(screen.queryByText("Unsaved")).not.toBeInTheDocument();
+
+    await act(async () => {
+      await storeState().runScispace("elt waveform.csv as derived.csv", { source: "gui" });
+    });
+    expect(await screen.findByText("Unsaved")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save Project" }));
+    await waitFor(() => expect(screen.queryByText("Unsaved")).not.toBeInTheDocument());
+
+    const firstProjectId = storeState().currentProjectId ?? "";
+    await user.click(screen.getByRole("button", { name: "New Project" }));
+    await waitFor(() => expect(storeState().currentProjectId).not.toBe(firstProjectId));
+
+    await act(async () => {
+      await storeState().runScispace("elt waveform.csv as scratch-derived.csv", { source: "gui" });
+    });
+    await user.selectOptions(screen.getByRole("combobox", { name: "Project" }), firstProjectId);
+
+    expect(confirm).toHaveBeenCalledWith("Switch projects and save current unsaved changes?");
+    await waitFor(() => expect(screen.queryByText("Unsaved")).not.toBeInTheDocument());
+  });
 });

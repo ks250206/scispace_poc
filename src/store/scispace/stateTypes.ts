@@ -24,6 +24,7 @@ export interface ScispaceState {
   datasets: Dataset[];
   projects: ProjectSummary[];
   currentProjectId?: string;
+  projectDirty: boolean;
   windows: WorkspaceWindow[];
   plotSpecs: PlotSpec[];
   pendingImports: PendingImport[];

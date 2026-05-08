@@ -86,4 +86,41 @@ describe("scispace store project behavior", () => {
     expect(store.getState().projects.some((project) => project.id === firstProjectId)).toBe(false);
     expect(await db.projects.get(firstProjectId ?? "")).toBeUndefined();
   });
+
+  it("tracks project dirty state and clears it when saving or switching projects", async () => {
+    const { store } = await makeStore();
+    const firstProjectId = store.getState().currentProjectId;
+
+    expect(store.getState().projectDirty).toBe(false);
+
+    await store.getState().runScispace("elt waveform.csv as derived.csv", { source: "gui" });
+    expect(store.getState().projectDirty).toBe(true);
+
+    await store.getState().saveCurrentProject();
+    expect(store.getState().projectDirty).toBe(false);
+
+    await store.getState().createNewProject("Scratch");
+    expect(store.getState().projectDirty).toBe(false);
+
+    await store.getState().runScispace("elt waveform.csv as scratch-derived.csv", {
+      source: "gui",
+    });
+    expect(store.getState().projectDirty).toBe(true);
+
+    await store.getState().switchProject(firstProjectId ?? "");
+    expect(store.getState().projectDirty).toBe(false);
+  });
+
+  it("normalizes blank and duplicate project names", async () => {
+    const { store } = await makeStore();
+    const firstProjectId = store.getState().currentProjectId;
+
+    await store.getState().saveCurrentProject("Analysis");
+    await store.getState().createNewProject("Analysis");
+    await store.getState().saveCurrentProject("   ");
+
+    const projects = store.getState().projects;
+    expect(projects.find((project) => project.id === firstProjectId)?.name).toBe("Analysis");
+    expect(projects.map((project) => project.name)).toContain("Analysis (1)");
+  });
 });

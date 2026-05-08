@@ -42,6 +42,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     datasets: [],
     projects: [],
     currentProjectId: undefined,
+    projectDirty: false,
     windows: [],
     plotSpecs: [],
     pendingImports: [],
@@ -118,6 +119,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         datasets: nextDatasets,
         projects: nextProjectRecords.map(projectSummary),
         currentProjectId,
+        projectDirty: false,
         windows: nextWindows,
         plotSpecs: nextPlotSpecs,
         commandHistory: layout.commandHistory ?? [],
@@ -166,6 +168,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           ? { ...state.columnSelections, [dataset.id]: datasetColumnIds(dataset) }
           : state.columnSelections,
         activeDatasetId: dataset?.id ?? state.activeDatasetId,
+        projectDirty: true,
         terminalEvents: [
           ...state.terminalEvents,
           dataset
@@ -187,6 +190,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           pendingImports: [...state.pendingImports, dialog.pendingImport],
           windows: [...state.windows, dialog.window],
           activeWindowId: dialog.window.id,
+          projectDirty: true,
         };
       });
       persistLayout(db, get());

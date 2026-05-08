@@ -25,6 +25,7 @@ export function Workbench() {
   const windows = useScispaceStore((state) => state.windows);
   const projects = useScispaceStore((state) => state.projects);
   const currentProjectId = useScispaceStore((state) => state.currentProjectId);
+  const projectDirty = useScispaceStore((state) => state.projectDirty);
   const runScispace = useScispaceStore((state) => state.runScispace);
   const createNewProject = useScispaceStore((state) => state.createNewProject);
   const saveCurrentProject = useScispaceStore((state) => state.saveCurrentProject);
@@ -162,6 +163,14 @@ export function Workbench() {
     if (confirmed) void deleteProject(currentProjectId);
   };
 
+  const handleSwitchProject = (projectId: string) => {
+    if (!projectId || projectId === currentProjectId) return;
+    if (projectDirty && !window.confirm("Switch projects and save current unsaved changes?")) {
+      return;
+    }
+    void switchProject(projectId);
+  };
+
   return (
     <main className="workbench" onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}>
       <div className="topbar">
@@ -170,7 +179,7 @@ export function Workbench() {
           <select
             aria-label="Project"
             value={currentProjectId ?? ""}
-            onChange={(event) => void switchProject(event.target.value)}
+            onChange={(event) => handleSwitchProject(event.target.value)}
           >
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
@@ -181,6 +190,7 @@ export function Workbench() {
           <button type="button" onClick={handleSaveProject}>
             Save Project
           </button>
+          {projectDirty ? <span className="project-dirty">Unsaved</span> : null}
           <button type="button" disabled={!currentProjectId} onClick={handleDeleteProject}>
             Delete Project
           </button>

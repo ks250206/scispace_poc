@@ -37,6 +37,7 @@ export const createWorkspaceActions = ({
     const nextColumnIds = columnIds.filter((columnId) => validColumns.has(columnId));
     set((state) => ({
       columnSelections: { ...state.columnSelections, [datasetId]: nextColumnIds },
+      projectDirty: true,
     }));
     persistLayout(db, get());
   },
@@ -96,6 +97,7 @@ export const createWorkspaceActions = ({
         windows,
         activeWindowId: existing?.id ?? `table-${datasetId}`,
         activeDatasetId: datasetId,
+        projectDirty: true,
       };
     });
     persistLayout(db, get());
@@ -127,6 +129,7 @@ export const createWorkspaceActions = ({
         ],
         activeWindowId: `plot-${normalizedSpec.id}`,
         currentPlotId: normalizedSpec.id,
+        projectDirty: true,
       };
     });
     persistLayout(db, get());
@@ -152,6 +155,7 @@ export const createWorkspaceActions = ({
       return {
         currentPlotId: plotId,
         activeWindowId: existing?.id ?? configWindow.id,
+        projectDirty: true,
         windows: existing
           ? state.windows.map((window) =>
               window.id === existing.id ? { ...window, zIndex, plotId } : window,

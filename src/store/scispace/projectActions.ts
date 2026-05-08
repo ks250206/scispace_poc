@@ -19,6 +19,24 @@ interface ProjectActionContext {
   set: StoreApi<ScispaceState>["setState"];
 }
 
+const uniqueProjectName = (
+  requestedName: string,
+  projects: { id: string; name: string }[],
+  currentProjectId?: string,
+): string => {
+  const existingNames = new Set(
+    projects.filter((project) => project.id !== currentProjectId).map((project) => project.name),
+  );
+  if (!existingNames.has(requestedName)) return requestedName;
+  let index = 1;
+  let candidate = `${requestedName} (${index})`;
+  while (existingNames.has(candidate)) {
+    index += 1;
+    candidate = `${requestedName} (${index})`;
+  }
+  return candidate;
+};
+
 export const createProjectActions = ({
   db,
   get,
@@ -32,7 +50,8 @@ export const createProjectActions = ({
       await get().saveCurrentProject();
     }
     const id = `project-${crypto.randomUUID()}`;
-    const projectName = name?.trim() || `Untitled Project ${get().projects.length + 1}`;
+    const baseName = name?.trim() || `Untitled Project ${get().projects.length + 1}`;
+    const projectName = uniqueProjectName(baseName, get().projects);
     const record = initialProjectRecord(id, projectName);
     const initialProject = {
       files: record.files,
@@ -62,6 +81,7 @@ export const createProjectActions = ({
       datasets: initialProject.datasets,
       projects: [...get().projects.filter((project) => project.id !== id), projectSummary(record)],
       currentProjectId: id,
+      projectDirty: false,
       windows: initialProject.windows,
       plotSpecs: initialProject.plotSpecs,
       pendingImports: [],
@@ -82,7 +102,8 @@ export const createProjectActions = ({
   saveCurrentProject: async (name) => {
     const id = get().currentProjectId ?? defaultProjectId;
     const previous = await db.projects.get(id);
-    const projectName = name?.trim() || previous?.name || defaultProjectName;
+    const baseName = name?.trim() || previous?.name || defaultProjectName;
+    const projectName = uniqueProjectName(baseName, get().projects, id);
     const record = projectRecordFromState(get(), id, projectName, previous);
     await db.transaction("rw", db.projects, db.layout, async () => {
       await db.projects.put(record);
@@ -90,6 +111,7 @@ export const createProjectActions = ({
     });
     set((state) => ({
       currentProjectId: id,
+      projectDirty: false,
       projects: [
         ...state.projects.filter((project) => project.id !== id),
         projectSummary(record),
@@ -135,6 +157,7 @@ export const createProjectActions = ({
       datasets,
       projects,
       currentProjectId: projectId,
+      projectDirty: false,
       windows,
       plotSpecs,
       pendingImports: [],
@@ -185,6 +208,7 @@ export const createProjectActions = ({
       datasets,
       projects: [projectSummary(replacement)],
       currentProjectId: replacement.id,
+      projectDirty: false,
       windows: replacement.layout.windows,
       plotSpecs: (replacement.layout.plotSpecs ?? []).map(normalizePlotSpec),
       pendingImports: [],

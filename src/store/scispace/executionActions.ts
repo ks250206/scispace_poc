@@ -55,6 +55,7 @@ export const createExecutionActions = ({
     set((state) => ({
       terminalEvents: [...state.terminalEvents, result.output],
       commandHistory: [...state.commandHistory, commandHistoryEntry],
+      projectDirty: result.kind === "error" ? state.projectDirty : true,
       undoStack:
         undoBefore && result.kind !== "error"
           ? [
@@ -91,6 +92,7 @@ export const createExecutionActions = ({
       currentPlotId: entry.before.currentPlotId,
       viewport: cloneState(entry.before.viewport),
       terminalEvents: [...state.terminalEvents, `Undo: ${entry.command}`],
+      projectDirty: true,
       undoStack: state.undoStack.slice(0, -1),
       redoStack: [...state.redoStack, entry],
     }));
@@ -114,6 +116,7 @@ export const createExecutionActions = ({
       currentPlotId: entry.after.currentPlotId,
       viewport: cloneState(entry.after.viewport),
       terminalEvents: [...state.terminalEvents, `Redo: ${entry.command}`],
+      projectDirty: true,
       undoStack: [...state.undoStack, entry],
       redoStack: state.redoStack.slice(0, -1),
     }));
