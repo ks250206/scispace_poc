@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { datasetColumnIds } from "../domain/csv";
-import type { VirtualFile } from "../domain/types";
+import type { Dataset, VirtualFile } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
 
 const depthOf = (path: string): number =>
@@ -21,6 +21,34 @@ const sortRawItems = (items: VirtualFile[]): VirtualFile[] =>
 
 const quoteCommandArg = (value: string): string =>
   /\s|["']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
+
+const importOpenCommand = (importId: string, fileName: string, text: string): string =>
+  `import-open ${importId} name=${quoteCommandArg(fileName)} text=${encodeURIComponent(text)}`;
+
+const tableCommand = (dataset: Dataset, columnIds: string[]): string =>
+  `table ${quoteCommandArg(dataset.name)} columns=${columnIds.map(quoteCommandArg).join(",")}`;
+
+const plotCommand = (dataset: Dataset, selectedColumnIds: string[]): string | undefined => {
+  const allColumnIds = datasetColumnIds(dataset);
+  const columns = selectedColumnIds.filter((columnId) => allColumnIds.includes(columnId));
+  const plotColumns = columns.length > 0 ? columns : allColumnIds;
+  const [firstColumn, ...remainingColumns] = plotColumns;
+  const x =
+    plotColumns.length > 1
+      ? firstColumn
+      : allColumnIds.find((columnId) => columnId !== firstColumn);
+  const yColumns = plotColumns.length > 1 ? remainingColumns : firstColumn ? [firstColumn] : [];
+  const validYColumns = yColumns.filter((columnId) => columnId !== x);
+  if (!x || validYColumns.length === 0) return undefined;
+  return `plot ${quoteCommandArg(dataset.name)} x=${quoteCommandArg(x)} y=${validYColumns
+    .map(quoteCommandArg)
+    .join(",")}`;
+};
+
+const columnsSelectedForDataset = (
+  dataset: Dataset,
+  selections: Record<string, string[]>,
+): string[] => selections[dataset.id] ?? datasetColumnIds(dataset);
 
 export function DataBrowser() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -46,10 +74,7 @@ export function DataBrowser() {
   };
 
   const openImportThroughCommand = (importId: string, fileName: string, text: string) => {
-    void runScispace(
-      `import-open ${importId} name=${quoteCommandArg(fileName)} text=${encodeURIComponent(text)}`,
-      { source: "gui" },
-    );
+    void runScispace(importOpenCommand(importId, fileName, text), { source: "gui" });
   };
 
   const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
@@ -86,39 +111,22 @@ export function DataBrowser() {
     if (confirmed) void runScispace(`file-delete ${quoteCommandArg(file.path)}`, { source: "gui" });
   };
 
-  const handleOpenTable = (datasetId: string, datasetName: string) => {
+  const handleOpenTable = (datasetId: string) => {
     const dataset = datasets.find((item) => item.id === datasetId);
     if (!dataset) return;
     const selectedColumns = useScispaceStore.getState().columnSelections[datasetId] ?? [];
     const columns = selectedColumns.length > 0 ? selectedColumns : datasetColumnIds(dataset);
-    void runScispace(
-      `table ${quoteCommandArg(datasetName)} columns=${columns.map(quoteCommandArg).join(",")}`,
-      { source: "gui" },
-    );
+    void runScispace(tableCommand(dataset, columns), { source: "gui" });
   };
 
   const handlePlotDataset = (datasetId: string) => {
     const dataset = datasets.find((item) => item.id === datasetId);
     if (!dataset) return;
-    const allColumns = datasetColumnIds(dataset);
-    const selectedColumns =
-      useScispaceStore
-        .getState()
-        .columnSelections[datasetId]?.filter((columnId) => allColumns.includes(columnId)) ??
-      allColumns;
-    const columns = selectedColumns.length > 0 ? selectedColumns : allColumns;
-    const [firstColumn, ...remainingColumns] = columns;
-    const x =
-      columns.length > 1 ? firstColumn : allColumns.find((columnId) => columnId !== firstColumn);
-    const yColumns = columns.length > 1 ? remainingColumns : firstColumn ? [firstColumn] : [];
-    if (!x || yColumns.length === 0) return;
-    void runScispace(
-      `plot ${quoteCommandArg(dataset.name)} x=${quoteCommandArg(x)} y=${yColumns
-        .filter((columnId) => columnId !== x)
-        .map(quoteCommandArg)
-        .join(",")}`,
-      { source: "gui" },
+    const command = plotCommand(
+      dataset,
+      columnsSelectedForDataset(dataset, useScispaceStore.getState().columnSelections),
     );
+    if (command) void runScispace(command, { source: "gui" });
   };
 
   const toggleDatasetCollapse = (datasetId: string) => {
@@ -155,7 +163,7 @@ export function DataBrowser() {
           const selected = dataset?.id === activeDatasetId;
           const isDirectory = file.kind === "directory";
           const selectedColumns = dataset
-            ? (columnSelections[dataset.id] ?? datasetColumnIds(dataset))
+            ? columnsSelectedForDataset(dataset, columnSelections)
             : [];
           const isCollapsed = dataset ? collapsedDatasetIds.has(dataset.id) : true;
           return (
@@ -184,7 +192,7 @@ export function DataBrowser() {
                   disabled={!dataset}
                   title={file.parseError}
                   onClick={() => {
-                    if (dataset) handleOpenTable(dataset.id, dataset.name);
+                    if (dataset) handleOpenTable(dataset.id);
                   }}
                 >
                   <span className="file-icon">{dataset ? "▦" : isDirectory ? "▸" : "◇"}</span>
