@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   calculateTerminalGrid,
   clearTerminalScrollbackRows,
+  executeTerminalFsCommand,
   handleTerminalInput,
   normalizeTerminalOutput,
   scrollTerminalToBottom,
+  terminalCommandLineText,
   writeTerminalOutput,
 } from "./TerminalPanel";
 import type { BashShell } from "@wterm/just-bash";
@@ -137,5 +139,71 @@ describe("terminal input handling", () => {
 
     expect(terminalElement.querySelectorAll(".term-scrollback-row")).toHaveLength(0);
     expect(terminalElement.querySelectorAll(".term-row")).toHaveLength(1);
+  });
+
+  it("supports cwd-based virtual fs navigation and file-list style output", () => {
+    const result = executeTerminalFsCommand(
+      "cd ~/raw && ls",
+      { cwd: "/home/user" },
+      [
+        {
+          id: "raw-dir",
+          path: "~/raw",
+          name: "raw",
+          kind: "directory",
+          createdAt: 1,
+        },
+        {
+          id: "waveform-file",
+          path: "~/raw/waveform.csv",
+          name: "waveform.csv",
+          kind: "file",
+          datasetId: "waveform",
+          text: "time,signal\n0,1",
+          createdAt: 1,
+        },
+      ],
+      [
+        {
+          id: "waveform",
+          name: "waveform.csv",
+          sourcePath: "~/raw/waveform.csv",
+          columns: [
+            { id: "time", name: "time", dataType: "number" },
+            { id: "signal", name: "signal", dataType: "number" },
+          ],
+          rows: [{ time: 0, signal: 1 }],
+          createdBy: "upload",
+          createdAt: 1,
+        },
+      ],
+    );
+
+    expect(result).toMatchObject({ cwd: "/home/user/raw", exitCode: 0 });
+    expect(result.output).toContain("[dataset] ~/raw/waveform.csv");
+  });
+
+  it("reads raw file contents relative to the terminal cwd", () => {
+    const result = executeTerminalFsCommand(
+      "cat waveform.csv",
+      { cwd: "/home/user/raw" },
+      [
+        {
+          id: "waveform-file",
+          path: "~/raw/waveform.csv",
+          name: "waveform.csv",
+          kind: "file",
+          text: "time,signal\n0,1",
+          createdAt: 1,
+        },
+      ],
+      [],
+    );
+
+    expect(result).toMatchObject({ exitCode: 0, output: "time,signal\n0,1" });
+  });
+
+  it("formats history commands for the terminal command line", () => {
+    expect(terminalCommandLineText("file-list ~/raw")).toBe("scispace file-list ~/raw");
   });
 });

@@ -4,7 +4,8 @@ import "@wterm/react/css";
 import type { WTerm } from "@wterm/dom";
 import { BashShell } from "@wterm/just-bash";
 import { defineCommand } from "just-bash";
-import type { VirtualFile } from "../domain/types";
+import { formatVirtualFileList } from "../domain/scispace/fileCommands";
+import type { Dataset, VirtualFile } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
 
 const toBashPath = (path: string): string => path.replace(/^~\//, "/home/user/");
@@ -19,6 +20,14 @@ type EditableBashShell = {
 };
 
 type TerminalSize = { cols: number; rows: number };
+export type TerminalFsState = { cwd: string };
+
+export type TerminalFsCommandResult = {
+  clear?: boolean;
+  cwd: string;
+  exitCode: number;
+  output: string;
+};
 
 type TerminalMetrics = {
   charWidth: number;
@@ -41,6 +50,97 @@ const buildInitialFiles = (files: VirtualFile[]): Record<string, string> =>
     ["/home/user/README.txt", "SciSpace terminal. Try: scispace lsdata\n"],
     ...files.filter((file) => file.text).map((file) => [toBashPath(file.path), file.text ?? ""]),
   ]);
+
+const normalizeShellPath = (path: string): string => {
+  if (path === "~") return "/home/user";
+  if (path.startsWith("~/")) return toBashPath(path);
+  return path.replace(/\/+$/, "") || "/";
+};
+
+const joinShellPath = (cwd: string, path?: string): string => {
+  if (!path || path === ".") return cwd;
+  if (path === "..") return cwd === "/home/user" ? cwd : cwd.slice(0, cwd.lastIndexOf("/"));
+  if (path.startsWith("/") || path.startsWith("~")) return normalizeShellPath(path);
+  return normalizeShellPath(`${cwd}/${path}`);
+};
+
+const shellPathToVirtualPath = (shellPath: string): string | undefined => {
+  const normalized = normalizeShellPath(shellPath);
+  if (normalized === "/home/user") return "~/raw";
+  if (normalized === "/home/user/raw") return "~/raw";
+  if (normalized.startsWith("/home/user/raw/"))
+    return `~/${normalized.slice("/home/user/".length)}`;
+  return undefined;
+};
+
+const shellPathForPrompt = (shellPath: string): string => shellPath.replace("/home/user", "~");
+
+const isKnownDirectory = (path: string, files: VirtualFile[]): boolean => {
+  const virtualPath = shellPathToVirtualPath(path);
+  if (!virtualPath) return false;
+  if (virtualPath === "~/raw") return true;
+  return files.some((file) => file.kind === "directory" && file.path === virtualPath);
+};
+
+export const terminalCommandLineText = (command: string): string => `scispace ${command}`;
+
+export const executeTerminalFsCommand = (
+  commandLine: string,
+  state: TerminalFsState,
+  files: VirtualFile[],
+  datasets: Dataset[],
+): TerminalFsCommandResult => {
+  const commands = commandLine
+    .split("&&")
+    .map((command) => command.trim())
+    .filter(Boolean);
+  let cwd = state.cwd;
+  const output: string[] = [];
+
+  for (const commandText of commands) {
+    const [command, ...args] = commandText.split(/\s+/);
+    if (command === "pwd") {
+      output.push(shellPathForPrompt(cwd));
+      continue;
+    }
+
+    if (command === "cd") {
+      const nextPath = joinShellPath(cwd, args[0] ?? "~");
+      if (!isKnownDirectory(nextPath, files)) {
+        return { cwd, exitCode: 1, output: `cd: no such directory: ${args[0] ?? "~"}` };
+      }
+      cwd = nextPath;
+      continue;
+    }
+
+    if (command === "ls") {
+      const target = shellPathToVirtualPath(joinShellPath(cwd, args[0]));
+      if (!target) return { cwd, exitCode: 1, output: `ls: unsupported path: ${args[0] ?? "."}` };
+      output.push(formatVirtualFileList(target, files, datasets));
+      continue;
+    }
+
+    if (command === "cat") {
+      const target = shellPathToVirtualPath(joinShellPath(cwd, args[0]));
+      const file = target
+        ? files.find((item) => item.kind === "file" && item.path === target)
+        : undefined;
+      if (!target || !file) {
+        return { cwd, exitCode: 1, output: `cat: no such file: ${args[0] ?? ""}` };
+      }
+      output.push(file.text ?? "");
+      continue;
+    }
+
+    if (command === "clear") {
+      return { clear: true, cwd, exitCode: 0, output: clearVisibleScreenSequence };
+    }
+
+    return { cwd, exitCode: 127, output: `${command}: command not found` };
+  }
+
+  return { cwd, exitCode: 0, output: output.join("\n") };
+};
 
 const sumStylePixels = (style: CSSStyleDeclaration | undefined, properties: string[]): number =>
   style
@@ -212,13 +312,17 @@ export function TerminalPanel() {
   const { ref, write, resize } = useTerminal();
   const shellRef = useRef<BashShell | null>(null);
   const terminalRef = useRef<WTerm | null>(null);
+  const terminalFsStateRef = useRef<TerminalFsState>({ cwd: "/home/user" });
   const viewportRef = useRef<HTMLDivElement>(null);
   const commandLineRequestIdRef = useRef<string | undefined>(undefined);
   const [terminalSize, setTerminalSize] = useState<TerminalSize>();
   const files = useScispaceStore((state) => state.files);
+  const datasets = useScispaceStore((state) => state.datasets);
   const workspaceScale = useScispaceStore((state) => state.viewport.scale);
   const runScispace = useScispaceStore((state) => state.runScispace);
   const terminalCommandLineRequest = useScispaceStore((state) => state.terminalCommandLineRequest);
+  const filesRef = useRef(files);
+  const datasetsRef = useRef(datasets);
 
   const initialFiles = useMemo(() => buildInitialFiles(files), [files]);
 
@@ -273,6 +377,26 @@ export function TerminalPanel() {
       });
       shellRef.current = shell;
       await shell.attach(writeOutput);
+      const registerFsCommand = (command: "pwd" | "cd" | "ls" | "cat" | "clear") => {
+        shell.bash?.registerCommand(
+          defineCommand(command, async (args) => {
+            const result = executeTerminalFsCommand(
+              [command, ...args].join(" "),
+              terminalFsStateRef.current,
+              filesRef.current,
+              datasetsRef.current,
+            );
+            terminalFsStateRef.current = { cwd: result.cwd };
+            scrollToBottom();
+            return {
+              stdout: result.output ? `${result.output}\n` : "",
+              stderr: result.exitCode === 0 ? "" : `${result.output}\n`,
+              exitCode: result.exitCode,
+            };
+          }),
+        );
+      };
+      (["pwd", "cd", "ls", "cat", "clear"] as const).forEach(registerFsCommand);
       shell.bash?.registerCommand(
         defineCommand("scispace", async (args) => {
           const result = await runScispace(args.join(" "), { source: "terminal" });
@@ -297,15 +421,20 @@ export function TerminalPanel() {
 
   useEffect(() => {
     const shell = shellRef.current;
+    filesRef.current = files;
     void syncBashFiles(shell?.bash, files);
   }, [files]);
+
+  useEffect(() => {
+    datasetsRef.current = datasets;
+  }, [datasets]);
 
   useEffect(() => {
     if (!terminalCommandLineRequest || !shellRef.current) return;
     if (commandLineRequestIdRef.current === terminalCommandLineRequest.id) return;
     commandLineRequestIdRef.current = terminalCommandLineRequest.id;
     void shellRef.current
-      .handleInput(`scispace ${terminalCommandLineRequest.command}`)
+      .handleInput(terminalCommandLineText(terminalCommandLineRequest.command))
       .then(scrollToBottom);
   }, [scrollToBottom, terminalCommandLineRequest]);
 

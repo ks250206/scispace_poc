@@ -1,7 +1,7 @@
 import type { Dataset, ScispaceCommandResult, VirtualFile } from "../types";
 import { isSafeFileName, isVirtualRawPath, readOption, type CommandContext } from "./commandUtils";
 
-const formatVirtualFileList = (
+export const formatVirtualFileList = (
   path: string,
   files: VirtualFile[] | undefined,
   datasets: Dataset[],
