@@ -10,8 +10,29 @@ import {
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { datasetColumnIds } from "../domain/csv";
-import type { DatasetColumn } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
+import { DataTableToolbar } from "./data-table/DataTableToolbar";
+import {
+  deleteColumnCommand,
+  deleteRowCommand,
+  plotCommand,
+  rangeCommand,
+  setCellCommand,
+} from "./data-table/tableCommands";
+import {
+  defaultColumnWidth,
+  formatCellValue,
+  minColumnWidth,
+  plotSelectionFromTableSelection,
+  positionInRange,
+  rangeBoundsFromSelection,
+  rowHeight,
+  tableScrollHeight,
+  tableWindowHeightForRows,
+  type TableCellPosition,
+  type TableCellRange,
+  type TableVisibleRows,
+} from "./data-table/tableModel";
 
 interface DataTableWindowProps {
   datasetId: string;
@@ -19,139 +40,8 @@ interface DataTableWindowProps {
   columnIds?: string[];
 }
 
-export type TableVisibleRows = 10 | 20 | 50;
-
-interface TableCellPosition {
-  rowIndex: number;
-  column: string;
-}
-
-interface TableCellRange {
-  anchor: TableCellPosition;
-  focus: TableCellPosition;
-}
-
-interface TableRangeBounds {
-  minRow: number;
-  maxRow: number;
-  firstColumn: string;
-  lastColumn: string;
-  rangeColumns: string[];
-}
-
-interface TablePlotSelection {
-  x: string;
-  yColumns: string[];
-}
-
-const formatCellValue = (value: unknown): string => {
-  if (value == null) return "";
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  return JSON.stringify(value);
-};
-
-const tableTitlebarHeight = 34;
-const tableControlsHeight = 38;
-const tableHeaderHeight = 32;
-const rowHeight = 32;
-const defaultColumnWidth = 140;
-const minColumnWidth = 96;
-
-const tableScrollHeight = (visibleRows: TableVisibleRows): number =>
-  tableHeaderHeight + visibleRows * rowHeight;
-
-export const tableWindowHeightForRows = (visibleRows: TableVisibleRows): number =>
-  tableTitlebarHeight + tableControlsHeight + tableScrollHeight(visibleRows);
-
-const quoteCommandArg = (value: string): string =>
-  /[\s"']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
-
-const setCellCommand = (
-  datasetName: string,
-  rowIndex: number,
-  columnId: string,
-  value: string,
-): string =>
-  `table-edit ${quoteCommandArg(datasetName)} action=set-cell row=${rowIndex + 1} column=${quoteCommandArg(
-    columnId,
-  )} value=${quoteCommandArg(value)}`;
-
-const deleteRowCommand = (datasetName: string, rowIndex: number): string =>
-  `table-edit ${quoteCommandArg(datasetName)} action=delete-row index=${rowIndex + 1}`;
-
-const deleteColumnCommand = (datasetName: string, columnId: string): string =>
-  `table-edit ${quoteCommandArg(datasetName)} action=delete-column column=${quoteCommandArg(columnId)}`;
-
-const rangeCommand = (
-  datasetName: string,
-  action: "clear" | "fill-down",
-  range: TableRangeBounds,
-): string =>
-  `table-range ${quoteCommandArg(datasetName)} action=${action} r1=${range.minRow + 1} c1=${quoteCommandArg(
-    range.firstColumn,
-  )} r2=${range.maxRow + 1} c2=${quoteCommandArg(range.lastColumn)}`;
-
-const plotCommand = (datasetName: string, selection: TablePlotSelection): string =>
-  `plot ${quoteCommandArg(datasetName)} x=${quoteCommandArg(selection.x)} y=${selection.yColumns
-    .map(quoteCommandArg)
-    .join(",")}`;
-
-const rangeBoundsFromSelection = (
-  selectedRange: TableCellRange | undefined,
-  columns: DatasetColumn[],
-): TableRangeBounds | undefined => {
-  if (!selectedRange) return undefined;
-  const anchorColumnIndex = columns.findIndex((item) => item.id === selectedRange.anchor.column);
-  const focusColumnIndex = columns.findIndex((item) => item.id === selectedRange.focus.column);
-  if (anchorColumnIndex < 0 || focusColumnIndex < 0) return undefined;
-  const minRow = Math.min(selectedRange.anchor.rowIndex, selectedRange.focus.rowIndex);
-  const maxRow = Math.max(selectedRange.anchor.rowIndex, selectedRange.focus.rowIndex);
-  const minColumn = Math.min(anchorColumnIndex, focusColumnIndex);
-  const maxColumn = Math.max(anchorColumnIndex, focusColumnIndex);
-  const rangeColumns = columns.slice(minColumn, maxColumn + 1).map((column) => column.id);
-  const firstColumn = rangeColumns[0];
-  const lastColumn = rangeColumns.at(-1);
-  if (!firstColumn || !lastColumn) return undefined;
-  return { minRow, maxRow, firstColumn, lastColumn, rangeColumns };
-};
-
-const plotSelectionFromTableSelection = (
-  rangeBounds: TableRangeBounds | undefined,
-  selectedColumn: string | undefined,
-  columns: DatasetColumn[],
-): TablePlotSelection | undefined => {
-  const selectedColumns = rangeBounds?.rangeColumns ?? (selectedColumn ? [selectedColumn] : []);
-  if (selectedColumns.length === 0) return undefined;
-  const visibleColumnIds = columns.map((column) => column.id);
-  const [rangeX, ...rangeY] = selectedColumns;
-  const fallbackX = visibleColumnIds.find((columnId) => columnId !== selectedColumns[0]);
-  const x = selectedColumns.length > 1 ? rangeX : fallbackX;
-  const yColumns = selectedColumns.length > 1 ? rangeY : selectedColumns;
-  const validYColumns = yColumns.filter((columnId) => columnId !== x);
-  if (!x || validYColumns.length === 0) return undefined;
-  return { x, yColumns: validYColumns };
-};
-
-const positionInRange = (
-  rowIndex: number,
-  columnId: string,
-  range: TableRangeBounds | undefined,
-  columns: DatasetColumn[],
-): boolean => {
-  if (!range) return false;
-  const currentColumnIndex = columns.findIndex((column) => column.id === columnId);
-  const firstColumnIndex = columns.findIndex((column) => column.id === range.firstColumn);
-  const lastColumnIndex = columns.findIndex((column) => column.id === range.lastColumn);
-  if (currentColumnIndex < 0 || firstColumnIndex < 0 || lastColumnIndex < 0) return false;
-  return (
-    rowIndex >= range.minRow &&
-    rowIndex <= range.maxRow &&
-    currentColumnIndex >= firstColumnIndex &&
-    currentColumnIndex <= lastColumnIndex
-  );
-};
+export { tableWindowHeightForRows };
+export type { TableVisibleRows };
 
 export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWindowProps) {
   const dataset = useScispaceStore((state) => state.datasets.find((item) => item.id === datasetId));
@@ -450,45 +340,25 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
 
   return (
     <div className="table-window">
-      <div className="window-controls">
-        <span>{dataset.rows.length} rows · virtualized</span>
-        <div className="table-delete-actions">
-          <button type="button" disabled={!hasSelectedRange} onClick={copySelectedRange}>
-            Copy TSV
-          </button>
-          <button type="button" disabled={!hasSelectedRange} onClick={clearSelectedRange}>
-            Delete selected cells
-          </button>
-          <button type="button" disabled={!canFillDownRange} onClick={fillDownSelectedRange}>
-            Fill down
-          </button>
-          <button type="button" disabled={!selectionPlotSpec} onClick={plotSelectedColumns}>
-            Plot selection
-          </button>
-          <button type="button" disabled={!selectedCell} onClick={deleteSelectedRow}>
-            Delete row
-          </button>
-          <button type="button" disabled={!selectedColumn} onClick={deleteSelectedColumn}>
-            Delete column
-          </button>
-        </div>
-        <label className="table-row-select">
-          Rows
-          <select
-            aria-label="Visible rows"
-            value={visibleRows}
-            onChange={(event) => {
-              const nextVisibleRows = Number(event.target.value) as TableVisibleRows;
-              setVisibleRows(nextVisibleRows);
-              updateWindow(windowId, { height: tableWindowHeightForRows(nextVisibleRows) });
-            }}
-          >
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-          </select>
-        </label>
-      </div>
+      <DataTableToolbar
+        rowCount={dataset.rows.length}
+        visibleRows={visibleRows}
+        hasSelectedRange={hasSelectedRange}
+        canFillDownRange={canFillDownRange}
+        canPlotSelection={Boolean(selectionPlotSpec)}
+        hasSelectedCell={Boolean(selectedCell)}
+        hasSelectedColumn={Boolean(selectedColumn)}
+        onCopySelectedRange={copySelectedRange}
+        onClearSelectedRange={clearSelectedRange}
+        onFillDownSelectedRange={fillDownSelectedRange}
+        onPlotSelectedColumns={plotSelectedColumns}
+        onDeleteSelectedRow={deleteSelectedRow}
+        onDeleteSelectedColumn={deleteSelectedColumn}
+        onVisibleRowsChange={(nextVisibleRows, height) => {
+          setVisibleRows(nextVisibleRows);
+          updateWindow(windowId, { height });
+        }}
+      />
       <div
         ref={parentRef}
         className="table-scroll"
