@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import type { PlotAnnotation, PlotMarkerShape, PlotSeries, PlotType } from "../domain/types";
+import type { PlotAnnotation, PlotSeries, PlotType } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
+import { PlotConfigAnnotationsTab } from "./plot-config/PlotConfigAnnotationsTab";
 import { PlotConfigAxesTab } from "./plot-config/PlotConfigAxesTab";
 import { PlotConfigBasicTab } from "./plot-config/PlotConfigBasicTab";
-import { ConfigField, ConfigGroup } from "./plot-config/PlotConfigFields";
+import { PlotConfigSeriesTab } from "./plot-config/PlotConfigSeriesTab";
 import {
   addAnnotationCommand,
   paddingToCommand,
@@ -179,207 +180,25 @@ export function PlotConfigWindow() {
       ) : null}
       {activeTab === "axes" ? <PlotConfigAxesTab spec={spec} onSetAxis={setAxis} /> : null}
       {activeTab === "series" ? (
-        <div className="plot-series-panel plot-config-section" role="tabpanel">
-          <ConfigGroup title="Add Trace">
-            <div className="plot-field-grid two">
-              <ConfigField label="Y column">
-                <select
-                  aria-label="Add series"
-                  value={seriesToAdd}
-                  onChange={(event) => setSeriesToAdd(event.target.value)}
-                >
-                  {availableSeriesColumns.map((column) => (
-                    <option key={column.id} value={column.id}>
-                      {column.name}
-                    </option>
-                  ))}
-                </select>
-              </ConfigField>
-              <button
-                className="plot-config-command"
-                type="button"
-                disabled={!seriesToAdd}
-                onClick={addSeries}
-              >
-                Add
-              </button>
-            </div>
-          </ConfigGroup>
-          {spec.series.map((series, index) => (
-            <ConfigGroup key={`${series.y}-${index}`} title={`Trace: ${series.y}`}>
-              <div className="plot-field-grid three">
-                <ConfigField label="Label">
-                  <input
-                    aria-label={`Label ${series.y}`}
-                    value={series.label}
-                    onChange={(event) => updateSeries(series, { label: event.target.value })}
-                  />
-                </ConfigField>
-                <ConfigField label="Color" compact>
-                  <input
-                    aria-label={`Color ${series.y}`}
-                    type="color"
-                    value={series.color}
-                    onChange={(event) => updateSeries(series, { color: event.target.value })}
-                  />
-                </ConfigField>
-                <ConfigField label="Draw order" compact>
-                  <input
-                    aria-label={`Draw order ${series.y}`}
-                    type="number"
-                    value={series.drawOrder}
-                    onChange={(event) =>
-                      updateSeries(series, { drawOrder: Number(event.target.value) })
-                    }
-                  />
-                </ConfigField>
-              </div>
-              <div className="plot-subgroup-title">Line and Marker</div>
-              <div className="plot-field-grid four">
-                <ConfigField label="Line width" compact>
-                  <input
-                    aria-label={`Line width ${series.y}`}
-                    type="number"
-                    min={0}
-                    value={series.lineWidth}
-                    onChange={(event) =>
-                      updateSeries(series, { lineWidth: Number(event.target.value) })
-                    }
-                  />
-                </ConfigField>
-                <ConfigField label="Marker size" compact>
-                  <input
-                    aria-label={`Marker size ${series.y}`}
-                    type="number"
-                    min={0}
-                    value={series.markerSize}
-                    onChange={(event) =>
-                      updateSeries(series, { markerSize: Number(event.target.value) })
-                    }
-                  />
-                </ConfigField>
-                <ConfigField label="Marker shape">
-                  <select
-                    aria-label={`Marker shape ${series.y}`}
-                    value={series.markerShape}
-                    onChange={(event) =>
-                      updateSeries(series, { markerShape: event.target.value as PlotMarkerShape })
-                    }
-                  >
-                    <option value="circle">circle</option>
-                    <option value="square">square</option>
-                    <option value="triangle">triangle</option>
-                    <option value="diamond">diamond</option>
-                    <option value="cross">cross</option>
-                    <option value="plus">plus</option>
-                  </select>
-                </ConfigField>
-                <button
-                  className="plot-config-command danger"
-                  type="button"
-                  aria-label={`Remove ${series.y}`}
-                  disabled={spec.series.length <= 1}
-                  onClick={() => removeSeries(series)}
-                >
-                  Remove
-                </button>
-              </div>
-            </ConfigGroup>
-          ))}
-        </div>
+        <PlotConfigSeriesTab
+          spec={spec}
+          availableSeriesColumns={availableSeriesColumns}
+          seriesToAdd={seriesToAdd}
+          onSetSeriesToAdd={setSeriesToAdd}
+          onAddSeries={addSeries}
+          onUpdateSeries={updateSeries}
+          onRemoveSeries={removeSeries}
+        />
       ) : null}
       {activeTab === "annotations" ? (
-        <div className="plot-annotation-panel plot-config-section" role="tabpanel">
-          <ConfigGroup title="Add Text Arrow">
-            <div className="plot-field-grid two">
-              <ConfigField label="Text">
-                <input
-                  aria-label="Annotation text"
-                  value={annotationDraft.text}
-                  onChange={(event) =>
-                    setAnnotationDraft((current) => ({ ...current, text: event.target.value }))
-                  }
-                />
-              </ConfigField>
-              <button className="plot-config-command" type="button" onClick={addAnnotation}>
-                Add annotation
-              </button>
-            </div>
-            <div className="plot-subgroup-title">Position</div>
-            <div className="plot-field-grid four">
-              {(["x", "y", "dx", "dy"] as const).map((field) => (
-                <ConfigField key={field} label={field} compact>
-                  <input
-                    aria-label={`Annotation ${field}`}
-                    type="number"
-                    value={annotationDraft[field]}
-                    onChange={(event) =>
-                      setAnnotationDraft((current) => ({ ...current, [field]: event.target.value }))
-                    }
-                  />
-                </ConfigField>
-              ))}
-            </div>
-          </ConfigGroup>
-          {spec.annotations.map((annotation) => (
-            <ConfigGroup key={annotation.id} title={`Annotation: ${annotation.text}`}>
-              <div className="plot-field-grid three">
-                <ConfigField label="Text">
-                  <input
-                    aria-label={`Annotation label ${annotation.id}`}
-                    value={annotation.text}
-                    onChange={(event) => updateAnnotation(annotation, { text: event.target.value })}
-                  />
-                </ConfigField>
-                <ConfigField label="Color" compact>
-                  <input
-                    aria-label={`Annotation color ${annotation.id}`}
-                    type="color"
-                    value={annotation.color}
-                    onChange={(event) =>
-                      updateAnnotation(annotation, { color: event.target.value })
-                    }
-                  />
-                </ConfigField>
-                <button
-                  className="plot-config-command danger"
-                  type="button"
-                  aria-label={`Remove annotation ${annotation.id}`}
-                  onClick={() => removeAnnotation(annotation)}
-                >
-                  Remove
-                </button>
-              </div>
-              <div className="plot-subgroup-title">Typography</div>
-              <div className="plot-field-grid two">
-                <ConfigField label="Font family">
-                  <input
-                    aria-label={`Annotation font family ${annotation.id}`}
-                    value={annotation.font.family}
-                    onChange={(event) =>
-                      updateAnnotation(annotation, {
-                        font: { ...annotation.font, family: event.target.value },
-                      })
-                    }
-                  />
-                </ConfigField>
-                <ConfigField label="Font size" compact>
-                  <input
-                    aria-label={`Annotation font size ${annotation.id}`}
-                    type="number"
-                    min={1}
-                    value={annotation.font.size}
-                    onChange={(event) =>
-                      updateAnnotation(annotation, {
-                        font: { ...annotation.font, size: Number(event.target.value) },
-                      })
-                    }
-                  />
-                </ConfigField>
-              </div>
-            </ConfigGroup>
-          ))}
-        </div>
+        <PlotConfigAnnotationsTab
+          spec={spec}
+          annotationDraft={annotationDraft}
+          onSetAnnotationDraft={setAnnotationDraft}
+          onAddAnnotation={addAnnotation}
+          onUpdateAnnotation={updateAnnotation}
+          onRemoveAnnotation={removeAnnotation}
+        />
       ) : null}
     </div>
   );
