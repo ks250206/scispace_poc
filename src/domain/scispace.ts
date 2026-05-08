@@ -11,92 +11,51 @@ import type {
   Dataset,
   PendingImport,
   PlotAnnotation,
-  PlotAxisSpec,
   PlotMarkerShape,
-  PlotPaddingSpec,
   PlotSeries,
-  PlotSizeSpec,
   PlotSpec,
-  PlotTextStyle,
   PlotTickDirection,
   PlotType,
   ScispaceCommandResult,
   VirtualFile,
 } from "./types";
+import {
+  findDataset,
+  importDelimiters,
+  isSafeFileName,
+  isString,
+  isVirtualRawPath,
+  parseBooleanOption,
+  parseColor,
+  parseInteger,
+  parseNonNegativeNumber,
+  parseOptionalBoolean,
+  parsePositiveNumber,
+  readOption,
+  tokenizeCommand,
+  type CommandContext,
+} from "./scispace/commandUtils";
+import {
+  axisDataHasNonPositiveValues,
+  createPlotSeries,
+  defaultPlotAxis,
+  defaultPlotFont,
+  defaultPlotPadding,
+  defaultPlotSize,
+  findPlot,
+  markerShapes,
+  normalizePlotSpecForCommand,
+  normalizeSeriesStyle,
+  parsePadding,
+  parsePlotDimension,
+  parseRange,
+  parseTick,
+  plotSpecSchema,
+  plotTypes,
+  tickDirections,
+} from "./scispace/plotSpec";
 
-export interface CommandContext {
-  datasets: Dataset[];
-  files?: VirtualFile[];
-  pendingImports?: PendingImport[];
-  plotSpecs?: PlotSpec[];
-}
-
-const findDataset = (datasets: Dataset[], token: string): Dataset | undefined =>
-  datasets.find(
-    (dataset) =>
-      dataset.id === token || dataset.name === token || dataset.sourcePath.endsWith(`/${token}`),
-  );
-
-const tokenizeCommand = (input: string): string[] => {
-  const tokens: string[] = [];
-  let current = "";
-  let quote: "'" | '"' | undefined;
-  for (let index = 0; index < input.length; index += 1) {
-    const char = input[index];
-    if ((char === "'" || char === '"') && !quote) {
-      quote = char;
-    } else if (char === quote) {
-      quote = undefined;
-    } else if (/\s/.test(char) && !quote) {
-      if (current) tokens.push(current);
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-  if (current) tokens.push(current);
-  return tokens;
-};
-
-const readOption = (tokens: string[], key: string): string | undefined => {
-  const prefix = `${key}=`;
-  return tokens.find((token) => token.startsWith(prefix))?.slice(prefix.length);
-};
-
-const isString = (value: string | undefined): value is string => Boolean(value);
-
-const parseBooleanOption = (tokens: string[], key: string): boolean =>
-  readOption(tokens, key) === "true";
-
-const parseOptionalBoolean = (value: string | undefined): boolean | undefined => {
-  if (value === "true") return true;
-  if (value === "false") return false;
-  return undefined;
-};
-
-const plotColors = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2"];
-const plotTypes = new Set<PlotType>(["line", "line-marker", "marker"]);
-const importDelimiters = new Set(["auto", "comma", "tab", "space", "semicolon"]);
-const tickDirections = new Set<PlotTickDirection>(["out", "in", "none"]);
-const markerShapes = new Set<PlotMarkerShape>([
-  "circle",
-  "square",
-  "triangle",
-  "diamond",
-  "cross",
-  "plus",
-]);
-const defaultPlotSize: PlotSizeSpec = { width: 640, height: 360 };
-const defaultPlotFont: PlotTextStyle = { family: "Inter, system-ui, sans-serif", size: 12 };
-const defaultAxisLabelFont: PlotTextStyle = { family: "Inter, system-ui, sans-serif", size: 12 };
-const defaultAxisValueFont: PlotTextStyle = { family: "Inter, system-ui, sans-serif", size: 11 };
-const defaultPlotPadding: PlotPaddingSpec = { top: 12, right: 12, bottom: 12, left: 12 };
-const isVirtualRawPath = (path: string | undefined): path is string =>
-  path === "~/raw" || Boolean(path?.startsWith("~/raw/"));
-const isSafeFileName = (name: string | undefined): name is string => {
-  if (!name?.trim()) return false;
-  return !name.includes("/") && !name.includes("\\") && name !== "." && name !== "..";
-};
+export { defaultPlotAxis, normalizePlotSpecForCommand } from "./scispace/plotSpec";
 
 const formatVirtualFileList = (
   path: string,
@@ -416,261 +375,6 @@ const executeTableCommand = (
   }
 
   return undefined;
-};
-
-const plotSpecSchema = {
-  id: "string",
-  type: '"line"',
-  plotType: '"line" | "line-marker" | "marker"',
-  source: "dataset id",
-  x: "x column name",
-  y: "primary y column name",
-  title: "string",
-  size: { width: "number", height: "number" },
-  font: { family: "string", size: "number" },
-  padding: { top: "number", right: "number", bottom: "number", left: "number" },
-  zoomMode: '"x" | "y" | "xy"',
-  axes: {
-    x: {
-      label: "string",
-      scale: '"linear" | "log"',
-      labelStyle: { family: "string", size: "number" },
-      valueStyle: { family: "string", size: "number" },
-      size: "number",
-      gap: "number",
-      labelGap: "number",
-      labelSize: "number",
-      color: "#rrggbb",
-      gridColor: "#rrggbb",
-      tickColor: "#rrggbb",
-      range: '{ mode: "auto" } | { mode: "manual", min: number, max: number }',
-      ticks:
-        '{ mode: "auto", orientation: "out" | "in" | "none", length: number, minor: boolean } | { mode: "manual", interval: number, orientation: "out" | "in" | "none", length: number, minor: boolean }',
-    },
-    y: {
-      label: "string",
-      scale: '"linear" | "log"',
-      labelStyle: { family: "string", size: "number" },
-      valueStyle: { family: "string", size: "number" },
-      size: "number",
-      gap: "number",
-      labelGap: "number",
-      labelSize: "number",
-      color: "#rrggbb",
-      gridColor: "#rrggbb",
-      tickColor: "#rrggbb",
-      range: '{ mode: "auto" } | { mode: "manual", min: number, max: number }',
-      ticks:
-        '{ mode: "auto", orientation: "out" | "in" | "none", length: number, minor: boolean } | { mode: "manual", interval: number, orientation: "out" | "in" | "none", length: number, minor: boolean }',
-    },
-  },
-  grid: { x: "boolean", y: "boolean" },
-  border: "boolean",
-  series: [
-    {
-      y: "y column name",
-      label: "string",
-      color: "#rrggbb",
-      lineWidth: "number",
-      markerSize: "number",
-      markerShape: '"circle" | "square" | "triangle" | "diamond" | "cross" | "plus"',
-      drawOrder: "number",
-    },
-  ],
-  annotations: [
-    {
-      id: "string",
-      type: '"text-arrow"',
-      text: "string",
-      x: "number",
-      y: "number",
-      dx: "number",
-      dy: "number",
-      color: "#rrggbb",
-      font: { family: "string", size: "number" },
-    },
-  ],
-} as const;
-
-export const defaultPlotAxis = (label: string): PlotAxisSpec => ({
-  label,
-  range: { mode: "auto" },
-  ticks: { mode: "auto", orientation: "out", length: 6, minor: false },
-  scale: "linear",
-  labelStyle: defaultAxisLabelFont,
-  valueStyle: defaultAxisValueFont,
-  size: 48,
-  gap: 6,
-  labelGap: 8,
-  labelSize: 24,
-  color: "#374151",
-  gridColor: "#e5e7eb",
-  tickColor: "#6b7280",
-});
-
-const createPlotSeries = (columns: string[]): PlotSeries[] =>
-  columns.map((column, index) => ({
-    y: column,
-    label: column,
-    color: plotColors[index % plotColors.length] ?? "#2563eb",
-    lineWidth: 2,
-    markerSize: 6,
-    markerShape: "circle",
-    drawOrder: index,
-  }));
-
-const normalizeSeriesStyle = (series: PlotSeries, index: number): PlotSeries => ({
-  y: series.y,
-  label: series.label || series.y,
-  color: series.color || plotColors[index % plotColors.length] || "#2563eb",
-  lineWidth: Number.isFinite(series.lineWidth) ? series.lineWidth : 2,
-  markerSize: Number.isFinite(series.markerSize) ? series.markerSize : 6,
-  markerShape: markerShapes.has(series.markerShape) ? series.markerShape : "circle",
-  drawOrder: Number.isFinite(series.drawOrder) ? series.drawOrder : index,
-});
-
-const normalizeAxis = (axis: PlotAxisSpec | undefined, label: string): PlotAxisSpec => {
-  const fallback = defaultPlotAxis(label);
-  return {
-    ...fallback,
-    ...axis,
-    label: axis?.label ?? label,
-    range: axis?.range ?? fallback.range,
-    scale: axis?.scale === "log" ? "log" : "linear",
-    ticks: {
-      ...fallback.ticks,
-      ...axis?.ticks,
-      length:
-        Number.isFinite(axis?.ticks.length) && Number(axis?.ticks.length) >= 0
-          ? Number(axis?.ticks.length)
-          : fallback.ticks.length,
-      minor: Boolean(axis?.ticks.minor),
-    },
-    labelStyle: normalizeTextStyle(axis?.labelStyle, fallback.labelStyle),
-    valueStyle: normalizeTextStyle(axis?.valueStyle, fallback.valueStyle),
-    size: Number.isFinite(axis?.size) ? Number(axis?.size) : fallback.size,
-    gap: Number.isFinite(axis?.gap) ? Number(axis?.gap) : fallback.gap,
-    labelGap: Number.isFinite(axis?.labelGap) ? Number(axis?.labelGap) : fallback.labelGap,
-    labelSize: Number.isFinite(axis?.labelSize) ? Number(axis?.labelSize) : fallback.labelSize,
-    color: parseColor(axis?.color) ?? fallback.color,
-    gridColor: parseColor(axis?.gridColor) ?? fallback.gridColor,
-    tickColor: parseColor(axis?.tickColor) ?? fallback.tickColor,
-  };
-};
-
-export const normalizePlotSpecForCommand = (spec: PlotSpec): PlotSpec => {
-  const existingSeries = spec.series ?? [];
-  const series = (
-    existingSeries.length > 0 ? existingSeries : spec.y ? createPlotSeries([spec.y]) : []
-  ).map(normalizeSeriesStyle);
-  const xLabel = spec.axes?.x.label ?? spec.axisLabels?.x ?? spec.x;
-  const yLabel =
-    spec.axes?.y.label ?? spec.axisLabels?.y ?? series.map((item) => item.label).join(", ");
-  return {
-    ...spec,
-    type: "line",
-    plotType: plotTypes.has(spec.plotType) ? spec.plotType : "line",
-    y: series[0]?.y ?? spec.y,
-    series,
-    zoomMode: spec.zoomMode ?? "xy",
-    axes: {
-      x: normalizeAxis(spec.axes?.x, xLabel),
-      y: normalizeAxis(spec.axes?.y, yLabel),
-    },
-    grid: spec.grid ?? { x: true, y: true },
-    border: spec.border ?? true,
-    size: {
-      width: parsePlotDimension(String(spec.size?.width)) ?? defaultPlotSize.width,
-      height: parsePlotDimension(String(spec.size?.height)) ?? defaultPlotSize.height,
-    },
-    font: normalizeTextStyle(spec.font, defaultPlotFont),
-    padding: spec.padding ?? defaultPlotPadding,
-    annotations: spec.annotations ?? [],
-    axisLabels: { x: xLabel, y: yLabel },
-  };
-};
-
-const findPlot = (plotSpecs: PlotSpec[] | undefined, plotId: string): PlotSpec | undefined =>
-  plotSpecs?.find((plot) => plot.id === plotId);
-
-const parseRange = (value: string | undefined): PlotAxisSpec["range"] | undefined => {
-  if (!value) return undefined;
-  if (value === "auto") return { mode: "auto" };
-  const [minText, maxText] = value.split(":");
-  const min = Number(minText);
-  const max = Number(maxText);
-  if (!Number.isFinite(min) || !Number.isFinite(max) || min >= max) return undefined;
-  return { mode: "manual", min, max };
-};
-
-const parseTick = (value: string | undefined): Partial<PlotAxisSpec["ticks"]> | undefined => {
-  if (!value) return undefined;
-  if (value === "auto") return { mode: "auto", interval: undefined };
-  const interval = Number(value);
-  if (!Number.isFinite(interval) || interval <= 0) return undefined;
-  return { mode: "manual", interval };
-};
-
-const parsePlotDimension = (value: string | undefined): number | undefined => {
-  if (value === undefined) return undefined;
-  const dimension = Number(value);
-  if (!Number.isFinite(dimension) || dimension < 120 || dimension > 4000) return undefined;
-  return Math.round(dimension);
-};
-
-const parsePositiveNumber = (value: string | undefined): number | undefined => {
-  if (value === undefined) return undefined;
-  const number = Number(value);
-  return Number.isFinite(number) && number > 0 ? number : undefined;
-};
-
-const parseNonNegativeNumber = (value: string | undefined): number | undefined => {
-  if (value === undefined) return undefined;
-  const number = Number(value);
-  return Number.isFinite(number) && number >= 0 ? number : undefined;
-};
-
-const parseInteger = (value: string | undefined): number | undefined => {
-  if (value === undefined) return undefined;
-  const number = Number(value);
-  return Number.isInteger(number) ? number : undefined;
-};
-
-const parseColor = (value: string | undefined): string | undefined => {
-  if (value === undefined) return undefined;
-  return /^#[\da-f]{6}$/i.test(value) ? value : undefined;
-};
-
-const parsePadding = (value: string | undefined): PlotPaddingSpec | undefined => {
-  if (value === undefined) return undefined;
-  const parts = value.split(":").map(Number);
-  if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part) || part < 0)) {
-    return undefined;
-  }
-  const [top, right, bottom, left] = parts;
-  return { top: top ?? 0, right: right ?? 0, bottom: bottom ?? 0, left: left ?? 0 };
-};
-
-const normalizeTextStyle = (
-  style: Partial<PlotTextStyle> | undefined,
-  fallback: PlotTextStyle,
-): PlotTextStyle => ({
-  family: style?.family?.trim() || fallback.family,
-  size:
-    Number.isFinite(style?.size) && Number(style?.size) > 0 ? Number(style?.size) : fallback.size,
-});
-
-const axisDataHasNonPositiveValues = (
-  axis: "x" | "y",
-  dataset: Dataset | undefined,
-  plot: PlotSpec,
-  nextX = plot.x,
-): boolean => {
-  if (!dataset) return true;
-  if (axis === "x") {
-    return dataset.rows.some((row, index) => Number(row[nextX] ?? index) <= 0);
-  }
-  return plot.series.some((series) => dataset.rows.some((row) => Number(row[series.y] ?? 0) <= 0));
 };
 
 const executePlotCommand = (
