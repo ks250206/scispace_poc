@@ -9,6 +9,7 @@ import {
 } from "react";
 import { CanvasWindow } from "./CanvasWindow";
 import { uploadOpenCommand } from "./DataBrowser";
+import { useDialog } from "./dialog/DialogProvider";
 import { useScispaceStore } from "../store/scispaceStore";
 
 const centerViewport = { x: -1920, y: -1080, scale: 1 };
@@ -19,6 +20,7 @@ const baseDotSpacing = 24;
 const baseMajorGridSpacing = 240;
 
 export function Workbench() {
+  const dialog = useDialog();
   const viewport = useScispaceStore((state) => state.viewport);
   const setViewport = useScispaceStore((state) => state.setViewport);
   const windows = useScispaceStore((state) => state.windows);
@@ -139,25 +141,42 @@ export function Workbench() {
     }
   };
 
-  const handleNewProject = () => {
-    const confirmed = window.confirm("Create a new project? Current project will be saved first.");
+  const handleNewProject = async () => {
+    const confirmed = await dialog.confirm({
+      title: "Create new project",
+      message: "Current project will be saved first.",
+      confirmLabel: "Create",
+    });
     if (!confirmed) return;
-    const name = window.prompt("Project name", `Untitled Project ${projects.length + 1}`);
+    const name = await dialog.prompt({
+      title: "Project name",
+      defaultValue: `Untitled Project ${projects.length + 1}`,
+      confirmLabel: "Create",
+    });
     void createNewProject(name ?? undefined);
   };
 
-  const handleSaveProject = () => {
+  const handleSaveProject = async () => {
     const currentName =
       projects.find((project) => project.id === currentProjectId)?.name ?? "Main Project";
-    const name = window.prompt("Project name", currentName);
+    const name = await dialog.prompt({
+      title: "Project name",
+      defaultValue: currentName,
+      confirmLabel: "Save",
+    });
     if (name !== null) void saveCurrentProject(name);
   };
 
-  const handleDeleteProject = () => {
+  const handleDeleteProject = async () => {
     if (!currentProjectId) return;
     const currentName =
       projects.find((project) => project.id === currentProjectId)?.name ?? "current project";
-    const confirmed = window.confirm(`Delete project "${currentName}"?`);
+    const confirmed = await dialog.confirm({
+      title: "Delete project",
+      message: `Delete project "${currentName}"?`,
+      confirmLabel: "Delete",
+      tone: "destructive",
+    });
     if (confirmed) void deleteProject(currentProjectId);
   };
 
@@ -178,9 +197,16 @@ export function Workbench() {
     await importProjectJson(await file.text());
   };
 
-  const handleSwitchProject = (projectId: string) => {
+  const handleSwitchProject = async (projectId: string) => {
     if (!projectId || projectId === currentProjectId) return;
-    if (projectDirty && !window.confirm("Switch projects and save current unsaved changes?")) {
+    if (
+      projectDirty &&
+      !(await dialog.confirm({
+        title: "Switch project",
+        message: "Switch projects and save current unsaved changes?",
+        confirmLabel: "Switch",
+      }))
+    ) {
       return;
     }
     void switchProject(projectId);
@@ -194,7 +220,7 @@ export function Workbench() {
           <select
             aria-label="Project"
             value={currentProjectId ?? ""}
-            onChange={(event) => handleSwitchProject(event.target.value)}
+            onChange={(event) => void handleSwitchProject(event.target.value)}
           >
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
@@ -202,11 +228,15 @@ export function Workbench() {
               </option>
             ))}
           </select>
-          <button type="button" onClick={handleSaveProject}>
+          <button type="button" onClick={() => void handleSaveProject()}>
             Save Project
           </button>
           {projectDirty ? <span className="project-dirty">Unsaved</span> : null}
-          <button type="button" disabled={!currentProjectId} onClick={handleDeleteProject}>
+          <button
+            type="button"
+            disabled={!currentProjectId}
+            onClick={() => void handleDeleteProject()}
+          >
             Delete Project
           </button>
           <button type="button" onClick={() => void handleExportProject()}>
@@ -229,7 +259,7 @@ export function Workbench() {
           <button type="button" disabled={redoStackLength === 0} onClick={() => void redo()}>
             Redo
           </button>
-          <button type="button" onClick={handleNewProject}>
+          <button type="button" onClick={() => void handleNewProject()}>
             New Project
           </button>
           <button type="button" onClick={() => setViewport(centerViewport)}>

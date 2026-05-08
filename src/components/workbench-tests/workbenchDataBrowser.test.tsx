@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   initializeStore,
   renderWorkbench,
@@ -74,32 +74,34 @@ describe("Workbench data browser UI", () => {
 
   it("creates, moves, renames, and deletes raw tree items from the data browser", async () => {
     const user = userEvent.setup();
-    const prompt = vi
-      .spyOn(window, "prompt")
-      .mockReturnValueOnce("analysis")
-      .mockReturnValueOnce("~/raw/analysis")
-      .mockReturnValueOnce("renamed.csv");
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     await renderWorkbench();
     await user.click(screen.getByRole("button", { name: "+" }));
+    let input = screen.getByRole("textbox", { name: "Folder name" });
+    fireEvent.change(input, { target: { value: "analysis" } });
+    await user.click(screen.getByRole("button", { name: "Create" }));
     expect(screen.getByText("analysis")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Actions waveform.csv" }));
     await user.click(screen.getByRole("menuitem", { name: "Move waveform.csv" }));
+    input = screen.getByRole("textbox", { name: "Move to directory" });
+    fireEvent.change(input, { target: { value: "~/raw/analysis" } });
+    await user.click(screen.getByRole("button", { name: "Move" }));
     await waitFor(() =>
       expect(storeState().datasets[0]?.sourcePath).toBe("~/raw/analysis/waveform.csv"),
     );
 
     await user.click(screen.getByRole("button", { name: "Actions waveform.csv" }));
     await user.click(screen.getByRole("menuitem", { name: "Rename waveform.csv" }));
+    input = screen.getByRole("textbox", { name: "Rename" });
+    fireEvent.change(input, { target: { value: "renamed.csv" } });
+    await user.click(screen.getByRole("button", { name: "Rename" }));
     await waitFor(() => expect(screen.getByText("renamed.csv")).toBeInTheDocument());
     expect(screen.getByText("Table - renamed.csv")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Actions renamed.csv" }));
     await user.click(screen.getByRole("menuitem", { name: "Delete renamed.csv" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(screen.queryByText("renamed.csv")).not.toBeInTheDocument());
-    expect(confirm).toHaveBeenCalled();
-    expect(prompt).toHaveBeenCalledTimes(3);
     expect(storeState().commandHistory.map((entry) => entry.command)).toEqual([
       "file-mkdir ~/raw/analysis",
       "file-move ~/raw/waveform.csv to=~/raw/analysis",
@@ -111,11 +113,11 @@ describe("Workbench data browser UI", () => {
 
   it("undoes and redoes data browser file operations from the topbar", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     await renderWorkbench();
 
     await user.click(screen.getByRole("button", { name: "Actions waveform.csv" }));
     await user.click(screen.getByRole("menuitem", { name: "Delete waveform.csv" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() =>
       expect(storeState().files.some((file) => file.path === "~/raw/waveform.csv")).toBe(false),
     );

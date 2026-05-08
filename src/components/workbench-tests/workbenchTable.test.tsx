@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -105,7 +105,6 @@ describe("Workbench table UI", () => {
 
   it("copies, clears, and fills selected table ranges through scispace commands", async () => {
     const user = userEvent.setup();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -124,6 +123,7 @@ describe("Workbench table UI", () => {
     expect(writeText).toHaveBeenCalledWith("0\t3\n0.125\t4.4902");
 
     await user.click(screen.getByRole("button", { name: "Delete selected cells" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(storeState().datasets[0]?.rows[0]?.time).toBe(""));
     expect(storeState().datasets[0]?.rows[1]?.signal).toBe("");
     expect(storeState().commandHistory.at(-1)).toMatchObject({
@@ -134,13 +134,13 @@ describe("Workbench table UI", () => {
     await user.click(cells[3] as HTMLElement);
     fireEvent.click(cells[11], { shiftKey: true });
     await user.click(screen.getByRole("button", { name: "Fill down" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Fill down" }));
     await waitFor(() => expect(storeState().datasets[0]?.rows[1]?.background).toBe(7));
     expect(storeState().datasets[0]?.rows[2]?.background).toBe(7);
     expect(storeState().commandHistory.at(-1)).toMatchObject({
       command: "table-range waveform.csv action=fill-down r1=1 c1=background r2=3 c2=background",
       source: "gui",
     });
-    expect(confirm).toHaveBeenCalledTimes(2);
   });
 
   it("creates plots from selected table columns through scispace commands", async () => {
@@ -169,7 +169,6 @@ describe("Workbench table UI", () => {
 
   it("deletes selected table rows and columns through scispace commands", async () => {
     const user = userEvent.setup();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     await renderWorkbench();
     expect(screen.getByRole("button", { name: "Delete row" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Delete column" })).toBeDisabled();
@@ -178,6 +177,7 @@ describe("Workbench table UI", () => {
     await user.click(cells[2] as HTMLElement);
     expect(screen.getByRole("button", { name: "Delete row" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "Delete row" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(storeState().datasets[0]?.rows).toHaveLength(159));
     expect(storeState().commandHistory.at(-1)).toMatchObject({
@@ -188,6 +188,7 @@ describe("Workbench table UI", () => {
     await user.click(screen.getByRole("button", { name: "Select column background" }));
     expect(screen.getByRole("button", { name: "Delete column" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "Delete column" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() =>
       expect(storeState().datasets[0]?.columns.map((column) => column.id)).toEqual([
@@ -201,16 +202,15 @@ describe("Workbench table UI", () => {
       command: "table-edit waveform.csv action=delete-column column=background",
       source: "gui",
     });
-    expect(confirm).toHaveBeenCalledTimes(2);
   });
 
   it("does not delete table data when confirmation is cancelled", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     await renderWorkbench();
     const cells = await waitForTableBodyCells(2);
     await user.click(cells[2] as HTMLElement);
     await user.click(screen.getByRole("button", { name: "Delete row" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(storeState().datasets[0]?.rows).toHaveLength(160);
     expect(storeState().commandHistory).toHaveLength(0);

@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { datasetColumnIds } from "../domain/csv";
 import type { Dataset, VirtualFile } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
+import { useDialog } from "./dialog/DialogProvider";
 
 const depthOf = (path: string): number =>
   Math.max(
@@ -55,6 +56,7 @@ const columnsSelectedForDataset = (
 ): string[] => selections[dataset.id] ?? datasetColumnIds(dataset);
 
 export function DataBrowser() {
+  const dialog = useDialog();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [collapsedDatasetIds, setCollapsedDatasetIds] = useState<Set<string>>(() => new Set());
   const [openMenuFileId, setOpenMenuFileId] = useState<string>();
@@ -89,8 +91,12 @@ export function DataBrowser() {
     await openFiles(Array.from(event.dataTransfer.files));
   };
 
-  const handleCreateFolder = () => {
-    const name = window.prompt("Folder name", "New Folder");
+  const handleCreateFolder = async () => {
+    const name = await dialog.prompt({
+      title: "Folder name",
+      defaultValue: "New Folder",
+      confirmLabel: "Create",
+    });
     if (name) void runScispace(`file-mkdir ~/raw/${quoteCommandArg(name)}`, { source: "gui" });
   };
 
@@ -101,8 +107,12 @@ export function DataBrowser() {
     action();
   };
 
-  const handleRename = (file: VirtualFile) => {
-    const name = window.prompt("Rename", file.name);
+  const handleRename = async (file: VirtualFile) => {
+    const name = await dialog.prompt({
+      title: "Rename",
+      defaultValue: file.name,
+      confirmLabel: "Rename",
+    });
     if (name && name !== file.name) {
       void runScispace(`file-rename ${quoteCommandArg(file.path)} name=${quoteCommandArg(name)}`, {
         source: "gui",
@@ -110,8 +120,12 @@ export function DataBrowser() {
     }
   };
 
-  const handleMove = (file: VirtualFile) => {
-    const directory = window.prompt("Move to directory", "~/raw");
+  const handleMove = async (file: VirtualFile) => {
+    const directory = await dialog.prompt({
+      title: "Move to directory",
+      defaultValue: "~/raw",
+      confirmLabel: "Move",
+    });
     if (directory) {
       void runScispace(`file-move ${quoteCommandArg(file.path)} to=${quoteCommandArg(directory)}`, {
         source: "gui",
@@ -119,8 +133,13 @@ export function DataBrowser() {
     }
   };
 
-  const handleDelete = (file: VirtualFile) => {
-    const confirmed = window.confirm(`Delete ${file.path}?`);
+  const handleDelete = async (file: VirtualFile) => {
+    const confirmed = await dialog.confirm({
+      title: "Delete item",
+      message: `Delete ${file.path}?`,
+      confirmLabel: "Delete",
+      tone: "destructive",
+    });
     if (confirmed) void runScispace(`file-delete ${quoteCommandArg(file.path)}`, { source: "gui" });
   };
 
@@ -166,7 +185,7 @@ export function DataBrowser() {
       <div className="tree-row root">
         <span>▾</span>
         <span className="folder-icon">~/raw</span>
-        <button type="button" className="tree-action" onClick={handleCreateFolder}>
+        <button type="button" className="tree-action" onClick={() => void handleCreateFolder()}>
           +
         </button>
       </div>
@@ -268,7 +287,7 @@ export function DataBrowser() {
                       type="button"
                       role="menuitem"
                       aria-label={`Move ${file.name}`}
-                      onClick={() => runItemAction(() => handleMove(file))}
+                      onClick={() => runItemAction(() => void handleMove(file))}
                     >
                       Move
                     </button>
@@ -276,7 +295,7 @@ export function DataBrowser() {
                       type="button"
                       role="menuitem"
                       aria-label={`Rename ${file.name}`}
-                      onClick={() => runItemAction(() => handleRename(file))}
+                      onClick={() => runItemAction(() => void handleRename(file))}
                     >
                       Rename
                     </button>
@@ -284,7 +303,7 @@ export function DataBrowser() {
                       type="button"
                       role="menuitem"
                       aria-label={`Delete ${file.name}`}
-                      onClick={() => runItemAction(() => handleDelete(file))}
+                      onClick={() => runItemAction(() => void handleDelete(file))}
                     >
                       Delete
                     </button>

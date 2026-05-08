@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { DialogProvider } from "./components/dialog/DialogProvider";
 import { Workbench } from "./components/Workbench";
 import { useScispaceStore } from "./store/scispaceStore";
 import "./App.css";
@@ -15,7 +16,11 @@ function App() {
     return <div className="loading-screen">Loading SciSpace...</div>;
   }
 
-  return <Workbench />;
+  return (
+    <DialogProvider>
+      <Workbench />
+    </DialogProvider>
+  );
 }
 
 export default App;

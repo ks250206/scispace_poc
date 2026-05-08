@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { DataTableWindow } from "../DataTableWindow";
+import { DialogProvider } from "../dialog/DialogProvider";
 import { ImportSettingsWindow } from "../ImportSettingsWindow";
 import { setupWorkbenchSuite, storeState } from "./workbenchTestUtils";
 
@@ -36,7 +37,11 @@ describe("Workbench performance regressions", () => {
     const dataset = storeState().datasets.find((item) => item.name === "large-table.csv");
     expect(dataset).toBeDefined();
 
-    render(<DataTableWindow datasetId={dataset?.id ?? ""} windowId="large-table-window" />);
+    render(
+      <DialogProvider>
+        <DataTableWindow datasetId={dataset?.id ?? ""} windowId="large-table-window" />
+      </DialogProvider>,
+    );
 
     await waitFor(() => expect(screen.getByText("800 rows · virtualized")).toBeInTheDocument());
     expect(document.querySelectorAll(".table-scroll tbody tr").length).toBeLessThan(40);

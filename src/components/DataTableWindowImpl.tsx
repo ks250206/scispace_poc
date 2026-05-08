@@ -5,6 +5,7 @@ import { datasetColumnIds } from "../domain/csv";
 import { useScispaceStore } from "../store/scispaceStore";
 import { DataTableGrid } from "./data-table/DataTableGrid";
 import { DataTableToolbar } from "./data-table/DataTableToolbar";
+import { useDialog } from "./dialog/DialogProvider";
 import {
   deleteColumnCommand,
   deleteRowCommand,
@@ -36,6 +37,7 @@ export { tableWindowHeightForRows };
 export type { TableVisibleRows };
 
 export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWindowProps) {
+  const dialog = useDialog();
   const dataset = useScispaceStore((state) => state.datasets.find((item) => item.id === datasetId));
   const updateWindow = useScispaceStore((state) => state.updateWindow);
   const runScispace = useScispaceStore((state) => state.runScispace);
@@ -133,17 +135,29 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     });
   };
 
-  const deleteSelectedRow = () => {
+  const deleteSelectedRow = async () => {
     if (!dataset || !selectedCell) return;
     const rowNumber = selectedCell.rowIndex + 1;
-    if (!window.confirm(`Delete row ${rowNumber} from ${dataset.name}?`)) return;
+    const confirmed = await dialog.confirm({
+      title: "Delete row",
+      message: `Delete row ${rowNumber} from ${dataset.name}?`,
+      confirmLabel: "Delete",
+      tone: "destructive",
+    });
+    if (!confirmed) return;
     clearSelection();
     void runScispace(deleteRowCommand(dataset.name, selectedCell.rowIndex), { source: "gui" });
   };
 
-  const deleteSelectedColumn = () => {
+  const deleteSelectedColumn = async () => {
     if (!dataset || !selectedColumn) return;
-    if (!window.confirm(`Delete column ${selectedColumn} from ${dataset.name}?`)) return;
+    const confirmed = await dialog.confirm({
+      title: "Delete column",
+      message: `Delete column ${selectedColumn} from ${dataset.name}?`,
+      confirmLabel: "Delete",
+      tone: "destructive",
+    });
+    if (!confirmed) return;
     clearSelection();
     void runScispace(deleteColumnCommand(dataset.name, selectedColumn), { source: "gui" });
   };
@@ -168,28 +182,27 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     void navigator.clipboard?.writeText(tsv);
   };
 
-  const clearSelectedRange = () => {
+  const clearSelectedRange = async () => {
     if (!dataset || !rangeBounds) return;
-    if (
-      !window.confirm(
-        `Delete selected cells from rows ${rangeBounds.minRow + 1}-${rangeBounds.maxRow + 1} in ${dataset.name}?`,
-      )
-    ) {
-      return;
-    }
+    const confirmed = await dialog.confirm({
+      title: "Delete selected cells",
+      message: `Delete selected cells from rows ${rangeBounds.minRow + 1}-${rangeBounds.maxRow + 1} in ${dataset.name}?`,
+      confirmLabel: "Delete",
+      tone: "destructive",
+    });
+    if (!confirmed) return;
     clearSelection();
     void runScispace(rangeCommand(dataset.name, "clear", rangeBounds), { source: "gui" });
   };
 
-  const fillDownSelectedRange = () => {
+  const fillDownSelectedRange = async () => {
     if (!dataset || !rangeBounds || rangeBounds.maxRow <= rangeBounds.minRow) return;
-    if (
-      !window.confirm(
-        `Fill down rows ${rangeBounds.minRow + 1}-${rangeBounds.maxRow + 1} in ${dataset.name}?`,
-      )
-    ) {
-      return;
-    }
+    const confirmed = await dialog.confirm({
+      title: "Fill down",
+      message: `Fill down rows ${rangeBounds.minRow + 1}-${rangeBounds.maxRow + 1} in ${dataset.name}?`,
+      confirmLabel: "Fill down",
+    });
+    if (!confirmed) return;
     clearSelection();
     void runScispace(rangeCommand(dataset.name, "fill-down", rangeBounds), { source: "gui" });
   };

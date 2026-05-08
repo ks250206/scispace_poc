@@ -13,15 +13,16 @@ describe("Workbench project UI", () => {
 
   it("resets the workspace after confirming New Project", async () => {
     const user = userEvent.setup();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    vi.spyOn(window, "prompt").mockReturnValue("Scratch Project");
     await renderWorkbench();
     fireEvent.click(screen.getByRole("button", { name: "Close Table - waveform.csv" }));
     await waitFor(() => expect(screen.queryByText("Table - waveform.csv")).not.toBeInTheDocument());
 
     await user.click(screen.getByRole("button", { name: "New Project" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    const projectName = screen.getByRole("textbox", { name: "Project name" });
+    fireEvent.change(projectName, { target: { value: "Scratch Project" } });
+    await user.click(screen.getByRole("button", { name: "Create" }));
 
-    expect(confirm).toHaveBeenCalled();
     await waitFor(() => expect(screen.getByText("Table - waveform.csv")).toBeInTheDocument());
     expect(screen.getByText("Plot - waveform.csv")).toBeInTheDocument();
     expect(screen.getByText("Terminal")).toBeInTheDocument();
@@ -30,8 +31,6 @@ describe("Workbench project UI", () => {
 
   it("shows project controls and switches saved projects", async () => {
     const user = userEvent.setup();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    const prompt = vi.spyOn(window, "prompt").mockReturnValue("Second Project");
     await renderWorkbench();
     expect(screen.getByRole("combobox", { name: "Project" })).toBeInTheDocument();
     const firstProjectName =
@@ -45,6 +44,10 @@ describe("Workbench project UI", () => {
       });
     });
     await user.click(screen.getByRole("button", { name: "New Project" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    const projectName = screen.getByRole("textbox", { name: "Project name" });
+    fireEvent.change(projectName, { target: { value: "Second Project" } });
+    await user.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() =>
       expect(storeState().projects.map((project) => project.name)).toContain("Second Project"),
     );
@@ -53,8 +56,6 @@ describe("Workbench project UI", () => {
     await waitFor(() =>
       expect(storeState().datasets.map((dataset) => dataset.name)).toContain("derived.csv"),
     );
-    expect(confirm).toHaveBeenCalled();
-    expect(prompt).toHaveBeenCalled();
   });
 
   it("exports and imports project json from the topbar", async () => {
@@ -107,8 +108,6 @@ describe("Workbench project UI", () => {
 
   it("shows unsaved project state, clears it on save, and confirms dirty switches", async () => {
     const user = userEvent.setup();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    vi.spyOn(window, "prompt").mockReturnValue("Main Project");
     await renderWorkbench();
 
     expect(screen.queryByText("Unsaved")).not.toBeInTheDocument();
@@ -120,10 +119,13 @@ describe("Workbench project UI", () => {
     expect(await screen.findByText("Unsaved")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Save Project" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByText("Unsaved")).not.toBeInTheDocument());
 
     const firstProjectId = storeState().currentProjectId ?? "";
     await user.click(screen.getByRole("button", { name: "New Project" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(storeState().currentProjectId).not.toBe(firstProjectId));
 
     await act(async () => {
@@ -131,7 +133,10 @@ describe("Workbench project UI", () => {
     });
     await user.selectOptions(screen.getByRole("combobox", { name: "Project" }), firstProjectId);
 
-    expect(confirm).toHaveBeenCalledWith("Switch projects and save current unsaved changes?");
+    expect(
+      screen.getByText("Switch projects and save current unsaved changes?"),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Switch" }));
     await waitFor(() => expect(screen.queryByText("Unsaved")).not.toBeInTheDocument());
   });
 });
