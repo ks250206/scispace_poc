@@ -9,7 +9,7 @@ import {
 } from "react";
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { ImportDelimiter } from "../domain/types";
+import type { Dataset, ImportDelimiter, PendingImport } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
 
 interface ImportSettingsWindowProps {
@@ -39,6 +39,35 @@ const rawLineNumberWidth = 64;
 const rawTextDefaultWidth = 720;
 const quoteCommandArg = (value: string): string =>
   /[\s"']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
+
+const importLineCommand = (importId: string, lineIndex: number, value: string): string =>
+  `import-line ${importId} line=${lineIndex + 1} value=${encodeURIComponent(value)}`;
+
+const importSetCommand = (importId: string, options: string): string =>
+  `import-set ${importId} ${options}`;
+
+const importColumnCommand = (importId: string, columnId: string, exclude: boolean): string =>
+  `import-column ${importId} column=${quoteCommandArg(columnId)} action=${
+    exclude ? "exclude" : "include"
+  }`;
+
+const importStatusText = (
+  pendingImport: PendingImport,
+  preview: Dataset | undefined,
+  rawLineCount: number,
+): string | undefined => {
+  if (pendingImport.mode === "raw") return `${rawLineCount} raw lines`;
+  if (preview) return `${preview.rows.length} preview rows · ${preview.columns.length} columns`;
+  return pendingImport.error;
+};
+
+const rawRowClassName = (pendingImport: PendingImport, lineIndex: number): string | undefined => {
+  const classNames = [
+    lineIndex < pendingImport.options.skipRows ? "skipped-row" : "",
+    pendingImport.detectedPreset?.dataStartLine === lineIndex + 1 ? "data-start-row" : "",
+  ].filter(Boolean);
+  return classNames.length > 0 ? classNames.join(" ") : undefined;
+};
 
 export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   const pendingImport = useScispaceStore((state) =>
@@ -110,12 +139,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
           start: index * rowHeight,
         }));
   const isRawMode = pendingImport?.mode === "raw";
-  const importStatus =
-    pendingImport?.mode === "raw"
-      ? `${rawLines.length} raw lines`
-      : preview
-        ? `${preview.rows.length} preview rows · ${preview.columns.length} columns`
-        : pendingImport?.error;
+  const importStatus = pendingImport && importStatusText(pendingImport, preview, rawLines.length);
 
   const startColumnResize = (
     setter: Dispatch<SetStateAction<Record<string, number>>>,
@@ -138,23 +162,13 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   if (!pendingImport) return <div className="empty-state">Import request not found.</div>;
 
   const updateRawLine = (lineIndex: number, value: string) => {
-    void runScispace(
-      `import-line ${importId} line=${lineIndex + 1} value=${encodeURIComponent(value)}`,
-      {
-        source: "gui",
-      },
-    );
+    void runScispace(importLineCommand(importId, lineIndex, value), { source: "gui" });
   };
   const runImportSet = (options: string) => {
-    void runScispace(`import-set ${importId} ${options}`, { source: "gui" });
+    void runScispace(importSetCommand(importId, options), { source: "gui" });
   };
   const toggleExcludedColumn = (columnId: string, checked: boolean) => {
-    void runScispace(
-      `import-column ${importId} column=${quoteCommandArg(columnId)} action=${
-        checked ? "exclude" : "include"
-      }`,
-      { source: "gui" },
-    );
+    void runScispace(importColumnCommand(importId, columnId, checked), { source: "gui" });
   };
 
   return (
@@ -336,16 +350,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
                 {visibleRawRows.map((virtualRow) => (
                   <tr
                     key={virtualRow.key}
-                    className={
-                      [
-                        virtualRow.index < pendingImport.options.skipRows ? "skipped-row" : "",
-                        pendingImport.detectedPreset?.dataStartLine === virtualRow.index + 1
-                          ? "data-start-row"
-                          : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ") || undefined
-                    }
+                    className={rawRowClassName(pendingImport, virtualRow.index)}
                     style={{ width: rawTableWidth, transform: `translateY(${virtualRow.start}px)` }}
                   >
                     <td
