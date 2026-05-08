@@ -6,18 +6,14 @@ import {
   normalizeVirtualPath,
   parseDelimitedText,
 } from "../../domain/csv";
-import { executeScispaceCommand } from "../../domain/scispace";
-import type { CommandHistoryEntry, Dataset, WorkspaceWindow } from "../../domain/types";
+import type { Dataset, WorkspaceWindow } from "../../domain/types";
 import { appDb, readPersistedLayout, type ProjectRecord, type SciSpaceDatabase } from "../db";
 import {
-  captureSnapshot,
   cloneState,
   defaultProjectId,
   defaultProjectName,
-  isUndoableCommand,
   persistLayout,
   projectSummary,
-  restoreSnapshot,
 } from "./projectPersistence";
 import type { ScispaceState } from "./stateTypes";
 import {
@@ -34,16 +30,12 @@ import {
 } from "./workspaceDefaults";
 import { canParseAsTable } from "./importPreview";
 import { uniquifyPath } from "./virtualFiles";
-import { applyScispaceResult } from "./resultAppliers";
-import {
-  nextActiveDatasetId,
-  normalizeColumnSelections,
-  retitleWindow,
-} from "./createStoreHelpers";
+import { normalizeColumnSelections } from "./createStoreHelpers";
 import { createImportDialogState } from "./importDialogState";
 import { createProjectActions } from "./projectActions";
 import { createFileActions } from "./fileActions";
 import { createWindowActions } from "./windowActions";
+import { createExecutionActions } from "./executionActions";
 
 export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
   create<ScispaceState>()((set, get) => ({
@@ -354,101 +346,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       persistLayout(db, get());
     },
 
-    runScispace: async (input, options) => {
-      const undoBefore = isUndoableCommand(input) ? captureSnapshot(get()) : undefined;
-      let result = executeScispaceCommand(input, {
-        datasets: get().datasets,
-        files: get().files,
-        plotSpecs: get().plotSpecs,
-        pendingImports: get().pendingImports,
-      });
-
-      result = await applyScispaceResult(result, {
-        db,
-        get,
-        input,
-        nextActiveDatasetId,
-        retitleWindow,
-        set,
-      });
-
-      const commandHistoryEntry: CommandHistoryEntry = {
-        id: crypto.randomUUID(),
-        command: input,
-        output: result.output,
-        kind: result.kind,
-        status: result.kind === "error" ? "error" : "success",
-        createdAt: Date.now(),
-        source: options?.source ?? "terminal",
-      };
-      set((state) => ({
-        terminalEvents: [...state.terminalEvents, result.output],
-        commandHistory: [...state.commandHistory, commandHistoryEntry],
-        undoStack:
-          undoBefore && result.kind !== "error"
-            ? [
-                ...state.undoStack,
-                {
-                  id: crypto.randomUUID(),
-                  command: input,
-                  before: undoBefore,
-                  after: captureSnapshot(get()),
-                  createdAt: Date.now(),
-                },
-              ]
-            : state.undoStack,
-        redoStack: undoBefore && result.kind !== "error" ? [] : state.redoStack,
-      }));
-      persistLayout(db, get());
-      return result;
-    },
-
-    undo: async () => {
-      const entry = get().undoStack.at(-1);
-      if (!entry) return;
-      const commandHistory = get().commandHistory;
-      await restoreSnapshot(db, entry.before, commandHistory);
-      set((state) => ({
-        files: cloneState(entry.before.files),
-        datasets: cloneState(entry.before.datasets),
-        windows: ensureWorkspaceWindows(cloneState(entry.before.windows)),
-        plotSpecs: cloneState(entry.before.plotSpecs).map(normalizePlotSpec),
-        pendingImports: cloneState(entry.before.pendingImports),
-        columnSelections: cloneState(entry.before.columnSelections),
-        activeDatasetId: entry.before.activeDatasetId,
-        activeWindowId: entry.before.activeWindowId,
-        currentPlotId: entry.before.currentPlotId,
-        viewport: cloneState(entry.before.viewport),
-        terminalEvents: [...state.terminalEvents, `Undo: ${entry.command}`],
-        undoStack: state.undoStack.slice(0, -1),
-        redoStack: [...state.redoStack, entry],
-      }));
-      persistLayout(db, get());
-    },
-
-    redo: async () => {
-      const entry = get().redoStack.at(-1);
-      if (!entry) return;
-      const commandHistory = get().commandHistory;
-      await restoreSnapshot(db, entry.after, commandHistory);
-      set((state) => ({
-        files: cloneState(entry.after.files),
-        datasets: cloneState(entry.after.datasets),
-        windows: ensureWorkspaceWindows(cloneState(entry.after.windows)),
-        plotSpecs: cloneState(entry.after.plotSpecs).map(normalizePlotSpec),
-        pendingImports: cloneState(entry.after.pendingImports),
-        columnSelections: cloneState(entry.after.columnSelections),
-        activeDatasetId: entry.after.activeDatasetId,
-        activeWindowId: entry.after.activeWindowId,
-        currentPlotId: entry.after.currentPlotId,
-        viewport: cloneState(entry.after.viewport),
-        terminalEvents: [...state.terminalEvents, `Redo: ${entry.command}`],
-        undoStack: [...state.undoStack, entry],
-        redoStack: state.redoStack.slice(0, -1),
-      }));
-      persistLayout(db, get());
-    },
-
+    ...createExecutionActions({ db, get, set }),
     ...createWindowActions({ db, get, set }),
     ...createProjectActions({ db, get, set }),
     ...createFileActions({ db, get, set }),
