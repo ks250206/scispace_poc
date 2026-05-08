@@ -127,41 +127,47 @@ export const normalizeVirtualPath = (fileName: string, directory = "~/raw"): str
   return `${directory.replace(/\/$/, "")}/${safeName || "untitled.txt"}`;
 };
 
-export const detectImportPreset = (
-  text: string,
+const detectRigakuRasPreset = (
+  lines: string[],
   fileName: string,
 ): DetectedImportPreset | undefined => {
-  const lines = text.split(/\r?\n/);
-  if (/\.ras$/i.test(fileName) || lines.some((line) => line.trim() === "*RAS_INT_START")) {
-    const startIndex = lines.findIndex((line) => line.trim() === "*RAS_INT_START");
-    const endIndex = lines.findIndex((line) => line.trim() === "*RAS_INT_END");
-    if (startIndex < 0 || endIndex <= startIndex) return undefined;
-    const metadata = Object.fromEntries(
-      lines
-        .slice(0, startIndex)
-        .filter((line) => line.startsWith("*"))
-        .map((line) => {
-          const match = line.match(/^\*(\S+)\s+"?([^"]*)"?/);
-          return match ? [match[1], match[2].trim()] : undefined;
-        })
-        .filter((entry): entry is [string, string] => Boolean(entry)),
-    );
-
-    return {
-      id: "rigaku-ras",
-      label: "Rigaku RAS",
-      dataStartLine: startIndex + 2,
-      options: {
-        skipRows: startIndex + 1,
-        delimiter: "space",
-        commentPrefix: "*",
-        hasHeader: false,
-        columnNames: ["angle", "intensity", "attenuation"],
-      },
-      metadata,
-    };
+  if (!/\.ras$/i.test(fileName) && !lines.some((line) => line.trim() === "*RAS_INT_START")) {
+    return undefined;
   }
+  const startIndex = lines.findIndex((line) => line.trim() === "*RAS_INT_START");
+  const endIndex = lines.findIndex((line) => line.trim() === "*RAS_INT_END");
+  if (startIndex < 0 || endIndex <= startIndex) return undefined;
+  const metadata = Object.fromEntries(
+    lines
+      .slice(0, startIndex)
+      .filter((line) => line.startsWith("*"))
+      .map((line) => {
+        const match = line.match(/^\*(\S+)\s+"?([^"]*)"?/);
+        return match ? [match[1], match[2].trim()] : undefined;
+      })
+      .filter((entry): entry is [string, string] => Boolean(entry)),
+  );
 
+  return {
+    id: "rigaku-ras",
+    label: "Rigaku RAS",
+    dataStartLine: startIndex + 2,
+    options: {
+      skipRows: startIndex + 1,
+      delimiter: "space",
+      commentPrefix: "*",
+      hasHeader: false,
+      columnNames: ["angle", "intensity", "attenuation"],
+    },
+    metadata,
+  };
+};
+
+const detectEcLabMptPreset = (
+  lines: string[],
+  fileName: string,
+  text: string,
+): DetectedImportPreset | undefined => {
   if (!/\.mpt$/i.test(fileName) && !text.startsWith("EC-Lab ASCII FILE")) return undefined;
   const headerLine = lines.find((line) => /^Nb header lines\s*:/i.test(line.trim()));
   const headerLineCount = Number(headerLine?.split(":").at(1)?.trim());
@@ -188,6 +194,14 @@ export const detectImportPreset = (
     },
     metadata,
   };
+};
+
+export const detectImportPreset = (
+  text: string,
+  fileName: string,
+): DetectedImportPreset | undefined => {
+  const lines = text.split(/\r?\n/);
+  return detectRigakuRasPreset(lines, fileName) ?? detectEcLabMptPreset(lines, fileName, text);
 };
 
 const delimiterToString = (delimiter: ImportDelimiter, sampleLine: string): string => {
@@ -226,6 +240,24 @@ const splitDelimitedLine = (line: string, delimiter: string): string[] => {
   return cells;
 };
 
+const tabularLines = (text: string, options: ImportParseOptions): string[] =>
+  text
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .slice(Math.max(0, options.skipRows))
+    .filter(
+      (line) => options.commentPrefix === "" || !line.trimStart().startsWith(options.commentPrefix),
+    )
+    .filter((line) => line.trim().length > 0);
+
+const parseHeaders = (firstCells: string[], options: ImportParseOptions): string[] =>
+  options.hasHeader
+    ? firstCells.map((header, index) => header.trim() || `column_${index + 1}`)
+    : firstCells.map((_, index) => {
+        const columnName = options.columnNames[index]?.trim();
+        return columnName || `column_${index + 1}`;
+      });
+
 export const parseDelimitedText = (
   text: string,
   name: string,
@@ -234,16 +266,7 @@ export const parseDelimitedText = (
   options: Partial<ImportParseOptions> = {},
 ): Dataset => {
   const resolvedOptions = { ...defaultImportParseOptions, ...options };
-  const lines = text
-    .replace(/^\uFEFF/, "")
-    .split(/\r?\n/)
-    .slice(Math.max(0, resolvedOptions.skipRows))
-    .filter(
-      (line) =>
-        resolvedOptions.commentPrefix === "" ||
-        !line.trimStart().startsWith(resolvedOptions.commentPrefix),
-    )
-    .filter((line) => line.trim().length > 0);
+  const lines = tabularLines(text, resolvedOptions);
 
   if (lines.length === 0) {
     throw new Error("Empty tabular file");
@@ -251,12 +274,7 @@ export const parseDelimitedText = (
 
   const delimiter = delimiterToString(resolvedOptions.delimiter, lines[0]);
   const firstCells = splitDelimitedLine(lines[0], delimiter);
-  const headers = resolvedOptions.hasHeader
-    ? firstCells.map((header, index) => header.trim() || `column_${index + 1}`)
-    : firstCells.map((_, index) => {
-        const columnName = resolvedOptions.columnNames[index]?.trim();
-        return columnName || `column_${index + 1}`;
-      });
+  const headers = parseHeaders(firstCells, resolvedOptions);
   const dataLines = resolvedOptions.hasHeader ? lines.slice(1) : lines;
 
   const usedIds = new Set<string>();
