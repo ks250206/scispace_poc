@@ -126,6 +126,13 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   const toggleExcludedColumn = (columnId: string, checked: boolean) => {
     void runScispace(importColumnCommand(importId, columnId, checked), { source: "gui" });
   };
+  const reapplyPreset = () => {
+    void runScispace(importSetCommand(importId, "preset=apply"), { source: "gui" });
+  };
+  const presetMetadataEntries = Object.entries(pendingImport.detectedPreset?.metadata ?? {}).slice(
+    0,
+    4,
+  );
 
   return (
     <div className="import-window">
@@ -143,6 +150,24 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
         <div className="import-preset-banner">
           <strong>{`Detected: ${pendingImport.detectedPreset.label}`}</strong>
           <span>{`Data starts at line ${pendingImport.detectedPreset.dataStartLine}`}</span>
+          {pendingImport.presetOverridden ? <span>Manual override</span> : null}
+          <button
+            type="button"
+            onClick={reapplyPreset}
+            aria-label={`Reapply ${pendingImport.detectedPreset.label} preset`}
+          >
+            Reapply preset
+          </button>
+          {presetMetadataEntries.length > 0 ? (
+            <dl className="import-preset-metadata">
+              {presetMetadataEntries.map(([key, value]) => (
+                <div key={key}>
+                  <dt>{key}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
         </div>
       ) : null}
       {pendingImport.error && !preview ? (

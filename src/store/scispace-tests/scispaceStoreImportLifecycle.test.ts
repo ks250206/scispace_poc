@@ -180,4 +180,28 @@ describe("scispace store import lifecycle behavior", () => {
       },
     });
   });
+
+  it("tracks manual preset overrides and reapplies detected import presets", async () => {
+    const { store } = await makeStore();
+    const text =
+      "EC-Lab ASCII FILE\nNb header lines : 4\nRun on channel : 4\nmode\ttime/s\tEwe/V\n1\t0\t3";
+    const importId = openImport(store, "sample.mpt", text);
+
+    await store.getState().runScispace(`import-set ${importId} delimiter=comma`, {
+      source: "gui",
+    });
+    expect(store.getState().pendingImports[0]).toMatchObject({
+      presetOverridden: true,
+      options: { delimiter: "comma" },
+    });
+
+    await store.getState().runScispace(`import-set ${importId} preset=apply`, {
+      source: "gui",
+    });
+    expect(store.getState().pendingImports[0]).toMatchObject({
+      presetOverridden: false,
+      options: { skipRows: 3, delimiter: "tab", hasHeader: true },
+      preview: { rows: [{ mode: 1, time_s: 0, Ewe_V: 3 }] },
+    });
+  });
 });

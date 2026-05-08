@@ -39,6 +39,7 @@ export const applyImportOpenResult = async (
       ...result.pendingImport,
       options,
       detectedPreset,
+      presetOverridden: false,
       allPreview,
       preview,
       error,

@@ -237,6 +237,7 @@ export interface PendingImport {
   mode: "tabular" | "raw";
   options: ImportParseOptions;
   detectedPreset?: DetectedImportPreset;
+  presetOverridden?: boolean;
   allPreview?: Dataset;
   preview?: Dataset;
   error?: string;

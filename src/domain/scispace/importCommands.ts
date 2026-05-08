@@ -72,6 +72,27 @@ export const executeImportCommand = (
     const pendingImport = context.pendingImports?.find((item) => item.id === importId);
     if (!pendingImport) return { kind: "error", output: `Pending import not found: ${importId}` };
 
+    if (readOption(args, "preset") === "apply") {
+      if (!pendingImport.detectedPreset) {
+        return { kind: "error", output: `No detected preset for import: ${importId}` };
+      }
+      return {
+        kind: "import-updated",
+        importId,
+        pendingImport: {
+          ...pendingImport,
+          mode: "tabular",
+          presetOverridden: false,
+          options: {
+            ...defaultImportParseOptions,
+            ...pendingImport.detectedPreset.options,
+            excludedColumnIds: [],
+          },
+        },
+        output: `Import preset reapplied: ${pendingImport.detectedPreset.label}`,
+      };
+    }
+
     const skipRowsValue = readOption(args, "skipRows");
     const skipRows = skipRowsValue === undefined ? undefined : parseInteger(skipRowsValue);
     if (skipRowsValue !== undefined && (skipRows === undefined || skipRows < 0)) {
@@ -96,8 +117,17 @@ export const executeImportCommand = (
     const columnNames = readOption(args, "columnNames")
       ?.split(",")
       .map((column) => column.trim());
+    const changedPresetSetting =
+      pendingImport.detectedPreset !== undefined &&
+      (skipRowsValue !== undefined ||
+        delimiter !== undefined ||
+        readOption(args, "commentPrefix") !== undefined ||
+        readOption(args, "hasHeader") !== undefined ||
+        mode !== undefined ||
+        columnNames !== undefined);
     const pendingImportUpdate: PendingImport = {
       ...pendingImport,
+      presetOverridden: changedPresetSetting ? true : pendingImport.presetOverridden,
       mode: mode ?? pendingImport.mode,
       options: {
         ...pendingImport.options,

@@ -35,6 +35,7 @@ export const createImportDialogState = (
     mode: "tabular",
     options,
     detectedPreset,
+    presetOverridden: false,
     allPreview,
     preview,
     error,

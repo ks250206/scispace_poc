@@ -106,8 +106,22 @@ describe("Workbench import UI", () => {
 
     await waitFor(() => expect(screen.getByText("Detected: Rigaku RAS")).toBeInTheDocument());
     expect(screen.getByText("Data starts at line 5")).toBeInTheDocument();
+    expect(screen.getByText("MEAS_SCAN_UNIT_X")).toBeInTheDocument();
+    expect(screen.getByText("deg")).toBeInTheDocument();
     expect(screen.getByLabelText("Raw line 5")).toHaveValue("10.0000 3.9658 1.0000");
     expect(document.querySelector(".raw-text-table tbody tr.data-start-row")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Delimiter"), { target: { value: "comma" } });
+    await waitFor(() => expect(screen.getByText("Manual override")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Reapply Rigaku RAS preset" }));
+    await waitFor(() =>
+      expect(storeState().pendingImports[0]).toMatchObject({
+        presetOverridden: false,
+        options: { delimiter: "space", skipRows: 4 },
+      }),
+    );
+    expect(screen.queryByText("Manual override")).not.toBeInTheDocument();
   });
 
   it("uses the whole import body for raw text mode", async () => {

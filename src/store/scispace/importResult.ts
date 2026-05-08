@@ -1,6 +1,11 @@
 import { datasetColumnIds, normalizeVirtualPath } from "../../domain/csv";
 import type { PendingImport, ScispaceCommandResult } from "../../domain/types";
-import { createPreviews, normalizeColumnNames, readCommandPath } from "./importPreview";
+import {
+  createPreviews,
+  emptyColumnIds,
+  normalizeColumnNames,
+  readCommandPath,
+} from "./importPreview";
 import type { ResultApplyContext } from "./resultApplyContext";
 import { makeFileRecord } from "./workspaceDefaults";
 import { uniquifyPath } from "./virtualFiles";
@@ -19,9 +24,16 @@ export const applyImportResult = async (
       updatedImport.text,
       updatedImport.options,
     );
+    const normalizedOptions =
+      updatedImport.detectedPreset && updatedImport.presetOverridden === false
+        ? normalizeColumnNames(
+            { ...updatedImport.options, excludedColumnIds: emptyColumnIds(allPreview) },
+            allPreview,
+          )
+        : normalizeColumnNames(updatedImport.options, allPreview);
     const normalizedImport: PendingImport = {
       ...updatedImport,
-      options: normalizeColumnNames(updatedImport.options, allPreview),
+      options: normalizedOptions,
       allPreview,
       preview,
       error,
