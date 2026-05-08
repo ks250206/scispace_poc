@@ -53,6 +53,7 @@ const columnsSelectedForDataset = (
 export function DataBrowser() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [collapsedDatasetIds, setCollapsedDatasetIds] = useState<Set<string>>(() => new Set());
+  const [openMenuFileId, setOpenMenuFileId] = useState<string>();
   const files = useScispaceStore((state) => state.files);
   const datasets = useScispaceStore((state) => state.datasets);
   const activeDatasetId = useScispaceStore((state) => state.activeDatasetId);
@@ -86,6 +87,13 @@ export function DataBrowser() {
   const handleCreateFolder = () => {
     const name = window.prompt("Folder name", "New Folder");
     if (name) void runScispace(`file-mkdir ~/raw/${quoteCommandArg(name)}`, { source: "gui" });
+  };
+
+  const closeItemMenu = () => setOpenMenuFileId(undefined);
+
+  const runItemAction = (action: () => void) => {
+    closeItemMenu();
+    action();
   };
 
   const handleRename = (file: VirtualFile) => {
@@ -171,6 +179,10 @@ export function DataBrowser() {
               <div
                 className={`tree-row file ${selected ? "selected" : ""} ${dataset ? "parsed" : "raw-only"} ${isDirectory ? "directory" : ""}`}
                 style={{ "--tree-depth": depthOf(file.path) } as CSSProperties}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setOpenMenuFileId(file.id);
+                }}
               >
                 <span className="tree-indent" />
                 <button
@@ -202,53 +214,83 @@ export function DataBrowser() {
                   {dataset ? `${dataset.rows.length}r · ${dataset.columns.length}c` : "raw"}
                 </span>
                 <div className="tree-actions">
-                  {!dataset && file.kind === "file" ? (
-                    <button
-                      type="button"
-                      aria-label={`Parse ${file.name}`}
-                      className="tree-action"
-                      onClick={() =>
-                        openImportThroughCommand(crypto.randomUUID(), file.name, file.text ?? "")
-                      }
-                    >
-                      ⇄
-                    </button>
-                  ) : null}
-                  {dataset ? (
-                    <button
-                      type="button"
-                      aria-label={`Plot ${file.name}`}
-                      className="tree-action"
-                      onClick={() => handlePlotDataset(dataset.id)}
-                    >
-                      ⌁
-                    </button>
-                  ) : null}
                   <button
                     type="button"
-                    aria-label={`Move ${file.name}`}
-                    className="tree-action"
-                    onClick={() => handleMove(file)}
+                    aria-label={`Actions ${file.name}`}
+                    aria-expanded={openMenuFileId === file.id}
+                    className="tree-action tree-menu-trigger"
+                    onClick={() =>
+                      setOpenMenuFileId((current) => (current === file.id ? undefined : file.id))
+                    }
                   >
-                    ↵
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Rename ${file.name}`}
-                    className="tree-action"
-                    onClick={() => handleRename(file)}
-                  >
-                    ✎
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Delete ${file.name}`}
-                    className="tree-action"
-                    onClick={() => handleDelete(file)}
-                  >
-                    ×
+                    ⋯
                   </button>
                 </div>
+                {openMenuFileId === file.id ? (
+                  <div className="tree-menu" role="menu" aria-label={`Actions for ${file.name}`}>
+                    {dataset ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => runItemAction(() => handleOpenTable(dataset.id))}
+                      >
+                        Table
+                      </button>
+                    ) : null}
+                    {dataset ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        aria-label={`Plot ${file.name}`}
+                        onClick={() => runItemAction(() => handlePlotDataset(dataset.id))}
+                      >
+                        Plot
+                      </button>
+                    ) : null}
+                    {!dataset && file.kind === "file" ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        aria-label={`Load ${file.name}`}
+                        onClick={() =>
+                          runItemAction(() =>
+                            openImportThroughCommand(
+                              crypto.randomUUID(),
+                              file.name,
+                              file.text ?? "",
+                            ),
+                          )
+                        }
+                      >
+                        Load
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label={`Move ${file.name}`}
+                      onClick={() => runItemAction(() => handleMove(file))}
+                    >
+                      Move
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label={`Rename ${file.name}`}
+                      onClick={() => runItemAction(() => handleRename(file))}
+                    >
+                      Rename
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label={`Delete ${file.name}`}
+                      onClick={() => runItemAction(() => handleDelete(file))}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ) : null}
               </div>
               {dataset && !isCollapsed
                 ? dataset.columns.map((column) => (

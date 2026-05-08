@@ -44,11 +44,13 @@ describe("Workbench data browser UI", () => {
   });
 
   it("opens raw file parsing from data browser through scispace commands", async () => {
+    const user = userEvent.setup();
     await act(async () => {
       await storeState().importTextFile("notes.txt", "raw notes");
     });
     await renderWorkbench();
-    fireEvent.click(screen.getByRole("button", { name: "Parse notes.txt" }));
+    await user.click(screen.getByRole("button", { name: "Actions notes.txt" }));
+    await user.click(screen.getByRole("menuitem", { name: "Load notes.txt" }));
 
     await waitFor(() => expect(screen.getByText("Import - notes.txt")).toBeInTheDocument());
   });
@@ -79,16 +81,19 @@ describe("Workbench data browser UI", () => {
     await user.click(screen.getByRole("button", { name: "+" }));
     expect(screen.getByText("analysis")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Move waveform.csv" }));
+    await user.click(screen.getByRole("button", { name: "Actions waveform.csv" }));
+    await user.click(screen.getByRole("menuitem", { name: "Move waveform.csv" }));
     await waitFor(() =>
       expect(storeState().datasets[0]?.sourcePath).toBe("~/raw/analysis/waveform.csv"),
     );
 
-    await user.click(screen.getByRole("button", { name: "Rename waveform.csv" }));
+    await user.click(screen.getByRole("button", { name: "Actions waveform.csv" }));
+    await user.click(screen.getByRole("menuitem", { name: "Rename waveform.csv" }));
     await waitFor(() => expect(screen.getByText("renamed.csv")).toBeInTheDocument());
     expect(screen.getByText("Table - renamed.csv")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Delete renamed.csv" }));
+    await user.click(screen.getByRole("button", { name: "Actions renamed.csv" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete renamed.csv" }));
     await waitFor(() => expect(screen.queryByText("renamed.csv")).not.toBeInTheDocument());
     expect(confirm).toHaveBeenCalled();
     expect(prompt).toHaveBeenCalledTimes(3);
@@ -106,7 +111,8 @@ describe("Workbench data browser UI", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     await renderWorkbench();
 
-    await user.click(screen.getByRole("button", { name: "Delete waveform.csv" }));
+    await user.click(screen.getByRole("button", { name: "Actions waveform.csv" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete waveform.csv" }));
     await waitFor(() =>
       expect(storeState().files.some((file) => file.path === "~/raw/waveform.csv")).toBe(false),
     );
@@ -162,7 +168,8 @@ describe("Workbench data browser UI", () => {
         .setDatasetColumnSelection("seed-waveform", ["time", "signal", "background"]);
     });
 
-    await user.click(screen.getByRole("button", { name: "Plot waveform.csv" }));
+    await user.click(screen.getByRole("button", { name: "Actions waveform.csv" }));
+    await user.click(screen.getByRole("menuitem", { name: "Plot waveform.csv" }));
 
     await waitFor(() =>
       expect(storeState().commandHistory.at(-1)).toMatchObject({
@@ -175,5 +182,28 @@ describe("Workbench data browser UI", () => {
       x: "time",
       series: [{ y: "signal" }, { y: "background" }],
     });
+  });
+
+  it("shows item actions by data browser item kind", async () => {
+    const user = userEvent.setup();
+    await act(async () => {
+      await storeState().runScispace("file-mkdir ~/raw/analysis");
+      await storeState().importTextFile("notes.txt", "raw notes");
+    });
+    await renderWorkbench();
+
+    await user.click(screen.getByRole("button", { name: "Actions waveform.csv" }));
+    expect(screen.getByRole("menuitem", { name: "Table" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Plot waveform.csv" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Load waveform.csv" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Actions notes.txt" }));
+    expect(screen.getByRole("menuitem", { name: "Load notes.txt" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Plot notes.txt" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Actions analysis" }));
+    expect(screen.queryByRole("menuitem", { name: "Load analysis" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Plot analysis" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Rename analysis" })).toBeInTheDocument();
   });
 });
