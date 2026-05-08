@@ -10,6 +10,7 @@ import {
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { datasetColumnIds } from "../domain/csv";
+import type { DatasetColumn } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
 
 interface DataTableWindowProps {
@@ -28,6 +29,19 @@ interface TableCellPosition {
 interface TableCellRange {
   anchor: TableCellPosition;
   focus: TableCellPosition;
+}
+
+interface TableRangeBounds {
+  minRow: number;
+  maxRow: number;
+  firstColumn: string;
+  lastColumn: string;
+  rangeColumns: string[];
+}
+
+interface TablePlotSelection {
+  x: string;
+  yColumns: string[];
 }
 
 const formatCellValue = (value: unknown): string => {
@@ -53,6 +67,91 @@ export const tableWindowHeightForRows = (visibleRows: TableVisibleRows): number 
 
 const quoteCommandArg = (value: string): string =>
   /[\s"']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
+
+const setCellCommand = (
+  datasetName: string,
+  rowIndex: number,
+  columnId: string,
+  value: string,
+): string =>
+  `table-edit ${quoteCommandArg(datasetName)} action=set-cell row=${rowIndex + 1} column=${quoteCommandArg(
+    columnId,
+  )} value=${quoteCommandArg(value)}`;
+
+const deleteRowCommand = (datasetName: string, rowIndex: number): string =>
+  `table-edit ${quoteCommandArg(datasetName)} action=delete-row index=${rowIndex + 1}`;
+
+const deleteColumnCommand = (datasetName: string, columnId: string): string =>
+  `table-edit ${quoteCommandArg(datasetName)} action=delete-column column=${quoteCommandArg(columnId)}`;
+
+const rangeCommand = (
+  datasetName: string,
+  action: "clear" | "fill-down",
+  range: TableRangeBounds,
+): string =>
+  `table-range ${quoteCommandArg(datasetName)} action=${action} r1=${range.minRow + 1} c1=${quoteCommandArg(
+    range.firstColumn,
+  )} r2=${range.maxRow + 1} c2=${quoteCommandArg(range.lastColumn)}`;
+
+const plotCommand = (datasetName: string, selection: TablePlotSelection): string =>
+  `plot ${quoteCommandArg(datasetName)} x=${quoteCommandArg(selection.x)} y=${selection.yColumns
+    .map(quoteCommandArg)
+    .join(",")}`;
+
+const rangeBoundsFromSelection = (
+  selectedRange: TableCellRange | undefined,
+  columns: DatasetColumn[],
+): TableRangeBounds | undefined => {
+  if (!selectedRange) return undefined;
+  const anchorColumnIndex = columns.findIndex((item) => item.id === selectedRange.anchor.column);
+  const focusColumnIndex = columns.findIndex((item) => item.id === selectedRange.focus.column);
+  if (anchorColumnIndex < 0 || focusColumnIndex < 0) return undefined;
+  const minRow = Math.min(selectedRange.anchor.rowIndex, selectedRange.focus.rowIndex);
+  const maxRow = Math.max(selectedRange.anchor.rowIndex, selectedRange.focus.rowIndex);
+  const minColumn = Math.min(anchorColumnIndex, focusColumnIndex);
+  const maxColumn = Math.max(anchorColumnIndex, focusColumnIndex);
+  const rangeColumns = columns.slice(minColumn, maxColumn + 1).map((column) => column.id);
+  const firstColumn = rangeColumns[0];
+  const lastColumn = rangeColumns.at(-1);
+  if (!firstColumn || !lastColumn) return undefined;
+  return { minRow, maxRow, firstColumn, lastColumn, rangeColumns };
+};
+
+const plotSelectionFromTableSelection = (
+  rangeBounds: TableRangeBounds | undefined,
+  selectedColumn: string | undefined,
+  columns: DatasetColumn[],
+): TablePlotSelection | undefined => {
+  const selectedColumns = rangeBounds?.rangeColumns ?? (selectedColumn ? [selectedColumn] : []);
+  if (selectedColumns.length === 0) return undefined;
+  const visibleColumnIds = columns.map((column) => column.id);
+  const [rangeX, ...rangeY] = selectedColumns;
+  const fallbackX = visibleColumnIds.find((columnId) => columnId !== selectedColumns[0]);
+  const x = selectedColumns.length > 1 ? rangeX : fallbackX;
+  const yColumns = selectedColumns.length > 1 ? rangeY : selectedColumns;
+  const validYColumns = yColumns.filter((columnId) => columnId !== x);
+  if (!x || validYColumns.length === 0) return undefined;
+  return { x, yColumns: validYColumns };
+};
+
+const positionInRange = (
+  rowIndex: number,
+  columnId: string,
+  range: TableRangeBounds | undefined,
+  columns: DatasetColumn[],
+): boolean => {
+  if (!range) return false;
+  const currentColumnIndex = columns.findIndex((column) => column.id === columnId);
+  const firstColumnIndex = columns.findIndex((column) => column.id === range.firstColumn);
+  const lastColumnIndex = columns.findIndex((column) => column.id === range.lastColumn);
+  if (currentColumnIndex < 0 || firstColumnIndex < 0 || lastColumnIndex < 0) return false;
+  return (
+    rowIndex >= range.minRow &&
+    rowIndex <= range.maxRow &&
+    currentColumnIndex >= firstColumnIndex &&
+    currentColumnIndex <= lastColumnIndex
+  );
+};
 
 export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWindowProps) {
   const dataset = useScispaceStore((state) => state.datasets.find((item) => item.id === datasetId));
@@ -167,12 +266,9 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     if (!dataset || !editingCell) return;
     const { rowIndex, column, value } = editingCell;
     setEditingCell(undefined);
-    void runScispace(
-      `table-edit ${quoteCommandArg(dataset.name)} action=set-cell row=${rowIndex + 1} column=${quoteCommandArg(
-        column,
-      )} value=${quoteCommandArg(nextValue ?? value)}`,
-      { source: "gui" },
-    );
+    void runScispace(setCellCommand(dataset.name, rowIndex, column, nextValue ?? value), {
+      source: "gui",
+    });
   };
 
   const cancelEdit = () => {
@@ -187,10 +283,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     setSelectedColumn(undefined);
     setSelectedRange(undefined);
     setEditingCell(undefined);
-    void runScispace(
-      `table-edit ${quoteCommandArg(dataset.name)} action=delete-row index=${rowNumber}`,
-      { source: "gui" },
-    );
+    void runScispace(deleteRowCommand(dataset.name, selectedCell.rowIndex), { source: "gui" });
   };
 
   const deleteSelectedColumn = () => {
@@ -200,48 +293,16 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     setSelectedColumn(undefined);
     setSelectedRange(undefined);
     setEditingCell(undefined);
-    void runScispace(
-      `table-edit ${quoteCommandArg(dataset.name)} action=delete-column column=${quoteCommandArg(
-        selectedColumn,
-      )}`,
-      { source: "gui" },
-    );
+    void runScispace(deleteColumnCommand(dataset.name, selectedColumn), { source: "gui" });
   };
 
-  const selectedRangeBounds = () => {
-    if (!selectedRange) return undefined;
-    const anchorColumnIndex = cellColumnIndex(selectedRange.anchor.column);
-    const focusColumnIndex = cellColumnIndex(selectedRange.focus.column);
-    if (anchorColumnIndex < 0 || focusColumnIndex < 0) return undefined;
-    const minRow = Math.min(selectedRange.anchor.rowIndex, selectedRange.focus.rowIndex);
-    const maxRow = Math.max(selectedRange.anchor.rowIndex, selectedRange.focus.rowIndex);
-    const minColumn = Math.min(anchorColumnIndex, focusColumnIndex);
-    const maxColumn = Math.max(anchorColumnIndex, focusColumnIndex);
-    const rangeColumns = visibleDatasetColumns
-      .slice(minColumn, maxColumn + 1)
-      .map((column) => column.id);
-    const firstColumn = rangeColumns[0];
-    const lastColumn = rangeColumns.at(-1);
-    if (!firstColumn || !lastColumn) return undefined;
-    return { minRow, maxRow, firstColumn, lastColumn, rangeColumns };
-  };
-
-  const rangeBounds = selectedRangeBounds();
+  const rangeBounds = rangeBoundsFromSelection(selectedRange, visibleDatasetColumns);
   const hasSelectedRange = Boolean(rangeBounds);
   const canFillDownRange = Boolean(rangeBounds && rangeBounds.maxRow > rangeBounds.minRow);
 
   const selectionPlotSpec = useMemo(() => {
     if (!dataset) return undefined;
-    const selectedColumns = rangeBounds?.rangeColumns ?? (selectedColumn ? [selectedColumn] : []);
-    if (selectedColumns.length === 0) return undefined;
-    const visibleColumnIds = visibleDatasetColumns.map((column) => column.id);
-    const [rangeX, ...rangeY] = selectedColumns;
-    const fallbackX = visibleColumnIds.find((columnId) => columnId !== selectedColumns[0]);
-    const x = selectedColumns.length > 1 ? rangeX : fallbackX;
-    const yColumns = selectedColumns.length > 1 ? rangeY : selectedColumns;
-    const validYColumns = yColumns.filter((columnId) => columnId !== x);
-    if (!x || validYColumns.length === 0) return undefined;
-    return { x, yColumns: validYColumns };
+    return plotSelectionFromTableSelection(rangeBounds, selectedColumn, visibleDatasetColumns);
   }, [dataset, rangeBounds, selectedColumn, visibleDatasetColumns]);
 
   const copySelectedRange = () => {
@@ -268,12 +329,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     setSelectedColumn(undefined);
     setSelectedRange(undefined);
     setEditingCell(undefined);
-    void runScispace(
-      `table-range ${quoteCommandArg(dataset.name)} action=clear r1=${rangeBounds.minRow + 1} c1=${quoteCommandArg(
-        rangeBounds.firstColumn,
-      )} r2=${rangeBounds.maxRow + 1} c2=${quoteCommandArg(rangeBounds.lastColumn)}`,
-      { source: "gui" },
-    );
+    void runScispace(rangeCommand(dataset.name, "clear", rangeBounds), { source: "gui" });
   };
 
   const fillDownSelectedRange = () => {
@@ -289,22 +345,12 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     setSelectedColumn(undefined);
     setSelectedRange(undefined);
     setEditingCell(undefined);
-    void runScispace(
-      `table-range ${quoteCommandArg(dataset.name)} action=fill-down r1=${rangeBounds.minRow + 1} c1=${quoteCommandArg(
-        rangeBounds.firstColumn,
-      )} r2=${rangeBounds.maxRow + 1} c2=${quoteCommandArg(rangeBounds.lastColumn)}`,
-      { source: "gui" },
-    );
+    void runScispace(rangeCommand(dataset.name, "fill-down", rangeBounds), { source: "gui" });
   };
 
   const plotSelectedColumns = () => {
     if (!dataset || !selectionPlotSpec) return;
-    void runScispace(
-      `plot ${quoteCommandArg(dataset.name)} x=${quoteCommandArg(selectionPlotSpec.x)} y=${selectionPlotSpec.yColumns
-        .map(quoteCommandArg)
-        .join(",")}`,
-      { source: "gui" },
-    );
+    void runScispace(plotCommand(dataset.name, selectionPlotSpec), { source: "gui" });
   };
 
   const handleCellKeyDown = (
@@ -359,21 +405,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   };
 
   const isCellInRange = (rowIndex: number, column: string): boolean => {
-    if (!selectedRange) return false;
-    const anchorColumnIndex = cellColumnIndex(selectedRange.anchor.column);
-    const focusColumnIndex = cellColumnIndex(selectedRange.focus.column);
-    const currentColumnIndex = cellColumnIndex(column);
-    if (anchorColumnIndex < 0 || focusColumnIndex < 0 || currentColumnIndex < 0) return false;
-    const minRow = Math.min(selectedRange.anchor.rowIndex, selectedRange.focus.rowIndex);
-    const maxRow = Math.max(selectedRange.anchor.rowIndex, selectedRange.focus.rowIndex);
-    const minColumn = Math.min(anchorColumnIndex, focusColumnIndex);
-    const maxColumn = Math.max(anchorColumnIndex, focusColumnIndex);
-    return (
-      rowIndex >= minRow &&
-      rowIndex <= maxRow &&
-      currentColumnIndex >= minColumn &&
-      currentColumnIndex <= maxColumn
-    );
+    return positionInRange(rowIndex, column, rangeBounds, visibleDatasetColumns);
   };
 
   useEffect(() => {
