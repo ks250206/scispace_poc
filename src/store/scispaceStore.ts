@@ -12,11 +12,9 @@ import { executeScispaceCommand } from "../domain/scispace";
 import type {
   CommandHistoryEntry,
   Dataset,
-  ImportParseOptions,
   PendingImport,
   PlotSpec,
   ScispaceCommandResult,
-  VirtualFile,
   WorkspaceWindow,
 } from "../domain/types";
 import { appDb, readPersistedLayout, type ProjectRecord, type SciSpaceDatabase } from "./db";
@@ -45,92 +43,23 @@ import {
   plotWindowHeightForSpec,
   seedPlot,
 } from "./scispace/workspaceDefaults";
-
-const makeDirectoryRecord = (path: string): VirtualFile => ({
-  id: path,
-  path,
-  name: path.split("/").at(-1) ?? path,
-  kind: "directory",
-  createdAt: Date.now(),
-});
-
-const normalizeDirectoryPath = (path: string): string => {
-  const trimmed = path.trim().replaceAll("\\", "/").replace(/\/+$/, "");
-  if (trimmed === "~" || trimmed === "~/raw") return "~/raw";
-  if (trimmed.startsWith("~/raw/")) return trimmed;
-  return `~/raw/${trimmed.replace(/^~\//, "").replace(/^raw\//, "")}`;
-};
-
-const safePathName = (name: string, fallback: string): string =>
-  name.trim().replaceAll("\\", "/").split("/").filter(Boolean).at(-1) ?? fallback;
-
-const parentDirectoryOf = (path: string): string => {
-  const slashIndex = path.lastIndexOf("/");
-  return slashIndex > "~/raw".length ? path.slice(0, slashIndex) : "~/raw";
-};
-
-const joinVirtualPath = (directory: string, name: string): string =>
-  `${normalizeDirectoryPath(directory)}/${safePathName(name, "untitled")}`;
-
-const uniquifyPath = (path: string, files: VirtualFile[]): string => {
-  const existing = new Set(files.map((file) => file.path));
-  if (!existing.has(path)) return path;
-
-  const slashIndex = path.lastIndexOf("/");
-  const directory = slashIndex >= 0 ? path.slice(0, slashIndex + 1) : "";
-  const fileName = slashIndex >= 0 ? path.slice(slashIndex + 1) : path;
-  const dotIndex = fileName.lastIndexOf(".");
-  const stem = dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
-  const extension = dotIndex > 0 ? fileName.slice(dotIndex) : "";
-
-  for (let index = 1; ; index += 1) {
-    const candidate = `${directory}${stem} (${index})${extension}`;
-    if (!existing.has(candidate)) return candidate;
-  }
-};
-
-const descendantPaths = (path: string, files: VirtualFile[]): Set<string> => {
-  const prefix = `${path}/`;
-  return new Set(
-    files
-      .filter((file) => file.path === path || file.path.startsWith(prefix))
-      .map((file) => file.path),
-  );
-};
-
-const rewriteAffectedVirtualPaths = (
-  files: VirtualFile[],
-  path: string,
-  basePath: string,
-): {
-  affectedPaths: Set<string>;
-  rewrittenFiles: VirtualFile[];
-  rewrittenAffectedFiles: VirtualFile[];
-} => {
-  const affectedPaths = descendantPaths(path, files);
-  const rewrittenAffectedEntries = files
-    .filter((file) => affectedPaths.has(file.path))
-    .map((file) => {
-      const nextPath = file.path === path ? basePath : `${basePath}${file.path.slice(path.length)}`;
-      return [
-        file.path,
-        {
-          ...file,
-          id: nextPath,
-          path: nextPath,
-          name: nextPath.split("/").at(-1) ?? nextPath,
-        },
-      ] as const;
-    });
-  const rewrittenByOldPath = new Map(rewrittenAffectedEntries);
-  return {
-    affectedPaths,
-    rewrittenFiles: files.map((file) =>
-      affectedPaths.has(file.path) ? (rewrittenByOldPath.get(file.path) ?? file) : file,
-    ),
-    rewrittenAffectedFiles: rewrittenAffectedEntries.map(([, file]) => file),
-  };
-};
+import {
+  canParseAsTable,
+  createPreviews,
+  emptyColumnIds,
+  normalizeColumnNames,
+  readCommandPath,
+} from "./scispace/importPreview";
+import {
+  descendantPaths,
+  joinVirtualPath,
+  makeDirectoryRecord,
+  normalizeDirectoryPath,
+  parentDirectoryOf,
+  rewriteAffectedVirtualPaths,
+  safePathName,
+  uniquifyPath,
+} from "./scispace/virtualFiles";
 
 const nextActiveDatasetId = (datasets: Dataset[], current?: string): string | undefined =>
   current && datasets.some((dataset) => dataset.id === current) ? current : datasets[0]?.id;
@@ -159,64 +88,6 @@ const retitleWindow = (window: WorkspaceWindow, datasets: Dataset[], plotSpecs: 
     return plot ? { ...window, title: plot.title } : window;
   }
   return window;
-};
-
-const canParseAsTable = (name: string): boolean => /\.(csv|tsv)$/i.test(name);
-
-const emptyColumnIds = (dataset?: Dataset): string[] => {
-  if (!dataset) return [];
-  return dataset.columns
-    .filter((column) =>
-      dataset.rows.every((row) => {
-        const value = row[column.id];
-        return value == null || value === "";
-      }),
-    )
-    .map((column) => column.id);
-};
-
-const createPreviews = (
-  id: string,
-  fileName: string,
-  text: string,
-  options: ImportParseOptions,
-): { allPreview?: Dataset; preview?: Dataset; error?: string } => {
-  const allResult = executeScispaceCommand(`import-preview ${id}`, {
-    datasets: [],
-    pendingImports: [
-      { id, fileName, text, mode: "tabular", options: { ...options, excludedColumnIds: [] } },
-    ],
-  });
-  const result = executeScispaceCommand(`import-preview ${id}`, {
-    datasets: [],
-    pendingImports: [{ id, fileName, text, mode: "tabular", options }],
-  });
-  if (result.kind === "import-preview" && allResult.kind === "import-preview") {
-    return { allPreview: allResult.preview, preview: result.preview, error: result.error };
-  }
-  return { error: result.output };
-};
-
-const normalizeColumnNames = (
-  options: ImportParseOptions,
-  preview?: Dataset,
-): ImportParseOptions => {
-  if (options.hasHeader || !preview) return options;
-  const columnNames = preview.columns.map(
-    (column, index) => options.columnNames[index]?.trim() || column.name || `column_${index + 1}`,
-  );
-  return { ...options, columnNames };
-};
-
-const readCommandPath = (input: string): string | undefined => {
-  const match = input.match(/(?:^|\s)path=("[^"]+"|'[^']+'|\S+)/);
-  if (!match) return undefined;
-  const token = match[1].replace(/^["']|["']$/g, "");
-  try {
-    return decodeURIComponent(token);
-  } catch {
-    return token;
-  }
 };
 
 export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
