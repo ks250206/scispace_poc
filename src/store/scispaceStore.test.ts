@@ -11,6 +11,20 @@ const makeStore = async () => {
   return { db, store };
 };
 
+type StoreFixture = Awaited<ReturnType<typeof makeStore>>;
+type TestStore = StoreFixture["store"];
+type RunScispaceOptions = Parameters<ReturnType<TestStore["getState"]>["runScispace"]>[1];
+
+const stateOf = (store: TestStore) => store.getState();
+
+const runCommand = (store: TestStore, command: string, options?: RunScispaceOptions) =>
+  stateOf(store).runScispace(command, options);
+
+const openImport = (store: TestStore, fileName: string, text: string) =>
+  stateOf(store).openImportDialog(fileName, text);
+
+const lastCommand = (store: TestStore) => stateOf(store).commandHistory.at(-1);
+
 const storeSeedDataset = () => {
   const dataset = createSeedDataset();
   return {
@@ -30,7 +44,7 @@ const storeSeedDataset = () => {
 describe("scispace zustand store", () => {
   it("seeds the workspace with a dataset and initial windows", async () => {
     const { store } = await makeStore();
-    const state = store.getState();
+    const state = stateOf(store);
 
     expect(state.datasets[0]?.id).toBe("seed-waveform");
     expect(state.files[0]?.path).toBe("~/raw/waveform.csv");
@@ -70,18 +84,18 @@ describe("scispace zustand store", () => {
 
   it("imports text files through Dexie and exposes parsed datasets", async () => {
     const { db, store } = await makeStore();
-    const result = await store.getState().importTextFile("sample.csv", "x,y\n0,1\n1,2");
+    const result = await stateOf(store).importTextFile("sample.csv", "x,y\n0,1\n1,2");
 
     expect(result.dataset?.name).toBe("sample.csv");
-    expect(store.getState().files.some((file) => file.path === "~/raw/sample.csv")).toBe(true);
+    expect(stateOf(store).files.some((file) => file.path === "~/raw/sample.csv")).toBe(true);
     expect(await db.datasets.get(result.dataset?.id ?? "")).toMatchObject({ name: "sample.csv" });
-    expect(store.getState().terminalEvents.at(-1)).toContain("Imported ~/raw/sample.csv");
+    expect(stateOf(store).terminalEvents.at(-1)).toContain("Imported ~/raw/sample.csv");
   });
 
   it("keeps unsupported uploads as uniquely named raw files", async () => {
     const { db, store } = await makeStore();
-    const first = await store.getState().importTextFile("notes.txt", "raw notes");
-    const second = await store.getState().importTextFile("notes.txt", "more notes");
+    const first = await stateOf(store).importTextFile("notes.txt", "raw notes");
+    const second = await stateOf(store).importTextFile("notes.txt", "more notes");
 
     expect(first.dataset).toBeUndefined();
     expect(first.parseError).toContain("Raw file stored");
@@ -95,7 +109,7 @@ describe("scispace zustand store", () => {
 
   it("stores parse errors for invalid tabular uploads", async () => {
     const { db, store } = await makeStore();
-    const result = await store.getState().importTextFile("bad.csv", "\n");
+    const result = await stateOf(store).importTextFile("bad.csv", "\n");
 
     expect(result.dataset).toBeUndefined();
     expect(result.parseError).toBe("Empty tabular file");
@@ -107,14 +121,15 @@ describe("scispace zustand store", () => {
   it("updates dataset cells and rewrites the backing virtual file", async () => {
     const { db, store } = await makeStore();
 
-    await store
-      .getState()
-      .runScispace("table-edit waveform.csv action=set-cell row=1 column=signal value=42.5");
+    await runCommand(
+      store,
+      "table-edit waveform.csv action=set-cell row=1 column=signal value=42.5",
+    );
 
-    expect(store.getState().datasets[0]?.rows[0]?.signal).toBe(42.5);
+    expect(stateOf(store).datasets[0]?.rows[0]?.signal).toBe(42.5);
     expect((await db.datasets.get("seed-waveform"))?.rows[0]?.signal).toBe(42.5);
     expect((await db.files.get("~/raw/waveform.csv"))?.text?.split("\n")[1]).toBe("0,0,42.5,7");
-    expect(store.getState().commandHistory.at(-1)).toMatchObject({
+    expect(lastCommand(store)).toMatchObject({
       command: "table-edit waveform.csv action=set-cell row=1 column=signal value=42.5",
       status: "success",
     });
@@ -123,29 +138,29 @@ describe("scispace zustand store", () => {
   it("runs table-edit row and column deletes through scispace and persists datasets", async () => {
     const { db, store } = await makeStore();
 
-    const rowResult = await store
-      .getState()
-      .runScispace("table-edit waveform.csv action=delete-row index=1", { source: "gui" });
+    const rowResult = await runCommand(store, "table-edit waveform.csv action=delete-row index=1", {
+      source: "gui",
+    });
     expect(rowResult.kind).toBe("dataset-updated");
-    expect(store.getState().datasets[0]?.rows).toHaveLength(159);
+    expect(stateOf(store).datasets[0]?.rows).toHaveLength(159);
     expect((await db.files.get("~/raw/waveform.csv"))?.text).not.toContain("0,0,3,7");
-    expect(store.getState().commandHistory.at(-1)).toMatchObject({
+    expect(lastCommand(store)).toMatchObject({
       command: "table-edit waveform.csv action=delete-row index=1",
       source: "gui",
       status: "success",
     });
 
-    const columnResult = await store
-      .getState()
-      .runScispace("table-edit waveform.csv action=delete-column column=background", {
-        source: "history",
-      });
+    const columnResult = await runCommand(
+      store,
+      "table-edit waveform.csv action=delete-column column=background",
+      { source: "history" },
+    );
     expect(columnResult.kind).toBe("dataset-updated");
-    expect(datasetColumnNames(store.getState().datasets[0]!)).toEqual(["index", "time", "signal"]);
-    expect(store.getState().windows.find((window) => window.id === "table-seed")).toMatchObject({
+    expect(datasetColumnNames(stateOf(store).datasets[0]!)).toEqual(["index", "time", "signal"]);
+    expect(stateOf(store).windows.find((window) => window.id === "table-seed")).toMatchObject({
       columnIds: ["index", "time", "signal"],
     });
-    expect(store.getState().plotSpecs[0]?.series.map((series) => series.y)).toEqual(["signal"]);
+    expect(stateOf(store).plotSpecs[0]?.series.map((series) => series.y)).toEqual(["signal"]);
     expect((await db.datasets.get("seed-waveform"))?.columns.map((column) => column.id)).toEqual([
       "index",
       "time",
@@ -159,43 +174,40 @@ describe("scispace zustand store", () => {
   it("removes plot windows when table-edit deletes required plot columns", async () => {
     const { store } = await makeStore();
 
-    await store.getState().runScispace("table-edit waveform.csv action=delete-column column=time");
+    await runCommand(store, "table-edit waveform.csv action=delete-column column=time");
 
-    expect(store.getState().plotSpecs).toHaveLength(0);
-    expect(store.getState().windows.some((window) => window.kind === "plot")).toBe(false);
-    expect(store.getState().currentPlotId).toBeUndefined();
+    expect(stateOf(store).plotSpecs).toHaveLength(0);
+    expect(stateOf(store).windows.some((window) => window.kind === "plot")).toBe(false);
+    expect(stateOf(store).currentPlotId).toBeUndefined();
   });
 
   it("runs table-range edits through scispace and rewrites backing files", async () => {
     const { db, store } = await makeStore();
 
-    const cleared = await store
-      .getState()
-      .runScispace("table-range waveform.csv action=clear r1=1 c1=time r2=2 c2=signal", {
-        source: "gui",
-      });
+    const cleared = await runCommand(
+      store,
+      "table-range waveform.csv action=clear r1=1 c1=time r2=2 c2=signal",
+      { source: "gui" },
+    );
     expect(cleared.kind).toBe("dataset-updated");
-    expect(store.getState().datasets[0]?.rows[0]).toMatchObject({ time: "", signal: "" });
+    expect(stateOf(store).datasets[0]?.rows[0]).toMatchObject({ time: "", signal: "" });
     expect((await db.files.get("~/raw/waveform.csv"))?.text?.split("\n")[1]).toBe("0,,,7");
-    expect(store.getState().commandHistory.at(-1)).toMatchObject({
+    expect(lastCommand(store)).toMatchObject({
       command: "table-range waveform.csv action=clear r1=1 c1=time r2=2 c2=signal",
       source: "gui",
       status: "success",
     });
 
-    const filled = await store
-      .getState()
-      .runScispace(
-        "table-range waveform.csv action=fill-down r1=1 c1=background r2=3 c2=background",
-        {
-          source: "history",
-        },
-      );
+    const filled = await runCommand(
+      store,
+      "table-range waveform.csv action=fill-down r1=1 c1=background r2=3 c2=background",
+      { source: "history" },
+    );
     expect(filled.kind).toBe("dataset-updated");
-    expect(store.getState().datasets[0]?.rows[1]?.background).toBe(7);
-    expect(store.getState().datasets[0]?.rows[2]?.background).toBe(7);
+    expect(stateOf(store).datasets[0]?.rows[1]?.background).toBe(7);
+    expect(stateOf(store).datasets[0]?.rows[2]?.background).toBe(7);
     expect((await db.datasets.get("seed-waveform"))?.rows[2]?.background).toBe(7);
-    expect(store.getState().commandHistory.at(-1)).toMatchObject({
+    expect(lastCommand(store)).toMatchObject({
       command: "table-range waveform.csv action=fill-down r1=1 c1=background r2=3 c2=background",
       source: "history",
       status: "success",
@@ -205,24 +217,25 @@ describe("scispace zustand store", () => {
   it("undoes and redoes destructive table edits from snapshots", async () => {
     const { db, store } = await makeStore();
 
-    await store
-      .getState()
-      .runScispace("table-edit waveform.csv action=set-cell row=1 column=signal value=42.5");
-    expect(store.getState().datasets[0]?.rows[0]?.signal).toBe(42.5);
-    expect(store.getState().undoStack).toHaveLength(1);
-    expect(store.getState().redoStack).toHaveLength(0);
+    await runCommand(
+      store,
+      "table-edit waveform.csv action=set-cell row=1 column=signal value=42.5",
+    );
+    expect(stateOf(store).datasets[0]?.rows[0]?.signal).toBe(42.5);
+    expect(stateOf(store).undoStack).toHaveLength(1);
+    expect(stateOf(store).redoStack).toHaveLength(0);
 
-    await store.getState().undo();
-    expect(store.getState().datasets[0]?.rows[0]?.signal).toBe(3);
+    await stateOf(store).undo();
+    expect(stateOf(store).datasets[0]?.rows[0]?.signal).toBe(3);
     expect((await db.files.get("~/raw/waveform.csv"))?.text?.split("\n")[1]).toBe("0,0,3,7");
-    expect(store.getState().undoStack).toHaveLength(0);
-    expect(store.getState().redoStack).toHaveLength(1);
+    expect(stateOf(store).undoStack).toHaveLength(0);
+    expect(stateOf(store).redoStack).toHaveLength(1);
 
-    await store.getState().redo();
-    expect(store.getState().datasets[0]?.rows[0]?.signal).toBe(42.5);
+    await stateOf(store).redo();
+    expect(stateOf(store).datasets[0]?.rows[0]?.signal).toBe(42.5);
     expect((await db.files.get("~/raw/waveform.csv"))?.text?.split("\n")[1]).toBe("0,0,42.5,7");
-    expect(store.getState().undoStack).toHaveLength(1);
-    expect(store.getState().redoStack).toHaveLength(0);
+    expect(stateOf(store).undoStack).toHaveLength(1);
+    expect(stateOf(store).redoStack).toHaveLength(0);
   });
 
   it("undoes and redoes destructive file commands", async () => {
@@ -270,7 +283,7 @@ describe("scispace zustand store", () => {
 
   it("cancels pending imports without saving files", async () => {
     const { db, store } = await makeStore();
-    const importId = store.getState().openImportDialog("cancel.csv", "x,y\n1,2");
+    const importId = openImport(store, "cancel.csv", "x,y\n1,2");
 
     await store.getState().runScispace(`import-cancel ${importId}`, { source: "gui" });
 
@@ -280,7 +293,7 @@ describe("scispace zustand store", () => {
 
   it("updates import preview when header row is disabled", async () => {
     const { store } = await makeStore();
-    const importId = store.getState().openImportDialog("no-header.csv", "1,2\n3,4");
+    const importId = openImport(store, "no-header.csv", "1,2\n3,4");
 
     await store.getState().runScispace(`import-set ${importId} hasHeader=false`, {
       source: "gui",
@@ -297,7 +310,7 @@ describe("scispace zustand store", () => {
 
   it("uses edited column names for headerless imports", async () => {
     const { store } = await makeStore();
-    const importId = store.getState().openImportDialog("no-header.csv", "1,2\n3,4");
+    const importId = openImport(store, "no-header.csv", "1,2\n3,4");
 
     await store.getState().runScispace(`import-set ${importId} hasHeader=false`, {
       source: "gui",
@@ -316,7 +329,7 @@ describe("scispace zustand store", () => {
 
   it("defaults import dialogs to tabular mode and excludes empty columns", async () => {
     const { store } = await makeStore();
-    const importId = store.getState().openImportDialog("with-empty.csv", "x,empty,y\n1,,2\n3,,4");
+    const importId = openImport(store, "with-empty.csv", "x,empty,y\n1,,2\n3,,4");
     const pendingImport = store.getState().pendingImports.find((item) => item.id === importId);
 
     expect(pendingImport).toMatchObject({
@@ -338,7 +351,7 @@ describe("scispace zustand store", () => {
     const { store } = await makeStore();
     const text =
       "EC-Lab ASCII FILE\nNb header lines : 4\nRun on channel : 4\nmode\ttime/s\tEwe/V\n1\t0\t3";
-    const importId = store.getState().openImportDialog("sample.mpt", text);
+    const importId = openImport(store, "sample.mpt", text);
 
     expect(store.getState().pendingImports[0]).toMatchObject({
       id: importId,
@@ -359,7 +372,7 @@ describe("scispace zustand store", () => {
       "10.0200 1.0105 1.0000",
       "*RAS_INT_END",
     ].join("\n");
-    const importId = store.getState().openImportDialog("sample.ras", text);
+    const importId = openImport(store, "sample.ras", text);
 
     expect(store.getState().pendingImports[0]).toMatchObject({
       id: importId,
@@ -424,7 +437,7 @@ describe("scispace zustand store", () => {
 
   it("updates import raw text lines through scispace commands", async () => {
     const { store } = await makeStore();
-    const importId = store.getState().openImportDialog("editable.csv", "x,y\n1,2\n3,4");
+    const importId = openImport(store, "editable.csv", "x,y\n1,2\n3,4");
 
     await store
       .getState()
@@ -501,7 +514,7 @@ describe("scispace zustand store", () => {
 
   it("opens raw import dialogs and confirms them without datasets", async () => {
     const { db, store } = await makeStore();
-    const importId = store.getState().openImportDialog("notes.txt", "raw notes");
+    const importId = openImport(store, "notes.txt", "raw notes");
 
     await store.getState().runScispace(`import-set ${importId} mode=raw`, { source: "gui" });
     const result = await store.getState().confirmImport(importId);
@@ -524,7 +537,7 @@ describe("scispace zustand store", () => {
 
   it("cancels pending imports through scispace commands", async () => {
     const { store } = await makeStore();
-    const importId = store.getState().openImportDialog("cancel-me.csv", "x,y\n1,2");
+    const importId = openImport(store, "cancel-me.csv", "x,y\n1,2");
 
     await store.getState().runScispace(`import-cancel ${importId}`, { source: "gui" });
 
@@ -587,7 +600,7 @@ describe("scispace zustand store", () => {
 
   it("initializes visible columns for imported datasets", async () => {
     const { db, store } = await makeStore();
-    const importId = store.getState().openImportDialog("drop-cols.csv", "x,empty,y\n1,,2\n3,,4");
+    const importId = openImport(store, "drop-cols.csv", "x,empty,y\n1,,2\n3,,4");
     expect(store.getState().pendingImports[0]?.options.excludedColumnIds).toEqual(["empty"]);
 
     await store.getState().runScispace(`import-column ${importId} column=y action=exclude`, {
@@ -604,7 +617,7 @@ describe("scispace zustand store", () => {
 
   it("lets raw text imports become tabular datasets after switching mode", async () => {
     const { store } = await makeStore();
-    const importId = store.getState().openImportDialog("notes.txt", "x y\n1 2");
+    const importId = openImport(store, "notes.txt", "x y\n1 2");
 
     await store.getState().runScispace(`import-set ${importId} mode=tabular delimiter=space`, {
       source: "gui",
@@ -740,7 +753,7 @@ describe("scispace zustand store", () => {
     store.getState().setViewport({ x: -3200, y: -1800, scale: 2 });
     const visibleOrigin = { x: 1600, y: 900 };
 
-    const importId = store.getState().openImportDialog("visible.csv", "x,y\n1,2");
+    const importId = openImport(store, "visible.csv", "x,y\n1,2");
     const importWindow = store.getState().windows.find((window) => window.importId === importId);
     expect(importWindow).toMatchObject({ x: expect.any(Number), y: expect.any(Number) });
     expect(importWindow?.x).toBeGreaterThan(visibleOrigin.x);
@@ -902,7 +915,7 @@ describe("scispace zustand store", () => {
 
   it("resets Zustand and Dexie to a fresh project", async () => {
     const { db, store } = await makeStore();
-    store.getState().openImportDialog("pending.csv", "x,y\n1,2");
+    openImport(store, "pending.csv", "x,y\n1,2");
     await store.getState().importTextFile("sample.csv", "x,y\n0,1");
     await store.getState().runScispace("elt waveform.csv as derived.csv");
     store.getState().closeWindow("table-seed");
