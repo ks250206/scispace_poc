@@ -4,6 +4,7 @@ import "@wterm/react/css";
 import type { WTerm } from "@wterm/dom";
 import { BashShell } from "@wterm/just-bash";
 import { defineCommand } from "just-bash";
+import type { VirtualFile } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
 
 const toBashPath = (path: string): string => path.replace(/^~\//, "/home/user/");
@@ -15,6 +16,90 @@ type EditableBashShell = {
   _cursor?: number;
   _line?: string;
   _write?: (data: string) => void;
+};
+
+type TerminalSize = { cols: number; rows: number };
+
+type TerminalMetrics = {
+  charWidth: number;
+  horizontalPadding: number;
+  rowHeight: number;
+  verticalPadding: number;
+};
+
+const defaultTerminalMetrics: TerminalMetrics = {
+  charWidth: 8.4,
+  horizontalPadding: 24,
+  rowHeight: 17,
+  verticalPadding: 16,
+};
+
+const workspaceScaleOrDefault = (scale: number): number => Math.max(0.1, scale || 1);
+
+const buildInitialFiles = (files: VirtualFile[]): Record<string, string> =>
+  Object.fromEntries([
+    ["/home/user/README.txt", "SciSpace terminal. Try: scispace lsdata\n"],
+    ...files.filter((file) => file.text).map((file) => [toBashPath(file.path), file.text ?? ""]),
+  ]);
+
+const sumStylePixels = (style: CSSStyleDeclaration | undefined, properties: string[]): number =>
+  style
+    ? properties.reduce((total, property) => {
+        return total + (Number.parseFloat(style.getPropertyValue(property)) || 0);
+      }, 0)
+    : 0;
+
+const measureTerminalMetrics = (
+  viewport: HTMLElement,
+  terminal: HTMLElement | undefined,
+  workspaceScale: number,
+): TerminalMetrics => {
+  const scale = workspaceScaleOrDefault(workspaceScale);
+  const terminalStyle = terminal ? getComputedStyle(terminal) : undefined;
+  const probe = document.createElement("span");
+  probe.textContent = "M";
+  probe.style.visibility = "hidden";
+  probe.style.position = "absolute";
+  probe.style.font = terminalStyle?.font ?? "14px Menlo, Consolas, monospace";
+  viewport.append(probe);
+  const charWidth = probe.getBoundingClientRect().width || defaultTerminalMetrics.charWidth * scale;
+  probe.remove();
+
+  const rowHeight =
+    (terminalStyle
+      ? Number.parseFloat(terminalStyle.getPropertyValue("--term-row-height")) ||
+        defaultTerminalMetrics.rowHeight
+      : defaultTerminalMetrics.rowHeight) * scale;
+
+  return {
+    charWidth,
+    horizontalPadding:
+      sumStylePixels(terminalStyle, ["padding-left", "padding-right"]) ||
+      defaultTerminalMetrics.horizontalPadding,
+    rowHeight,
+    verticalPadding:
+      sumStylePixels(terminalStyle, ["padding-top", "padding-bottom"]) ||
+      defaultTerminalMetrics.verticalPadding,
+  };
+};
+
+const syncBashFiles = async (
+  bash: BashShell["bash"] | null | undefined,
+  files: VirtualFile[],
+): Promise<void> => {
+  if (!bash) return;
+  await bash.fs.rm("/home/user/raw", { recursive: true, force: true });
+  await bash.fs.mkdir("/home/user/raw", { recursive: true });
+  await Promise.all(
+    files
+      .filter((file) => file.kind === "directory")
+      .map((file) => bash.fs.mkdir(toBashPath(file.path), { recursive: true })),
+  );
+  await Promise.all(
+    files
+      .filter((file) => file.text)
+      .map((file) => bash.fs.writeFile(toBashPath(file.path), file.text ?? "")),
+  );
 };
 
 export const calculateTerminalGrid = ({
@@ -33,8 +118,8 @@ export const calculateTerminalGrid = ({
   horizontalPadding: number;
   verticalPadding: number;
   workspaceScale: number;
-}): { cols: number; rows: number } => {
-  const scale = Math.max(0.1, workspaceScale || 1);
+}): TerminalSize => {
+  const scale = workspaceScaleOrDefault(workspaceScale);
   const logicalWidth = viewportWidth / scale;
   const logicalHeight = viewportHeight / scale;
   const logicalCharWidth = Math.max(1, charWidth / scale);
@@ -129,22 +214,13 @@ export function TerminalPanel() {
   const terminalRef = useRef<WTerm | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const commandLineRequestIdRef = useRef<string | undefined>(undefined);
-  const [terminalSize, setTerminalSize] = useState<{ cols: number; rows: number }>();
+  const [terminalSize, setTerminalSize] = useState<TerminalSize>();
   const files = useScispaceStore((state) => state.files);
   const workspaceScale = useScispaceStore((state) => state.viewport.scale);
   const runScispace = useScispaceStore((state) => state.runScispace);
   const terminalCommandLineRequest = useScispaceStore((state) => state.terminalCommandLineRequest);
 
-  const initialFiles = useMemo(
-    () =>
-      Object.fromEntries([
-        ["/home/user/README.txt", "SciSpace terminal. Try: scispace lsdata\n"],
-        ...files
-          .filter((file) => file.text)
-          .map((file) => [toBashPath(file.path), file.text ?? ""]),
-      ]),
-    [files],
-  );
+  const initialFiles = useMemo(() => buildInitialFiles(files), [files]);
 
   const syncTerminalSize = useCallback(() => {
     const viewport = viewportRef.current;
@@ -152,36 +228,15 @@ export function TerminalPanel() {
     if (!viewport) return;
 
     const terminal = terminalInstance?.element;
-    const terminalStyle = terminal ? getComputedStyle(terminal) : undefined;
-    const horizontalPadding = terminalStyle
-      ? (Number.parseFloat(terminalStyle.paddingLeft) || 0) +
-        (Number.parseFloat(terminalStyle.paddingRight) || 0)
-      : 24;
-    const verticalPadding = terminalStyle
-      ? (Number.parseFloat(terminalStyle.paddingTop) || 0) +
-        (Number.parseFloat(terminalStyle.paddingBottom) || 0)
-      : 16;
-    const probe = document.createElement("span");
-    probe.textContent = "M";
-    probe.style.visibility = "hidden";
-    probe.style.position = "absolute";
-    probe.style.font = terminalStyle?.font ?? "14px Menlo, Consolas, monospace";
-    viewport.append(probe);
-    const charWidth = probe.getBoundingClientRect().width || 8.4 * Math.max(0.1, workspaceScale);
-    probe.remove();
-
-    const rowHeight =
-      (terminalStyle
-        ? Number.parseFloat(terminalStyle.getPropertyValue("--term-row-height")) || 17
-        : 17) * Math.max(0.1, workspaceScale);
+    const metrics = measureTerminalMetrics(viewport, terminal, workspaceScale);
     const { width, height } = viewport.getBoundingClientRect();
     const { cols, rows } = calculateTerminalGrid({
       viewportWidth: width,
       viewportHeight: height,
-      charWidth,
-      rowHeight,
-      horizontalPadding,
-      verticalPadding,
+      charWidth: metrics.charWidth,
+      rowHeight: metrics.rowHeight,
+      horizontalPadding: metrics.horizontalPadding,
+      verticalPadding: metrics.verticalPadding,
       workspaceScale,
     });
     setTerminalSize((current) =>
@@ -242,22 +297,7 @@ export function TerminalPanel() {
 
   useEffect(() => {
     const shell = shellRef.current;
-    const bash = shell?.bash;
-    if (!bash) return;
-    void (async () => {
-      await bash.fs.rm("/home/user/raw", { recursive: true, force: true });
-      await bash.fs.mkdir("/home/user/raw", { recursive: true });
-      await Promise.all(
-        files
-          .filter((file) => file.kind === "directory")
-          .map((file) => bash.fs.mkdir(toBashPath(file.path), { recursive: true })),
-      );
-      await Promise.all(
-        files
-          .filter((file) => file.text)
-          .map((file) => bash.fs.writeFile(toBashPath(file.path), file.text ?? "")),
-      );
-    })();
+    void syncBashFiles(shell?.bash, files);
   }, [files]);
 
   useEffect(() => {
