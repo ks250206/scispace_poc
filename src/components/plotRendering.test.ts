@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createSeedDataset } from "../domain/csv";
 import { executeScispaceCommand } from "../domain/scispace";
-import { buildPlotOptions, sortedPlotSeries } from "./plotRendering";
+import {
+  buildPlotOptions,
+  plotPositionFromClient,
+  plotRenderScale,
+  plotSizeFromRenderedRect,
+  scalePlotSpecForRender,
+  sortedPlotSeries,
+} from "./plotRendering";
 
 describe("plot rendering options", () => {
   it("maps rich plot spec values to uPlot options", () => {
@@ -98,5 +105,34 @@ describe("plot rendering options", () => {
     ]);
 
     expect(series.map((item) => item.y)).toEqual(["background", "signal"]);
+  });
+
+  it("scales plot render specs for sharp workspace zoom rendering", () => {
+    const dataset = createSeedDataset();
+    const created = executeScispaceCommand("plot waveform.csv x=time y=signal", {
+      datasets: [dataset],
+    });
+    expect(created.kind).toBe("plot-created");
+    if (created.kind !== "plot-created") return;
+
+    const scaled = scalePlotSpecForRender(created.spec, plotRenderScale(2));
+
+    expect(scaled.size).toEqual({ width: created.spec.size.width * 2, height: 720 });
+    expect(scaled.padding.left).toBe(created.spec.padding.left * 2);
+    expect(scaled.axes.x.size).toBe(created.spec.axes.x.size * 2);
+    expect(scaled.axes.x.valueStyle.size).toBe(created.spec.axes.x.valueStyle.size * 2);
+    expect(scaled.series[0]?.lineWidth).toBe(created.spec.series[0]!.lineWidth * 2);
+    expect(plotRenderScale(10)).toBe(4);
+  });
+
+  it("normalizes plot pointer coordinates between workspace and render scales", () => {
+    const rect = { left: 100, top: 40, width: 640, height: 360 } as DOMRect;
+
+    expect(plotPositionFromClient({ x: 300, y: 140 }, rect, 2, 2)).toEqual({ left: 200, top: 100 });
+    expect(plotPositionFromClient({ x: 300, y: 140 }, rect, 0.5, 1)).toEqual({
+      left: 400,
+      top: 200,
+    });
+    expect(plotSizeFromRenderedRect(rect, 0.5, 1)).toEqual({ width: 1280, height: 720 });
   });
 });

@@ -2,7 +2,15 @@ import { useEffect, useMemo, useRef } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 import { useScispaceStore } from "../store/scispaceStore";
-import { buildPlotOptions, sortedPlotSeries, xAxisLabelHeight } from "./plotRendering";
+import {
+  buildPlotOptions,
+  plotPositionFromClient,
+  plotRenderScale,
+  plotSizeFromRenderedRect,
+  scalePlotSpecForRender,
+  sortedPlotSeries,
+  xAxisLabelHeight,
+} from "./plotRendering";
 
 interface PlotWindowProps {
   plotId: string;
@@ -19,6 +27,7 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
   const spec = useScispaceStore((state) => state.plotSpecs.find((item) => item.id === plotId));
+  const workspaceScale = useScispaceStore((state) => state.viewport.scale);
   const dataset = useScispaceStore((state) =>
     state.datasets.find((item) => item.id === spec?.source),
   );
@@ -37,26 +46,37 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
     if (!containerRef.current || !plotData || !spec) return;
     plotRef.current?.destroy();
 
-    const plotHeight = Math.max(160, spec.size.height - xAxisLabelHeight);
-    plotRef.current = new uPlot(buildPlotOptions(spec, plotHeight), plotData, containerRef.current);
+    const renderScale = plotRenderScale(workspaceScale);
+    const renderSpec = scalePlotSpecForRender(spec, renderScale);
+    const plotHeight = Math.max(160, renderSpec.size.height - xAxisLabelHeight * renderScale);
+    plotRef.current = new uPlot(
+      buildPlotOptions(renderSpec, plotHeight),
+      plotData,
+      containerRef.current,
+    );
 
     const plot = plotRef.current;
+    plot.root.style.transform = `scale(${1 / renderScale})`;
+    plot.root.style.transformOrigin = "0 0";
     let dragStart: { left: number; top: number } | undefined;
     const clampPosition = (position: { left: number; top: number }) => {
       plot.syncRect(false);
       const rect = plot.rect;
+      const size = plotSizeFromRenderedRect(rect, workspaceScale, renderScale);
       return {
-        left: Math.max(0, Math.min(rect.width, position.left)),
-        top: Math.max(0, Math.min(rect.height, position.top)),
+        left: Math.max(0, Math.min(size.width, position.left)),
+        top: Math.max(0, Math.min(size.height, position.top)),
       };
     };
     const positionFromEvent = (event: MouseEvent) => {
       plot.syncRect(false);
       const rect = plot.rect;
-      return {
-        left: event.clientX - rect.left,
-        top: event.clientY - rect.top,
-      };
+      return plotPositionFromClient(
+        { x: event.clientX, y: event.clientY },
+        rect,
+        workspaceScale,
+        renderScale,
+      );
     };
     const updateSelection = (position: { left: number; top: number }) => {
       if (!dragStart) return;
@@ -124,7 +144,7 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
       document.removeEventListener("mouseup", handleMouseUp);
       plot.destroy();
     };
-  }, [plotData, spec]);
+  }, [plotData, spec, workspaceScale]);
 
   if (!spec || !dataset) return <div className="empty-state">Plot source not found.</div>;
 
@@ -145,7 +165,10 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
         <div
           ref={containerRef}
           className="plot-canvas-host"
-          style={{ height: Math.max(160, spec.size.height - xAxisLabelHeight) }}
+          style={{
+            width: spec.size.width,
+            height: Math.max(160, spec.size.height - xAxisLabelHeight),
+          }}
         />
         <div className="plot-x-axis-label">{spec.axes.x.label}</div>
       </div>

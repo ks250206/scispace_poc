@@ -2,11 +2,117 @@ import uPlot from "uplot";
 import type { PlotAxisSpec, PlotMarkerShape, PlotSeries, PlotSpec } from "../domain/types";
 
 export const xAxisLabelHeight = 24;
+const minRenderScale = 0.1;
+const maxRenderScale = 4;
+
+const scaleNumber = (value: number, scale: number): number => Number((value * scale).toFixed(3));
+
+export const plotRenderScale = (workspaceScale: number): number =>
+  Math.min(maxRenderScale, Math.max(minRenderScale, workspaceScale || 1));
+
+export const plotPositionFromClient = (
+  client: { x: number; y: number },
+  rect: Pick<DOMRect, "left" | "top">,
+  workspaceScale: number,
+  renderScale: number,
+): { left: number; top: number } => {
+  const safeWorkspaceScale = Math.max(minRenderScale, workspaceScale || 1);
+  const coordinateScale = renderScale / safeWorkspaceScale;
+  return {
+    left: (client.x - rect.left) * coordinateScale,
+    top: (client.y - rect.top) * coordinateScale,
+  };
+};
+
+export const plotSizeFromRenderedRect = (
+  rect: Pick<DOMRect, "width" | "height">,
+  workspaceScale: number,
+  renderScale: number,
+): { width: number; height: number } => {
+  const safeWorkspaceScale = Math.max(minRenderScale, workspaceScale || 1);
+  const coordinateScale = renderScale / safeWorkspaceScale;
+  return {
+    width: rect.width * coordinateScale,
+    height: rect.height * coordinateScale,
+  };
+};
 
 export const sortedPlotSeries = (series: PlotSeries[]): PlotSeries[] =>
   [...series].sort(
     (left, right) => left.drawOrder - right.drawOrder || left.y.localeCompare(right.y),
   );
+
+export const scalePlotSpecForRender = (spec: PlotSpec, renderScale: number): PlotSpec => {
+  if (renderScale === 1) return spec;
+  return {
+    ...spec,
+    size: {
+      width: scaleNumber(spec.size.width, renderScale),
+      height: scaleNumber(spec.size.height, renderScale),
+    },
+    font: { ...spec.font, size: scaleNumber(spec.font.size, renderScale) },
+    padding: {
+      top: scaleNumber(spec.padding.top, renderScale),
+      right: scaleNumber(spec.padding.right, renderScale),
+      bottom: scaleNumber(spec.padding.bottom, renderScale),
+      left: scaleNumber(spec.padding.left, renderScale),
+    },
+    axes: {
+      x: {
+        ...spec.axes.x,
+        size: scaleNumber(spec.axes.x.size, renderScale),
+        gap: scaleNumber(spec.axes.x.gap, renderScale),
+        labelGap: scaleNumber(spec.axes.x.labelGap, renderScale),
+        labelSize: scaleNumber(spec.axes.x.labelSize, renderScale),
+        ticks: {
+          ...spec.axes.x.ticks,
+          length: scaleNumber(spec.axes.x.ticks.length, renderScale),
+        },
+        labelStyle: {
+          ...spec.axes.x.labelStyle,
+          size: scaleNumber(spec.axes.x.labelStyle.size, renderScale),
+        },
+        valueStyle: {
+          ...spec.axes.x.valueStyle,
+          size: scaleNumber(spec.axes.x.valueStyle.size, renderScale),
+        },
+      },
+      y: {
+        ...spec.axes.y,
+        size: scaleNumber(spec.axes.y.size, renderScale),
+        gap: scaleNumber(spec.axes.y.gap, renderScale),
+        labelGap: scaleNumber(spec.axes.y.labelGap, renderScale),
+        labelSize: scaleNumber(spec.axes.y.labelSize, renderScale),
+        ticks: {
+          ...spec.axes.y.ticks,
+          length: scaleNumber(spec.axes.y.ticks.length, renderScale),
+        },
+        labelStyle: {
+          ...spec.axes.y.labelStyle,
+          size: scaleNumber(spec.axes.y.labelStyle.size, renderScale),
+        },
+        valueStyle: {
+          ...spec.axes.y.valueStyle,
+          size: scaleNumber(spec.axes.y.valueStyle.size, renderScale),
+        },
+      },
+    },
+    series: spec.series.map((series) => ({
+      ...series,
+      lineWidth: scaleNumber(series.lineWidth, renderScale),
+      markerSize: scaleNumber(series.markerSize, renderScale),
+    })),
+    annotations: spec.annotations.map((annotation) => ({
+      ...annotation,
+      dx: scaleNumber(annotation.dx, renderScale),
+      dy: scaleNumber(annotation.dy, renderScale),
+      font: {
+        ...annotation.font,
+        size: scaleNumber(annotation.font.size, renderScale),
+      },
+    })),
+  };
+};
 
 const font = (size: number, family: string): string => `${size}px ${family}`;
 

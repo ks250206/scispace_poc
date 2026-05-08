@@ -17,6 +17,34 @@ type EditableBashShell = {
   _write?: (data: string) => void;
 };
 
+export const calculateTerminalGrid = ({
+  viewportWidth,
+  viewportHeight,
+  charWidth,
+  rowHeight,
+  horizontalPadding,
+  verticalPadding,
+  workspaceScale,
+}: {
+  viewportWidth: number;
+  viewportHeight: number;
+  charWidth: number;
+  rowHeight: number;
+  horizontalPadding: number;
+  verticalPadding: number;
+  workspaceScale: number;
+}): { cols: number; rows: number } => {
+  const scale = Math.max(0.1, workspaceScale || 1);
+  const logicalWidth = viewportWidth / scale;
+  const logicalHeight = viewportHeight / scale;
+  const logicalCharWidth = Math.max(1, charWidth / scale);
+  const logicalRowHeight = Math.max(1, rowHeight / scale);
+  return {
+    cols: Math.max(1, Math.floor((logicalWidth - horizontalPadding) / logicalCharWidth)),
+    rows: Math.max(1, Math.floor((logicalHeight - verticalPadding) / logicalRowHeight)),
+  };
+};
+
 export const scrollTerminalToBottom = (
   terminalElement?: HTMLElement | null,
   viewportElement?: HTMLElement | null,
@@ -103,6 +131,7 @@ export function TerminalPanel() {
   const commandLineRequestIdRef = useRef<string | undefined>(undefined);
   const [terminalSize, setTerminalSize] = useState<{ cols: number; rows: number }>();
   const files = useScispaceStore((state) => state.files);
+  const workspaceScale = useScispaceStore((state) => state.viewport.scale);
   const runScispace = useScispaceStore((state) => state.runScispace);
   const terminalCommandLineRequest = useScispaceStore((state) => state.terminalCommandLineRequest);
 
@@ -138,21 +167,30 @@ export function TerminalPanel() {
     probe.style.position = "absolute";
     probe.style.font = terminalStyle?.font ?? "14px Menlo, Consolas, monospace";
     viewport.append(probe);
-    const charWidth = probe.getBoundingClientRect().width || 8.4;
+    const charWidth = probe.getBoundingClientRect().width || 8.4 * Math.max(0.1, workspaceScale);
     probe.remove();
 
-    const rowHeight = terminalStyle
-      ? Number.parseFloat(terminalStyle.getPropertyValue("--term-row-height")) || 17
-      : 17;
+    const rowHeight =
+      (terminalStyle
+        ? Number.parseFloat(terminalStyle.getPropertyValue("--term-row-height")) || 17
+        : 17) * Math.max(0.1, workspaceScale);
     const { width, height } = viewport.getBoundingClientRect();
-    const cols = Math.max(1, Math.floor((width - horizontalPadding) / charWidth));
-    const rows = Math.max(1, Math.floor((height - verticalPadding) / rowHeight));
+    const { cols, rows } = calculateTerminalGrid({
+      viewportWidth: width,
+      viewportHeight: height,
+      charWidth,
+      rowHeight,
+      horizontalPadding,
+      verticalPadding,
+      workspaceScale,
+    });
     setTerminalSize((current) =>
       current && current.cols === cols && current.rows === rows ? current : { cols, rows },
     );
     terminalInstance?.resize(cols, rows);
     resize(cols, rows);
-  }, [ref, resize]);
+    scrollTerminalToBottom(terminal, viewport);
+  }, [ref, resize, workspaceScale]);
 
   const scrollToBottom = useCallback(() => {
     const terminalElement = terminalRef.current?.element ?? ref.current?.instance?.element;

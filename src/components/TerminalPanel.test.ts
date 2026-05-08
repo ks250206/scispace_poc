@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  calculateTerminalGrid,
   clearTerminalScrollbackRows,
   handleTerminalInput,
   normalizeTerminalOutput,
@@ -9,6 +10,40 @@ import {
 import type { BashShell } from "@wterm/just-bash";
 
 describe("terminal input handling", () => {
+  it("keeps terminal grid sizing stable under workspace scale", () => {
+    const base = {
+      viewportWidth: 800,
+      viewportHeight: 400,
+      charWidth: 8,
+      rowHeight: 16,
+      horizontalPadding: 24,
+      verticalPadding: 16,
+      workspaceScale: 1,
+    };
+
+    expect(calculateTerminalGrid(base)).toEqual({ cols: 97, rows: 24 });
+    expect(
+      calculateTerminalGrid({
+        ...base,
+        viewportWidth: 1600,
+        viewportHeight: 800,
+        charWidth: 16,
+        rowHeight: 32,
+        workspaceScale: 2,
+      }),
+    ).toEqual({ cols: 97, rows: 24 });
+    expect(
+      calculateTerminalGrid({
+        ...base,
+        viewportWidth: 400,
+        viewportHeight: 200,
+        charWidth: 4,
+        rowHeight: 8,
+        workspaceScale: 0.5,
+      }),
+    ).toEqual({ cols: 97, rows: 24 });
+  });
+
   it("handles delete escape sequence as forward delete instead of printing [3~", async () => {
     const writes: string[] = [];
     const shell = {
