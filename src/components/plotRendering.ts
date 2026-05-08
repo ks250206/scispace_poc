@@ -7,6 +7,8 @@ const maxRenderScale = 4;
 
 const scaleNumber = (value: number, scale: number): number => Number((value * scale).toFixed(3));
 
+const font = (size: number, family: string): string => `${size}px ${family}`;
+
 export const plotRenderScale = (workspaceScale: number): number =>
   Math.min(maxRenderScale, Math.max(minRenderScale, workspaceScale || 1));
 
@@ -42,6 +44,26 @@ export const sortedPlotSeries = (series: PlotSeries[]): PlotSeries[] =>
     (left, right) => left.drawOrder - right.drawOrder || left.y.localeCompare(right.y),
   );
 
+const scaleAxisForRender = (axis: PlotAxisSpec, renderScale: number): PlotAxisSpec => ({
+  ...axis,
+  size: scaleNumber(axis.size, renderScale),
+  gap: scaleNumber(axis.gap, renderScale),
+  labelGap: scaleNumber(axis.labelGap, renderScale),
+  labelSize: scaleNumber(axis.labelSize, renderScale),
+  ticks: {
+    ...axis.ticks,
+    length: scaleNumber(axis.ticks.length, renderScale),
+  },
+  labelStyle: {
+    ...axis.labelStyle,
+    size: scaleNumber(axis.labelStyle.size, renderScale),
+  },
+  valueStyle: {
+    ...axis.valueStyle,
+    size: scaleNumber(axis.valueStyle.size, renderScale),
+  },
+});
+
 export const scalePlotSpecForRender = (spec: PlotSpec, renderScale: number): PlotSpec => {
   if (renderScale === 1) return spec;
   return {
@@ -58,44 +80,8 @@ export const scalePlotSpecForRender = (spec: PlotSpec, renderScale: number): Plo
       left: scaleNumber(spec.padding.left, renderScale),
     },
     axes: {
-      x: {
-        ...spec.axes.x,
-        size: scaleNumber(spec.axes.x.size, renderScale),
-        gap: scaleNumber(spec.axes.x.gap, renderScale),
-        labelGap: scaleNumber(spec.axes.x.labelGap, renderScale),
-        labelSize: scaleNumber(spec.axes.x.labelSize, renderScale),
-        ticks: {
-          ...spec.axes.x.ticks,
-          length: scaleNumber(spec.axes.x.ticks.length, renderScale),
-        },
-        labelStyle: {
-          ...spec.axes.x.labelStyle,
-          size: scaleNumber(spec.axes.x.labelStyle.size, renderScale),
-        },
-        valueStyle: {
-          ...spec.axes.x.valueStyle,
-          size: scaleNumber(spec.axes.x.valueStyle.size, renderScale),
-        },
-      },
-      y: {
-        ...spec.axes.y,
-        size: scaleNumber(spec.axes.y.size, renderScale),
-        gap: scaleNumber(spec.axes.y.gap, renderScale),
-        labelGap: scaleNumber(spec.axes.y.labelGap, renderScale),
-        labelSize: scaleNumber(spec.axes.y.labelSize, renderScale),
-        ticks: {
-          ...spec.axes.y.ticks,
-          length: scaleNumber(spec.axes.y.ticks.length, renderScale),
-        },
-        labelStyle: {
-          ...spec.axes.y.labelStyle,
-          size: scaleNumber(spec.axes.y.labelStyle.size, renderScale),
-        },
-        valueStyle: {
-          ...spec.axes.y.valueStyle,
-          size: scaleNumber(spec.axes.y.valueStyle.size, renderScale),
-        },
-      },
+      x: scaleAxisForRender(spec.axes.x, renderScale),
+      y: scaleAxisForRender(spec.axes.y, renderScale),
     },
     series: spec.series.map((series) => ({
       ...series,
@@ -113,8 +99,6 @@ export const scalePlotSpecForRender = (spec: PlotSpec, renderScale: number): Plo
     })),
   };
 };
-
-const font = (size: number, family: string): string => `${size}px ${family}`;
 
 const axisOptions = (axis: PlotAxisSpec, grid: boolean, border: boolean): uPlot.Axis => ({
   label: axis.label,
