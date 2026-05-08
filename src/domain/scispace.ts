@@ -119,6 +119,91 @@ const formatVirtualFileList = (
     .join("\n");
 };
 
+const helpText = [
+  "scispace commands:",
+  "  lsdata",
+  "  table <dataset> columns=<column[,column...]>",
+  "  table-edit <dataset> action=<delete-row|delete-column|set-cell> index=<n> row=<n> column=<col> value=<value>",
+  "  table-range <dataset> action=<clear|fill-down> r1=<n> c1=<col> r2=<n> c2=<col>",
+  "  plot <dataset> x=<column> y=<column[,column...]> type=<line|line-marker|marker>",
+  "  plot-set <plotId> title=<title> type=<line|line-marker|marker> border=<true|false> width=<n> height=<n> fontFamily=<name> fontSize=<n> padding=<t:r:b:l>",
+  "  plot-axis <plotId> axis=<x|y> range=<auto|min:max> tick=<auto|interval> tickDir=<out|in|none> scale=<linear|log>",
+  "  plot-grid <plotId> x=<true|false> y=<true|false>",
+  "  plot-series <plotId> y=<column> action=<add|remove> markerShape=<circle|square|triangle|diamond|cross|plus> order=<n>",
+  "  plot-annotation <plotId> action=<add|update|remove>",
+  "  plot-schema [plotId]",
+  "  file-list [path]",
+  "  file-mkdir <path>",
+  "  file-rename <path> name=<newName>",
+  "  file-move <path> to=<directory>",
+  "  file-delete <path>",
+  "  import-open <importId> name=<fileName> text=<encodedText>",
+  "  import-preview <importId>",
+  "  import-set <importId> skipRows=<n> delimiter=<auto|comma|tab|space|semicolon> hasHeader=<true|false> mode=<tabular|raw>",
+  "  import-column <importId> column=<col> action=<include|exclude>",
+  "  import-line <importId> line=<n> value=<text>",
+  "  import-cancel <importId>",
+  "  import-confirm <importId> mode=<tabular|raw> path=<virtualPath>",
+  "  elt <dataset> as <newName>",
+].join("\n");
+
+const executeVirtualFileCommand = (
+  command: string,
+  args: string[],
+  context: CommandContext,
+): ScispaceCommandResult | undefined => {
+  if (command === "file-mkdir") {
+    const path = args[0];
+    if (!isVirtualRawPath(path)) return { kind: "error", output: "Usage: file-mkdir ~/raw/<path>" };
+    return { kind: "file-command", action: "mkdir", path, output: `Directory created: ${path}` };
+  }
+
+  if (command === "file-rename") {
+    const path = args[0];
+    const name = readOption(args, "name");
+    if (!isVirtualRawPath(path) || !isSafeFileName(name)) {
+      return { kind: "error", output: "Usage: file-rename ~/raw/<path> name=<newName>" };
+    }
+    return { kind: "file-command", action: "rename", path, name, output: `Renamed: ${path}` };
+  }
+
+  if (command === "file-move") {
+    const path = args[0];
+    const targetDirectory = readOption(args, "to");
+    if (!isVirtualRawPath(path) || !isVirtualRawPath(targetDirectory)) {
+      return { kind: "error", output: "Usage: file-move ~/raw/<path> to=~/raw/<directory>" };
+    }
+    return {
+      kind: "file-command",
+      action: "move",
+      path,
+      targetDirectory,
+      output: `Moved: ${path}`,
+    };
+  }
+
+  if (command === "file-delete") {
+    const path = args[0];
+    if (!isVirtualRawPath(path))
+      return { kind: "error", output: "Usage: file-delete ~/raw/<path>" };
+    return { kind: "file-command", action: "delete", path, output: `Deleted: ${path}` };
+  }
+
+  if (command === "file-list") {
+    const path = args[0] ?? "~/raw";
+    if (!isVirtualRawPath(path))
+      return { kind: "error", output: "Usage: file-list [~/raw/<path>]" };
+    return {
+      kind: "file-command",
+      action: "list",
+      path,
+      output: formatVirtualFileList(path, context.files, context.datasets),
+    };
+  }
+
+  return undefined;
+};
+
 const plotSpecSchema = {
   id: "string",
   type: '"line"',
@@ -384,33 +469,7 @@ export const executeScispaceCommand = (
   if (!command || command === "help") {
     return {
       kind: "text",
-      output: [
-        "scispace commands:",
-        "  lsdata",
-        "  table <dataset> columns=<column[,column...]>",
-        "  table-edit <dataset> action=<delete-row|delete-column|set-cell> index=<n> row=<n> column=<col> value=<value>",
-        "  table-range <dataset> action=<clear|fill-down> r1=<n> c1=<col> r2=<n> c2=<col>",
-        "  plot <dataset> x=<column> y=<column[,column...]> type=<line|line-marker|marker>",
-        "  plot-set <plotId> title=<title> type=<line|line-marker|marker> border=<true|false> width=<n> height=<n> fontFamily=<name> fontSize=<n> padding=<t:r:b:l>",
-        "  plot-axis <plotId> axis=<x|y> range=<auto|min:max> tick=<auto|interval> tickDir=<out|in|none> scale=<linear|log>",
-        "  plot-grid <plotId> x=<true|false> y=<true|false>",
-        "  plot-series <plotId> y=<column> action=<add|remove> markerShape=<circle|square|triangle|diamond|cross|plus> order=<n>",
-        "  plot-annotation <plotId> action=<add|update|remove>",
-        "  plot-schema [plotId]",
-        "  file-list [path]",
-        "  file-mkdir <path>",
-        "  file-rename <path> name=<newName>",
-        "  file-move <path> to=<directory>",
-        "  file-delete <path>",
-        "  import-open <importId> name=<fileName> text=<encodedText>",
-        "  import-preview <importId>",
-        "  import-set <importId> skipRows=<n> delimiter=<auto|comma|tab|space|semicolon> hasHeader=<true|false> mode=<tabular|raw>",
-        "  import-column <importId> column=<col> action=<include|exclude>",
-        "  import-line <importId> line=<n> value=<text>",
-        "  import-cancel <importId>",
-        "  import-confirm <importId> mode=<tabular|raw> path=<virtualPath>",
-        "  elt <dataset> as <newName>",
-      ].join("\n"),
+      output: helpText,
     };
   }
 
@@ -424,54 +483,8 @@ export const executeScispaceCommand = (
     return { kind: "text", output: output || "No datasets loaded" };
   }
 
-  if (command === "file-mkdir") {
-    const path = args[0];
-    if (!isVirtualRawPath(path)) return { kind: "error", output: "Usage: file-mkdir ~/raw/<path>" };
-    return { kind: "file-command", action: "mkdir", path, output: `Directory created: ${path}` };
-  }
-
-  if (command === "file-rename") {
-    const path = args[0];
-    const name = readOption(args, "name");
-    if (!isVirtualRawPath(path) || !isSafeFileName(name)) {
-      return { kind: "error", output: "Usage: file-rename ~/raw/<path> name=<newName>" };
-    }
-    return { kind: "file-command", action: "rename", path, name, output: `Renamed: ${path}` };
-  }
-
-  if (command === "file-move") {
-    const path = args[0];
-    const targetDirectory = readOption(args, "to");
-    if (!isVirtualRawPath(path) || !isVirtualRawPath(targetDirectory)) {
-      return { kind: "error", output: "Usage: file-move ~/raw/<path> to=~/raw/<directory>" };
-    }
-    return {
-      kind: "file-command",
-      action: "move",
-      path,
-      targetDirectory,
-      output: `Moved: ${path}`,
-    };
-  }
-
-  if (command === "file-delete") {
-    const path = args[0];
-    if (!isVirtualRawPath(path))
-      return { kind: "error", output: "Usage: file-delete ~/raw/<path>" };
-    return { kind: "file-command", action: "delete", path, output: `Deleted: ${path}` };
-  }
-
-  if (command === "file-list") {
-    const path = args[0] ?? "~/raw";
-    if (!isVirtualRawPath(path))
-      return { kind: "error", output: "Usage: file-list [~/raw/<path>]" };
-    return {
-      kind: "file-command",
-      action: "list",
-      path,
-      output: formatVirtualFileList(path, context.files, context.datasets),
-    };
-  }
+  const virtualFileResult = executeVirtualFileCommand(command, args, context);
+  if (virtualFileResult) return virtualFileResult;
 
   if (command === "table") {
     const dataset = findDataset(context.datasets, args[0] ?? "");
