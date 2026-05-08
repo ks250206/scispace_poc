@@ -190,7 +190,9 @@ describe("Workbench import UI", () => {
     });
 
     await waitFor(() => expect(screen.getByText("Import - undo-import.csv")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    await act(async () => {
+      await storeState().confirmImport(importId);
+    });
     await waitFor(() =>
       expect(storeState().files.some((file) => file.path === "~/raw/undo-import.csv")).toBe(true),
     );
