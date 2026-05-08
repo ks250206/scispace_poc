@@ -22,8 +22,15 @@ const sortRawItems = (items: VirtualFile[]): VirtualFile[] =>
 const quoteCommandArg = (value: string): string =>
   /\s|["']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
 
-const importOpenCommand = (importId: string, fileName: string, text: string): string =>
-  `import-open ${importId} name=${quoteCommandArg(fileName)} text=${encodeURIComponent(text)}`;
+export const uploadOpenCommand = (
+  uploadId: string,
+  fileName: string,
+  text: string,
+  mode: "tabular" | "raw" = "tabular",
+): string =>
+  `upload-open ${uploadId} name=${quoteCommandArg(fileName)} text=${encodeURIComponent(
+    text,
+  )} mode=${mode}`;
 
 const tableCommand = (dataset: Dataset, columnIds: string[]): string =>
   `table ${quoteCommandArg(dataset.name)} columns=${columnIds.map(quoteCommandArg).join(",")}`;
@@ -75,7 +82,7 @@ export function DataBrowser() {
   };
 
   const openImportThroughCommand = (importId: string, fileName: string, text: string) => {
-    void runScispace(importOpenCommand(importId, fileName, text), { source: "gui" });
+    void runScispace(uploadOpenCommand(importId, fileName, text), { source: "gui" });
   };
 
   const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {

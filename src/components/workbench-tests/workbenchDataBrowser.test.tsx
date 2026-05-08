@@ -41,6 +41,7 @@ describe("Workbench data browser UI", () => {
 
     await waitFor(() => expect(screen.getByText("Import - clicked.csv")).toBeInTheDocument());
     expect(storeState().pendingImports[0]?.fileName).toBe("clicked.csv");
+    expect(storeState().commandHistory.at(-1)?.command).toContain("upload-open");
   });
 
   it("opens raw file parsing from data browser through scispace commands", async () => {

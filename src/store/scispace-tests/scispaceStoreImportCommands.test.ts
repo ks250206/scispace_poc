@@ -86,6 +86,36 @@ describe("scispace store import command behavior", () => {
     });
   });
 
+  it("opens upload dialogs through scispace commands", async () => {
+    const { store } = await makeStore();
+    await store
+      .getState()
+      .runScispace(
+        `upload-open upload-1 name=uploaded.csv text=${encodeURIComponent("x,y\n1,2")}`,
+        {
+          source: "gui",
+        },
+      );
+
+    expect(store.getState().pendingImports).toHaveLength(1);
+    expect(store.getState().pendingImports[0]).toMatchObject({
+      id: "upload-1",
+      fileName: "uploaded.csv",
+      preview: { rows: [{ x: 1, y: 2 }] },
+    });
+    expect(store.getState().windows.find((window) => window.importId === "upload-1")).toMatchObject(
+      {
+        title: "Import - uploaded.csv",
+        kind: "import",
+      },
+    );
+    expect(store.getState().commandHistory.at(-1)).toMatchObject({
+      command: `upload-open upload-1 name=uploaded.csv text=${encodeURIComponent("x,y\n1,2")}`,
+      source: "gui",
+      status: "success",
+    });
+  });
+
   it("keeps confirmed import dataset paths aligned after path collisions", async () => {
     const { db, store } = await makeStore();
     await store

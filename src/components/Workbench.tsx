@@ -8,6 +8,7 @@ import {
   type WheelEvent,
 } from "react";
 import { CanvasWindow } from "./CanvasWindow";
+import { uploadOpenCommand } from "./DataBrowser";
 import { useScispaceStore } from "../store/scispaceStore";
 
 const centerViewport = { x: -1920, y: -1080, scale: 1 };
@@ -16,8 +17,6 @@ const maxScale = 3;
 const wheelPanSensitivity = 0.75;
 const baseDotSpacing = 24;
 const baseMajorGridSpacing = 240;
-const quoteCommandArg = (value: string): string =>
-  /\s|["']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
 
 export function Workbench() {
   const viewport = useScispaceStore((state) => state.viewport);
@@ -132,12 +131,7 @@ export function Workbench() {
     for (const file of files) {
       const importId = crypto.randomUUID();
       const text = await file.text();
-      void runScispace(
-        `import-open ${importId} name=${quoteCommandArg(file.name)} text=${encodeURIComponent(
-          text,
-        )}`,
-        { source: "gui" },
-      );
+      void runScispace(uploadOpenCommand(importId, file.name, text), { source: "gui" });
     }
   };
 

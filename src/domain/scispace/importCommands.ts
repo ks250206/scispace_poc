@@ -14,7 +14,7 @@ export const executeImportCommand = (
   args: string[],
   context: CommandContext,
 ): ScispaceCommandResult | undefined => {
-  if (command === "import-open") {
+  if (command === "import-open" || command === "upload-open") {
     const importId = args[0] ?? "";
     const fileName = readOption(args, "name");
     const text = readOption(args, "text");
@@ -36,7 +36,7 @@ export const executeImportCommand = (
       kind: "import-open",
       importId,
       pendingImport,
-      output: `Import opened: ${fileName}`,
+      output: `${command === "upload-open" ? "Upload" : "Import"} opened: ${fileName}`,
     };
   }
 

@@ -31,6 +31,9 @@ describe("scispace import commands", () => {
     const opened = runEmptyCommand(
       `import-open import-1 name=configured.csv text=${encodeURIComponent("x,y\n1,2")}`,
     );
+    const uploaded = runEmptyCommand(
+      `upload-open upload-1 name=uploaded.csv text=${encodeURIComponent("a,b\n3,4")} mode=raw`,
+    );
     const missingName = runEmptyCommand("import-open import-1 text=abc");
 
     expect(opened).toMatchObject({
@@ -41,6 +44,16 @@ describe("scispace import commands", () => {
         text: "x,y\n1,2",
         mode: "tabular",
       },
+    });
+    expect(uploaded).toMatchObject({
+      kind: "import-open",
+      importId: "upload-1",
+      pendingImport: {
+        fileName: "uploaded.csv",
+        text: "a,b\n3,4",
+        mode: "raw",
+      },
+      output: "Upload opened: uploaded.csv",
     });
     expect(missingName).toMatchObject({ kind: "error" });
   });

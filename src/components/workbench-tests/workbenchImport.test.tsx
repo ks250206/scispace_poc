@@ -19,6 +19,15 @@ describe("Workbench import UI", () => {
 
     await waitFor(() => expect(screen.getByText("Import - dropped.csv")).toBeInTheDocument());
     await waitFor(() => expect(storeState().pendingImports[0]?.preview?.rows).toHaveLength(2));
+    await waitFor(() =>
+      expect(storeState().commandHistory.at(-1)).toMatchObject({
+        command: `upload-open ${storeState().pendingImports[0]?.id} name=dropped.csv text=${encodeURIComponent(
+          "x,y\n1,2\n3,4",
+        )} mode=tabular`,
+        source: "gui",
+        status: "success",
+      }),
+    );
   });
 
   it("stacks raw text and import preview virtual tables with resizable columns", async () => {
