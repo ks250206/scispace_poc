@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { datasetColumnIds } from "../domain/csv";
@@ -22,11 +22,9 @@ import {
   rowHeight,
   tableScrollHeight,
   tableWindowHeightForRows,
-  type TableCellPosition,
-  type TableCellRange,
-  type TableEditingCell,
   type TableVisibleRows,
 } from "./data-table/tableModel";
+import { useTableSelection } from "./data-table/useTableSelection";
 
 interface DataTableWindowProps {
   datasetId: string;
@@ -42,11 +40,6 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   const updateWindow = useScispaceStore((state) => state.updateWindow);
   const runScispace = useScispaceStore((state) => state.runScispace);
   const [visibleRows, setVisibleRows] = useState<TableVisibleRows>(10);
-  const [selectedColumn, setSelectedColumn] = useState<string>();
-  const [selectedCell, setSelectedCell] = useState<TableCellPosition>();
-  const [selectedRange, setSelectedRange] = useState<TableCellRange>();
-  const [isRangeDragging, setIsRangeDragging] = useState(false);
-  const [editingCell, setEditingCell] = useState<TableEditingCell>();
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -71,6 +64,23 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   const data = useMemo(() => dataset?.rows ?? [], [dataset]);
   const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel() });
   const rows = table.getRowModel().rows;
+  const {
+    selectedColumn,
+    selectedCell,
+    selectedRange,
+    isRangeDragging,
+    editingCell,
+    setIsRangeDragging,
+    setEditingCell,
+    clearSelection,
+    selectColumn,
+    selectSingleCell,
+    extendRangeSelection,
+    startRangeSelection,
+    startEdit,
+    cancelEdit,
+    handleCellKeyDown,
+  } = useTableSelection({ rowsLength: rows.length, columns: visibleDatasetColumns });
   const getColumnWidth = useCallback(
     (columnId: string) => columnWidths[columnId] ?? defaultColumnWidth,
     [columnWidths],
@@ -109,38 +119,10 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     document.addEventListener("pointerup", handlePointerUp);
   };
 
-  const selectSingleCell = (position: TableCellPosition) => {
-    setSelectedColumn(undefined);
-    setSelectedCell(position);
-    setSelectedRange(undefined);
-  };
-
-  const extendRangeSelection = (position: TableCellPosition) => {
-    const anchor = selectedRange?.anchor ?? selectedCell ?? position;
-    setSelectedColumn(undefined);
-    setSelectedCell(position);
-    setSelectedRange({ anchor, focus: position });
-    setEditingCell(undefined);
-  };
-
-  const startRangeSelection = (position: TableCellPosition) => {
-    setSelectedColumn(undefined);
-    setSelectedCell(position);
-    setSelectedRange({ anchor: position, focus: position });
-    setEditingCell(undefined);
-  };
-
   const cellColumnIndex = useCallback(
     (column: string): number => visibleDatasetColumns.findIndex((item) => item.id === column),
     [visibleDatasetColumns],
   );
-
-  const startEdit = (rowIndex: number, column: string, value: unknown) => {
-    setSelectedColumn(undefined);
-    setSelectedCell({ rowIndex, column });
-    setSelectedRange(undefined);
-    setEditingCell({ rowIndex, column, value: formatCellValue(value) });
-  };
 
   const commitEdit = (nextValue?: string) => {
     if (!dataset || !editingCell) return;
@@ -151,28 +133,18 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     });
   };
 
-  const cancelEdit = () => {
-    setEditingCell(undefined);
-  };
-
   const deleteSelectedRow = () => {
     if (!dataset || !selectedCell) return;
     const rowNumber = selectedCell.rowIndex + 1;
     if (!window.confirm(`Delete row ${rowNumber} from ${dataset.name}?`)) return;
-    setSelectedCell(undefined);
-    setSelectedColumn(undefined);
-    setSelectedRange(undefined);
-    setEditingCell(undefined);
+    clearSelection();
     void runScispace(deleteRowCommand(dataset.name, selectedCell.rowIndex), { source: "gui" });
   };
 
   const deleteSelectedColumn = () => {
     if (!dataset || !selectedColumn) return;
     if (!window.confirm(`Delete column ${selectedColumn} from ${dataset.name}?`)) return;
-    setSelectedCell(undefined);
-    setSelectedColumn(undefined);
-    setSelectedRange(undefined);
-    setEditingCell(undefined);
+    clearSelection();
     void runScispace(deleteColumnCommand(dataset.name, selectedColumn), { source: "gui" });
   };
 
@@ -205,10 +177,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     ) {
       return;
     }
-    setSelectedCell(undefined);
-    setSelectedColumn(undefined);
-    setSelectedRange(undefined);
-    setEditingCell(undefined);
+    clearSelection();
     void runScispace(rangeCommand(dataset.name, "clear", rangeBounds), { source: "gui" });
   };
 
@@ -221,67 +190,13 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     ) {
       return;
     }
-    setSelectedCell(undefined);
-    setSelectedColumn(undefined);
-    setSelectedRange(undefined);
-    setEditingCell(undefined);
+    clearSelection();
     void runScispace(rangeCommand(dataset.name, "fill-down", rangeBounds), { source: "gui" });
   };
 
   const plotSelectedColumns = () => {
     if (!dataset || !selectionPlotSpec) return;
     void runScispace(plotCommand(dataset.name, selectionPlotSpec), { source: "gui" });
-  };
-
-  const handleCellKeyDown = (
-    event: KeyboardEvent<HTMLTableCellElement>,
-    rowIndex: number,
-    column: string,
-    value: unknown,
-  ) => {
-    if (event.key === "Enter" || event.key === "F2") {
-      event.preventDefault();
-      startEdit(rowIndex, column, value);
-      return;
-    }
-    if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
-
-    event.preventDefault();
-    const currentPosition = selectedCell ?? { rowIndex, column };
-    const currentColumnIndex = visibleDatasetColumns.findIndex(
-      (item) => item.id === currentPosition.column,
-    );
-    if (currentColumnIndex < 0) return;
-    const jumpToEdge = event.metaKey || event.ctrlKey;
-    const nextRowIndex =
-      event.key === "ArrowUp"
-        ? jumpToEdge
-          ? 0
-          : Math.max(0, currentPosition.rowIndex - 1)
-        : event.key === "ArrowDown"
-          ? jumpToEdge
-            ? rows.length - 1
-            : Math.min(rows.length - 1, currentPosition.rowIndex + 1)
-          : currentPosition.rowIndex;
-    const nextColumnIndex =
-      event.key === "ArrowLeft"
-        ? jumpToEdge
-          ? 0
-          : Math.max(0, currentColumnIndex - 1)
-        : event.key === "ArrowRight"
-          ? jumpToEdge
-            ? visibleDatasetColumns.length - 1
-            : Math.min(visibleDatasetColumns.length - 1, currentColumnIndex + 1)
-          : currentColumnIndex;
-    const nextColumn = visibleDatasetColumns[nextColumnIndex]?.id;
-    if (!nextColumn) return;
-
-    const nextPosition = { rowIndex: nextRowIndex, column: nextColumn };
-    if (event.shiftKey) extendRangeSelection(nextPosition);
-    else {
-      selectSingleCell(nextPosition);
-      setEditingCell(undefined);
-    }
   };
 
   const isCellInRange = (rowIndex: number, column: string): boolean => {
@@ -363,12 +278,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
         isRangeDragging={isRangeDragging}
         getColumnWidth={getColumnWidth}
         isCellInRange={isCellInRange}
-        onSelectColumn={(columnId) => {
-          setSelectedColumn(columnId);
-          setSelectedCell(undefined);
-          setSelectedRange(undefined);
-          setEditingCell(undefined);
-        }}
+        onSelectColumn={selectColumn}
         onStartColumnResize={startColumnResize}
         onSelectSingleCell={selectSingleCell}
         onExtendRangeSelection={extendRangeSelection}
