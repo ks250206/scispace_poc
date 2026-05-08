@@ -470,6 +470,40 @@ const descendantPaths = (path: string, files: VirtualFile[]): Set<string> => {
   );
 };
 
+const rewriteAffectedVirtualPaths = (
+  files: VirtualFile[],
+  path: string,
+  basePath: string,
+): {
+  affectedPaths: Set<string>;
+  rewrittenFiles: VirtualFile[];
+  rewrittenAffectedFiles: VirtualFile[];
+} => {
+  const affectedPaths = descendantPaths(path, files);
+  const rewrittenAffectedEntries = files
+    .filter((file) => affectedPaths.has(file.path))
+    .map((file) => {
+      const nextPath = file.path === path ? basePath : `${basePath}${file.path.slice(path.length)}`;
+      return [
+        file.path,
+        {
+          ...file,
+          id: nextPath,
+          path: nextPath,
+          name: nextPath.split("/").at(-1) ?? nextPath,
+        },
+      ] as const;
+    });
+  const rewrittenByOldPath = new Map(rewrittenAffectedEntries);
+  return {
+    affectedPaths,
+    rewrittenFiles: files.map((file) =>
+      affectedPaths.has(file.path) ? (rewrittenByOldPath.get(file.path) ?? file) : file,
+    ),
+    rewrittenAffectedFiles: rewrittenAffectedEntries.map(([, file]) => file),
+  };
+};
+
 const nextActiveDatasetId = (datasets: Dataset[], current?: string): string | undefined =>
   current && datasets.some((dataset) => dataset.id === current) ? current : datasets[0]?.id;
 
@@ -1510,27 +1544,8 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         joinVirtualPath(parentDirectoryOf(path), safeName),
         unaffectedFiles,
       );
-      const renamedAffectedEntries = get()
-        .files.filter((file) => affectedPaths.has(file.path))
-        .map((file) => {
-          const nextPath =
-            file.path === path ? basePath : `${basePath}${file.path.slice(path.length)}`;
-          return [
-            file.path,
-            {
-              ...file,
-              id: nextPath,
-              path: nextPath,
-              name: nextPath.split("/").at(-1) ?? nextPath,
-            },
-          ] as const;
-        });
-      const renamedAffectedFiles = renamedAffectedEntries.map(([, file]) => file);
-      const renamedByOldPath = new Map(renamedAffectedEntries);
-      const renamedFiles = get().files.map((file) => {
-        if (!affectedPaths.has(file.path)) return file;
-        return renamedByOldPath.get(file.path) ?? file;
-      });
+      const { rewrittenFiles: renamedFiles, rewrittenAffectedFiles: renamedAffectedFiles } =
+        rewriteAffectedVirtualPaths(get().files, path, basePath);
       const datasetIdsToRename = new Set(
         target.kind === "file" && target.datasetId ? [target.datasetId] : [],
       );
@@ -1582,27 +1597,8 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         target.kind === "directory" ? descendantPaths(path, get().files) : new Set([path]);
       const unaffectedFiles = get().files.filter((file) => !affectedPaths.has(file.path));
       const basePath = uniquifyPath(joinVirtualPath(directory, target.name), unaffectedFiles);
-      const movedAffectedEntries = get()
-        .files.filter((file) => affectedPaths.has(file.path))
-        .map((file) => {
-          const nextPath =
-            file.path === path ? basePath : `${basePath}${file.path.slice(path.length)}`;
-          return [
-            file.path,
-            {
-              ...file,
-              id: nextPath,
-              path: nextPath,
-              name: nextPath.split("/").at(-1) ?? nextPath,
-            },
-          ] as const;
-        });
-      const movedAffectedFiles = movedAffectedEntries.map(([, file]) => file);
-      const movedByOldPath = new Map(movedAffectedEntries);
-      const movedFiles = get().files.map((file) => {
-        if (!affectedPaths.has(file.path)) return file;
-        return movedByOldPath.get(file.path) ?? file;
-      });
+      const { rewrittenFiles: movedFiles, rewrittenAffectedFiles: movedAffectedFiles } =
+        rewriteAffectedVirtualPaths(get().files, path, basePath);
       const updatedDatasets = get().datasets.map((dataset) => {
         const sourceFile = movedFiles.find((file) => file.datasetId === dataset.id);
         return sourceFile ? { ...dataset, sourcePath: sourceFile.path } : dataset;
