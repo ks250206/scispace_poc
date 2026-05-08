@@ -1,0 +1,279 @@
+import type { PlotAxisSpec, PlotSpec } from "../../domain/types";
+import { ConfigField, ConfigGroup } from "./PlotConfigFields";
+import type { AxisPatch } from "./plotConfigModel";
+
+interface PlotConfigAxesTabProps {
+  spec: PlotSpec;
+  onSetAxis: (axis: "x" | "y", patch: AxisPatch) => void;
+}
+
+export function PlotConfigAxesTab({ spec, onSetAxis }: PlotConfigAxesTabProps) {
+  return (
+    <div className="plot-axis-panel plot-config-section" role="tabpanel">
+      {(["x", "y"] as const).map((axis) => (
+        <ConfigGroup key={axis} title={`${axis.toUpperCase()} Axis`}>
+          <div className="plot-field-grid two">
+            <ConfigField label="Label">
+              <input
+                aria-label={`${axis} axis label`}
+                value={spec.axes[axis].label}
+                onChange={(event) => onSetAxis(axis, { label: event.target.value })}
+              />
+            </ConfigField>
+            <ConfigField label="Scale">
+              <select
+                aria-label={`${axis} scale`}
+                value={spec.axes[axis].scale}
+                onChange={(event) =>
+                  onSetAxis(axis, { scale: event.target.value as PlotAxisSpec["scale"] })
+                }
+              >
+                <option value="linear">linear</option>
+                <option value="log">log</option>
+              </select>
+            </ConfigField>
+          </div>
+
+          <div className="plot-subgroup-title">Range</div>
+          <div className="plot-field-grid four">
+            <ConfigField label="Mode">
+              <select
+                aria-label={`${axis} range mode`}
+                value={spec.axes[axis].range.mode}
+                onChange={(event) =>
+                  onSetAxis(axis, {
+                    range:
+                      event.target.value === "manual"
+                        ? { mode: "manual", min: 0, max: 1 }
+                        : { mode: "auto" },
+                  })
+                }
+              >
+                <option value="auto">auto range</option>
+                <option value="manual">manual range</option>
+              </select>
+            </ConfigField>
+            <ConfigField label="Min" compact>
+              <input
+                aria-label={`${axis} range min`}
+                type="number"
+                disabled={spec.axes[axis].range.mode === "auto"}
+                value={spec.axes[axis].range.min ?? ""}
+                onChange={(event) =>
+                  onSetAxis(axis, {
+                    range: {
+                      mode: "manual",
+                      min: Number(event.target.value),
+                      max: spec.axes[axis].range.max ?? 1,
+                    },
+                  })
+                }
+              />
+            </ConfigField>
+            <ConfigField label="Max" compact>
+              <input
+                aria-label={`${axis} range max`}
+                type="number"
+                disabled={spec.axes[axis].range.mode === "auto"}
+                value={spec.axes[axis].range.max ?? ""}
+                onChange={(event) =>
+                  onSetAxis(axis, {
+                    range: {
+                      mode: "manual",
+                      min: spec.axes[axis].range.min ?? 0,
+                      max: Number(event.target.value),
+                    },
+                  })
+                }
+              />
+            </ConfigField>
+          </div>
+
+          <div className="plot-subgroup-title">Ticks</div>
+          <div className="plot-field-grid four">
+            <ConfigField label="Interval" compact>
+              <input
+                aria-label={`${axis} tick interval`}
+                type="number"
+                min={0}
+                value={spec.axes[axis].ticks.interval ?? ""}
+                placeholder="auto"
+                onChange={(event) =>
+                  onSetAxis(axis, {
+                    ticks:
+                      event.target.value === ""
+                        ? { mode: "auto", interval: undefined }
+                        : { mode: "manual", interval: Number(event.target.value) },
+                  })
+                }
+              />
+            </ConfigField>
+            <ConfigField label="Direction">
+              <select
+                aria-label={`${axis} tick direction`}
+                value={spec.axes[axis].ticks.orientation}
+                onChange={(event) =>
+                  onSetAxis(axis, {
+                    ticks: {
+                      orientation: event.target.value as PlotAxisSpec["ticks"]["orientation"],
+                    },
+                  })
+                }
+              >
+                <option value="out">out</option>
+                <option value="in">in</option>
+                <option value="none">none</option>
+              </select>
+            </ConfigField>
+            <ConfigField label="Length" compact>
+              <input
+                aria-label={`${axis} tick length`}
+                type="number"
+                min={0}
+                value={spec.axes[axis].ticks.length}
+                onChange={(event) =>
+                  onSetAxis(axis, { ticks: { length: Number(event.target.value) } })
+                }
+              />
+            </ConfigField>
+            <label className="plot-config-check">
+              <input
+                aria-label={`${axis} minor tick`}
+                type="checkbox"
+                checked={spec.axes[axis].ticks.minor}
+                onChange={(event) => onSetAxis(axis, { ticks: { minor: event.target.checked } })}
+              />
+              <span>Minor tick</span>
+            </label>
+          </div>
+
+          <div className="plot-subgroup-title">Typography</div>
+          <div className="plot-field-grid two">
+            <ConfigField label="Label font">
+              <input
+                aria-label={`${axis} label font family`}
+                value={spec.axes[axis].labelStyle.family}
+                onChange={(event) =>
+                  onSetAxis(axis, {
+                    labelStyle: { ...spec.axes[axis].labelStyle, family: event.target.value },
+                  })
+                }
+              />
+            </ConfigField>
+            <ConfigField label="Label size" compact>
+              <input
+                aria-label={`${axis} label font size`}
+                type="number"
+                min={1}
+                value={spec.axes[axis].labelStyle.size}
+                onChange={(event) =>
+                  onSetAxis(axis, {
+                    labelStyle: {
+                      ...spec.axes[axis].labelStyle,
+                      size: Number(event.target.value),
+                    },
+                  })
+                }
+              />
+            </ConfigField>
+            <ConfigField label="Tick font">
+              <input
+                aria-label={`${axis} value font family`}
+                value={spec.axes[axis].valueStyle.family}
+                onChange={(event) =>
+                  onSetAxis(axis, {
+                    valueStyle: { ...spec.axes[axis].valueStyle, family: event.target.value },
+                  })
+                }
+              />
+            </ConfigField>
+            <ConfigField label="Tick size" compact>
+              <input
+                aria-label={`${axis} value font size`}
+                type="number"
+                min={1}
+                value={spec.axes[axis].valueStyle.size}
+                onChange={(event) =>
+                  onSetAxis(axis, {
+                    valueStyle: {
+                      ...spec.axes[axis].valueStyle,
+                      size: Number(event.target.value),
+                    },
+                  })
+                }
+              />
+            </ConfigField>
+          </div>
+
+          <div className="plot-subgroup-title">Layout</div>
+          <div className="plot-field-grid four">
+            <ConfigField label="Axis size" compact>
+              <input
+                aria-label={`${axis} axis size`}
+                type="number"
+                min={1}
+                value={spec.axes[axis].size}
+                onChange={(event) => onSetAxis(axis, { size: Number(event.target.value) })}
+              />
+            </ConfigField>
+            <ConfigField label="Axis gap" compact>
+              <input
+                aria-label={`${axis} axis gap`}
+                type="number"
+                min={0}
+                value={spec.axes[axis].gap}
+                onChange={(event) => onSetAxis(axis, { gap: Number(event.target.value) })}
+              />
+            </ConfigField>
+            <ConfigField label="Label gap" compact>
+              <input
+                aria-label={`${axis} label gap`}
+                type="number"
+                min={0}
+                value={spec.axes[axis].labelGap}
+                onChange={(event) => onSetAxis(axis, { labelGap: Number(event.target.value) })}
+              />
+            </ConfigField>
+            <ConfigField label="Label size" compact>
+              <input
+                aria-label={`${axis} label size`}
+                type="number"
+                min={1}
+                value={spec.axes[axis].labelSize}
+                onChange={(event) => onSetAxis(axis, { labelSize: Number(event.target.value) })}
+              />
+            </ConfigField>
+          </div>
+
+          <div className="plot-subgroup-title">Colors</div>
+          <div className="plot-field-grid three">
+            <ConfigField label="Axis color" compact>
+              <input
+                aria-label={`${axis} axis color`}
+                type="color"
+                value={spec.axes[axis].color}
+                onChange={(event) => onSetAxis(axis, { color: event.target.value })}
+              />
+            </ConfigField>
+            <ConfigField label="Grid color" compact>
+              <input
+                aria-label={`${axis} grid color`}
+                type="color"
+                value={spec.axes[axis].gridColor}
+                onChange={(event) => onSetAxis(axis, { gridColor: event.target.value })}
+              />
+            </ConfigField>
+            <ConfigField label="Tick color" compact>
+              <input
+                aria-label={`${axis} tick color`}
+                type="color"
+                value={spec.axes[axis].tickColor}
+                onChange={(event) => onSetAxis(axis, { tickColor: event.target.value })}
+              />
+            </ConfigField>
+          </div>
+        </ConfigGroup>
+      ))}
+    </div>
+  );
+}

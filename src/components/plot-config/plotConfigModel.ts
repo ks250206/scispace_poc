@@ -1,3 +1,9 @@
+import type { PlotAxisSpec } from "../../domain/types";
+
+export type AxisPatch = Omit<Partial<PlotAxisSpec>, "ticks"> & {
+  ticks?: Partial<PlotAxisSpec["ticks"]>;
+};
+
 export type PlotConfigTab = "basic" | "axes" | "series" | "annotations";
 
 export interface PlotSizeDraft {
