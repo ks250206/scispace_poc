@@ -1,293 +1,50 @@
 import { create } from "zustand";
 import {
-  createSeedDataset,
   detectImportPreset,
+  datasetColumnIds,
   datasetToDelimitedText,
   defaultImportParseOptions,
-  datasetColumnIds,
   normalizeDataset,
   normalizeVirtualPath,
   parseDelimitedText,
 } from "../domain/csv";
-import {
-  defaultPlotAxis,
-  executeScispaceCommand,
-  normalizePlotSpecForCommand,
-} from "../domain/scispace";
+import { executeScispaceCommand } from "../domain/scispace";
 import type {
   CommandHistoryEntry,
-  CommandHistorySource,
   Dataset,
-  ImportFileResult,
   ImportParseOptions,
   PendingImport,
-  PersistedLayout,
   PlotSpec,
   ScispaceCommandResult,
-  ViewportState,
   VirtualFile,
   WorkspaceWindow,
 } from "../domain/types";
+import { appDb, readPersistedLayout, type ProjectRecord, type SciSpaceDatabase } from "./db";
 import {
-  appDb,
-  readPersistedLayout,
-  type ProjectRecord,
-  type SciSpaceDatabase,
-  writePersistedLayout,
-} from "./db";
-
-interface ProjectSummary {
-  id: string;
-  name: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
-interface ScispaceState {
-  initialized: boolean;
-  files: VirtualFile[];
-  datasets: Dataset[];
-  projects: ProjectSummary[];
-  currentProjectId?: string;
-  windows: WorkspaceWindow[];
-  plotSpecs: PlotSpec[];
-  pendingImports: PendingImport[];
-  terminalEvents: string[];
-  commandHistory: CommandHistoryEntry[];
-  undoStack: UndoHistoryEntry[];
-  redoStack: UndoHistoryEntry[];
-  terminalCommandLineRequest?: { id: string; command: string };
-  columnSelections: Record<string, string[]>;
-  activeDatasetId?: string;
-  activeWindowId?: string;
-  currentPlotId?: string;
-  viewport: ViewportState;
-  initialize: () => Promise<void>;
-  importTextFile: (name: string, text: string) => Promise<ImportFileResult>;
-  openImportDialog: (fileName: string, text: string) => string;
-  confirmImport: (importId: string) => Promise<ImportFileResult | undefined>;
-  setDatasetColumnSelection: (datasetId: string, columnIds: string[]) => void;
-  toggleDatasetColumn: (datasetId: string, columnId: string) => void;
-  selectDataset: (datasetId: string) => Promise<void>;
-  openTable: (datasetId: string, columnIds?: string[]) => Promise<void>;
-  openPlot: (spec: PlotSpec) => Promise<void>;
-  openPlotConfig: (plotId: string) => void;
-  runScispace: (
-    input: string,
-    options?: { source?: CommandHistorySource },
-  ) => Promise<ScispaceCommandResult>;
-  undo: () => Promise<void>;
-  redo: () => Promise<void>;
-  closeWindow: (id: string) => void;
-  createNewProject: (name?: string) => Promise<void>;
-  saveCurrentProject: (name?: string) => Promise<void>;
-  switchProject: (projectId: string) => Promise<void>;
-  deleteProject: (projectId: string) => Promise<void>;
-  createDirectory: (name: string, parentPath?: string) => Promise<VirtualFile | undefined>;
-  renameVirtualItem: (path: string, name: string) => Promise<void>;
-  moveVirtualItem: (path: string, targetDirectory: string) => Promise<void>;
-  deleteVirtualItem: (path: string) => Promise<void>;
-  updateWindow: (
-    id: string,
-    patch: Partial<Pick<WorkspaceWindow, "x" | "y" | "width" | "height">>,
-  ) => void;
-  focusWindow: (id: string) => void;
-  setViewport: (viewport: ViewportState) => void;
-  sendCommandToTerminalLine: (command: string) => void;
-}
-
-interface ProjectSnapshot {
-  files: VirtualFile[];
-  datasets: Dataset[];
-  windows: WorkspaceWindow[];
-  plotSpecs: PlotSpec[];
-  pendingImports: PendingImport[];
-  columnSelections: Record<string, string[]>;
-  activeDatasetId?: string;
-  activeWindowId?: string;
-  currentPlotId?: string;
-  viewport: ViewportState;
-}
-
-interface UndoHistoryEntry {
-  id: string;
-  command: string;
-  before: ProjectSnapshot;
-  after: ProjectSnapshot;
-  createdAt: number;
-}
-
-const centerTileX = 1920;
-const centerTileY = 1080;
-const plotWindowChromeHeight = 94;
-const tableWindowHeightForRows = (visibleRows: 10 | 20 | 50): number =>
-  34 + 38 + 32 + visibleRows * 32;
-const plotWindowHeightForSpec = (height: number): number => height + plotWindowChromeHeight;
-const visibleWorkspaceOrigin = (viewport: ViewportState): { x: number; y: number } => {
-  const scale = Math.max(0.01, viewport.scale);
-  return {
-    x: -viewport.x / scale,
-    y: -viewport.y / scale,
-  };
-};
-
-const newWindowPosition = (
-  state: Pick<ScispaceState, "viewport" | "windows">,
-  offsetX: number,
-  offsetY: number,
-): { x: number; y: number } => {
-  const origin = visibleWorkspaceOrigin(state.viewport);
-  const cascade = state.windows.length % 8;
-  return {
-    x: Math.round(origin.x + offsetX + cascade * 24),
-    y: Math.round(origin.y + offsetY + cascade * 20),
-  };
-};
-
-const initialWindows = (): WorkspaceWindow[] => [
-  {
-    id: "browser-main",
-    kind: "browser",
-    title: "Data Browser",
-    x: centerTileX + 64,
-    y: centerTileY + 72,
-    width: 300,
-    height: 440,
-    zIndex: 1,
-  },
-  {
-    id: "table-seed",
-    kind: "table",
-    title: "Table - waveform.csv",
-    x: centerTileX + 396,
-    y: centerTileY + 88,
-    width: 650,
-    height: tableWindowHeightForRows(10),
-    zIndex: 2,
-    datasetId: "seed-waveform",
-  },
-  {
-    id: "plot-seed",
-    kind: "plot",
-    title: "Plot - waveform.csv",
-    x: centerTileX + 1088,
-    y: centerTileY + 88,
-    width: 640,
-    height: plotWindowHeightForSpec(360),
-    zIndex: 3,
-    datasetId: "seed-waveform",
-    plotId: "seed-plot",
-  },
-  {
-    id: "terminal-main",
-    kind: "terminal",
-    title: "Terminal",
-    x: centerTileX + 64,
-    y: centerTileY + 756,
-    width: 1664,
-    height: 300,
-    zIndex: 4,
-  },
-  {
-    id: "history-main",
-    kind: "history",
-    title: "Command History",
-    x: centerTileX + 1328,
-    y: centerTileY + 532,
-    width: 420,
-    height: 520,
-    zIndex: 5,
-  },
-];
-
-const ensureWorkspaceWindows = (windows: WorkspaceWindow[]): WorkspaceWindow[] => {
-  let nextWindows = windows;
-  if (!nextWindows.some((window) => window.kind === "terminal")) {
-    const zIndex = Math.max(0, ...nextWindows.map((window) => window.zIndex)) + 1;
-    nextWindows = [
-      ...nextWindows,
-      {
-        id: "terminal-main",
-        kind: "terminal",
-        title: "Terminal",
-        x: centerTileX + 64,
-        y: centerTileY + 756,
-        width: 1664,
-        height: 300,
-        zIndex,
-      },
-    ];
-  }
-  if (!nextWindows.some((window) => window.kind === "history")) {
-    const zIndex = Math.max(0, ...nextWindows.map((window) => window.zIndex)) + 1;
-    nextWindows = [
-      ...nextWindows,
-      {
-        id: "history-main",
-        kind: "history",
-        title: "Command History",
-        x: centerTileX + 1328,
-        y: centerTileY + 532,
-        width: 420,
-        height: 520,
-        zIndex,
-      },
-    ];
-  }
-  return nextWindows;
-};
-
-const seedPlot = (): PlotSpec => ({
-  id: "seed-plot",
-  type: "line",
-  plotType: "line",
-  source: "seed-waveform",
-  x: "time",
-  y: "signal",
-  title: "waveform.csv: signal vs time",
-  series: [
-    {
-      y: "signal",
-      label: "signal",
-      color: "#2563eb",
-      lineWidth: 2,
-      markerSize: 6,
-      markerShape: "circle",
-      drawOrder: 0,
-    },
-  ],
-  zoomMode: "xy",
-  axes: { x: defaultPlotAxis("time"), y: defaultPlotAxis("signal") },
-  grid: { x: true, y: true },
-  border: true,
-  size: { width: 640, height: 360 },
-  font: { family: "Inter, system-ui, sans-serif", size: 12 },
-  padding: { top: 12, right: 12, bottom: 12, left: 12 },
-  annotations: [],
-  axisLabels: { x: "time", y: "signal" },
-});
-
-const normalizePlotSpec = (spec: PlotSpec): PlotSpec => {
-  return normalizePlotSpecForCommand(spec);
-};
-
-const initialViewport = (): ViewportState => ({ x: -1920, y: -1080, scale: 1 });
-
-const makeFileRecord = (
-  path: string,
-  text: string,
-  datasetId?: string,
-  parseError?: string,
-): VirtualFile => ({
-  id: path,
-  path,
-  name: path.split("/").at(-1) ?? path,
-  kind: "file",
-  text,
-  datasetId,
-  parseError,
-  createdAt: Date.now(),
-});
+  captureSnapshot,
+  cloneState,
+  defaultProjectId,
+  defaultProjectName,
+  initialProjectRecord,
+  isUndoableCommand,
+  persistLayout,
+  projectRecordFromState,
+  projectSummary,
+  restoreSnapshot,
+} from "./scispace/projectPersistence";
+import type { ScispaceState } from "./scispace/stateTypes";
+import {
+  createInitialProject,
+  ensureWorkspaceWindows,
+  initialWindows,
+  initialViewport,
+  makeFileRecord,
+  newWindowPosition,
+  normalizePlotSpec,
+  tableWindowHeightForRows,
+  plotWindowHeightForSpec,
+  seedPlot,
+} from "./scispace/workspaceDefaults";
 
 const makeDirectoryRecord = (path: string): VirtualFile => ({
   id: path,
@@ -314,135 +71,6 @@ const parentDirectoryOf = (path: string): string => {
 
 const joinVirtualPath = (directory: string, name: string): string =>
   `${normalizeDirectoryPath(directory)}/${safePathName(name, "untitled")}`;
-
-const createInitialProject = () => {
-  const seed = createSeedDataset();
-  const file = makeFileRecord(seed.sourcePath, datasetToDelimitedText(seed), seed.id);
-  return {
-    files: [file],
-    datasets: [seed],
-    windows: initialWindows(),
-    plotSpecs: [seedPlot()],
-    viewport: initialViewport(),
-    commandHistory: [],
-    columnSelections: { [seed.id]: datasetColumnIds(seed) },
-  };
-};
-
-const defaultProjectId = "project-main";
-const defaultProjectName = "Main Project";
-
-const projectSummary = (record: ProjectRecord): ProjectSummary => ({
-  id: record.id,
-  name: record.name,
-  createdAt: record.createdAt,
-  updatedAt: record.updatedAt,
-});
-
-const layoutFromState = (
-  state: ScispaceState,
-  projectId = state.currentProjectId,
-): PersistedLayout => ({
-  windows: state.windows.filter((window) => window.kind !== "import"),
-  viewport: state.viewport,
-  plotSpecs: state.plotSpecs.map(normalizePlotSpec),
-  commandHistory: state.commandHistory,
-  columnSelections: state.columnSelections,
-  currentProjectId: projectId,
-});
-
-const initialProjectRecord = (id: string, name: string, createdAt = Date.now()): ProjectRecord => {
-  const initialProject = createInitialProject();
-  return {
-    id,
-    name,
-    files: initialProject.files,
-    datasets: initialProject.datasets,
-    layout: {
-      windows: initialProject.windows,
-      viewport: initialProject.viewport,
-      plotSpecs: initialProject.plotSpecs,
-      commandHistory: initialProject.commandHistory,
-      columnSelections: initialProject.columnSelections,
-      currentProjectId: id,
-    },
-    createdAt,
-    updatedAt: createdAt,
-  };
-};
-
-const projectRecordFromState = (
-  state: ScispaceState,
-  id: string,
-  name: string,
-  previous?: ProjectRecord,
-): ProjectRecord => {
-  const now = Date.now();
-  return {
-    id,
-    name,
-    files: cloneState(state.files),
-    datasets: cloneState(state.datasets),
-    layout: layoutFromState(state, id),
-    createdAt: previous?.createdAt ?? now,
-    updatedAt: now,
-  };
-};
-
-const cloneState = <T>(value: T): T => structuredClone(value);
-
-const captureSnapshot = (state: ScispaceState): ProjectSnapshot => ({
-  files: cloneState(state.files),
-  datasets: cloneState(state.datasets),
-  windows: cloneState(state.windows),
-  plotSpecs: cloneState(state.plotSpecs),
-  pendingImports: cloneState(state.pendingImports),
-  columnSelections: cloneState(state.columnSelections),
-  activeDatasetId: state.activeDatasetId,
-  activeWindowId: state.activeWindowId,
-  currentPlotId: state.currentPlotId,
-  viewport: cloneState(state.viewport),
-});
-
-const isUndoableCommand = (input: string): boolean => {
-  const command = input.trim();
-  if (/^table-edit\s/.test(command)) {
-    return /(?:^|\s)action=(set-cell|delete-row|delete-column)(?:\s|$)/.test(command);
-  }
-  if (/^table-range\s/.test(command)) {
-    return /(?:^|\s)action=(clear|fill-down)(?:\s|$)/.test(command);
-  }
-  if (/^import-confirm\s/.test(command)) return true;
-  return /^file-(delete|rename|move)\s/.test(command);
-};
-
-const persistLayout = (db: SciSpaceDatabase, state: ScispaceState): void => {
-  void writePersistedLayout(db, layoutFromState(state));
-};
-
-const restoreSnapshot = async (
-  db: SciSpaceDatabase,
-  snapshot: ProjectSnapshot,
-  commandHistory: CommandHistoryEntry[],
-): Promise<void> => {
-  await db.transaction("rw", db.files, db.datasets, db.layout, async () => {
-    await db.files.clear();
-    await db.datasets.clear();
-    await db.files.bulkPut(snapshot.files);
-    await db.datasets.bulkPut(snapshot.datasets);
-    await db.layout.put({
-      id: "main",
-      value: {
-        windows: snapshot.windows.filter((window) => window.kind !== "import"),
-        viewport: snapshot.viewport,
-        plotSpecs: snapshot.plotSpecs.map(normalizePlotSpec),
-        commandHistory,
-        columnSelections: snapshot.columnSelections,
-        currentProjectId: undefined,
-      },
-    });
-  });
-};
 
 const uniquifyPath = (path: string, files: VirtualFile[]): string => {
   const existing = new Set(files.map((file) => file.path));
