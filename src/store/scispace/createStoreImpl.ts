@@ -12,7 +12,6 @@ import type {
   CommandHistoryEntry,
   Dataset,
   PendingImport,
-  PlotSpec,
   WorkspaceWindow,
 } from "../../domain/types";
 import { appDb, readPersistedLayout, type ProjectRecord, type SciSpaceDatabase } from "../db";
@@ -53,35 +52,11 @@ import {
   uniquifyPath,
 } from "./virtualFiles";
 import { applyScispaceResult } from "./resultAppliers";
-
-const nextActiveDatasetId = (datasets: Dataset[], current?: string): string | undefined =>
-  current && datasets.some((dataset) => dataset.id === current) ? current : datasets[0]?.id;
-
-const normalizeColumnSelections = (
-  datasets: Dataset[],
-  selections: Record<string, string[]>,
-): Record<string, string[]> =>
-  Object.fromEntries(
-    datasets.map((dataset) => {
-      const validColumnIds = datasetColumnIds(dataset);
-      const selected = (selections[dataset.id] ?? validColumnIds).filter((columnId) =>
-        validColumnIds.includes(columnId),
-      );
-      return [dataset.id, selected.length > 0 ? selected : validColumnIds];
-    }),
-  );
-
-const retitleWindow = (window: WorkspaceWindow, datasets: Dataset[], plotSpecs: PlotSpec[]) => {
-  if (window.kind === "table" && window.datasetId) {
-    const dataset = datasets.find((item) => item.id === window.datasetId);
-    return dataset ? { ...window, title: `Table - ${dataset.name}` } : window;
-  }
-  if (window.kind === "plot" && window.plotId) {
-    const plot = plotSpecs.find((item) => item.id === window.plotId);
-    return plot ? { ...window, title: plot.title } : window;
-  }
-  return window;
-};
+import {
+  nextActiveDatasetId,
+  normalizeColumnSelections,
+  retitleWindow,
+} from "./createStoreHelpers";
 
 export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
   create<ScispaceState>()((set, get) => ({
