@@ -43,7 +43,12 @@ export const createProjectActions = ({
   set,
 }: ProjectActionContext): Pick<
   ScispaceState,
-  "createNewProject" | "saveCurrentProject" | "switchProject" | "deleteProject"
+  | "createNewProject"
+  | "saveCurrentProject"
+  | "switchProject"
+  | "deleteProject"
+  | "exportCurrentProjectJson"
+  | "importProjectJson"
 > => ({
   createNewProject: async (name) => {
     if (get().initialized && get().currentProjectId) {
@@ -222,6 +227,120 @@ export const createProjectActions = ({
       activeWindowId: undefined,
       currentPlotId: replacement.layout.plotSpecs?.[0]?.id,
       viewport: replacement.layout.viewport,
+    });
+    persistLayout(db, get());
+  },
+
+  exportCurrentProjectJson: async () => {
+    const id = get().currentProjectId ?? defaultProjectId;
+    const previous = await db.projects.get(id);
+    const name =
+      get().projects.find((project) => project.id === id)?.name ??
+      previous?.name ??
+      defaultProjectName;
+    const record = projectRecordFromState(get(), id, name, previous);
+    return JSON.stringify({ version: 1, project: record }, null, 2);
+  },
+
+  importProjectJson: async (json) => {
+    const parsed: unknown = JSON.parse(json);
+    const candidate =
+      typeof parsed === "object" && parsed !== null && "project" in parsed
+        ? (parsed as { project?: unknown }).project
+        : parsed;
+    if (typeof candidate !== "object" || candidate === null) {
+      throw new Error("Project JSON must contain a project object");
+    }
+    const project = candidate as {
+      name?: unknown;
+      files?: unknown;
+      datasets?: unknown;
+      layout?: unknown;
+      createdAt?: unknown;
+    };
+    if (!Array.isArray(project.files) || !Array.isArray(project.datasets)) {
+      throw new Error("Project JSON must contain files and datasets arrays");
+    }
+    if (typeof project.layout !== "object" || project.layout === null) {
+      throw new Error("Project JSON must contain a layout object");
+    }
+    const layout = project.layout as {
+      windows?: unknown;
+      viewport?: unknown;
+      plotSpecs?: unknown;
+      commandHistory?: unknown;
+      columnSelections?: unknown;
+    };
+    if (!Array.isArray(layout.windows) || typeof layout.viewport !== "object") {
+      throw new Error("Project JSON layout must contain windows and viewport");
+    }
+
+    if (get().initialized && get().currentProjectId) {
+      await get().saveCurrentProject();
+    }
+
+    const id = `project-${crypto.randomUUID()}`;
+    const name = uniqueProjectName(
+      typeof project.name === "string" && project.name.trim()
+        ? project.name.trim()
+        : "Imported Project",
+      get().projects,
+    );
+    const datasets = project.datasets.map(normalizeDataset);
+    const plotSpecs = (Array.isArray(layout.plotSpecs) ? layout.plotSpecs : [seedPlot()]).map(
+      normalizePlotSpec,
+    );
+    const windows = ensureWorkspaceWindows(layout.windows as ScispaceState["windows"]);
+    const columnSelections = normalizeColumnSelections(
+      datasets,
+      (layout.columnSelections ?? {}) as Record<string, string[]>,
+    );
+    const now = Date.now();
+    const record = {
+      id,
+      name,
+      files: project.files as ScispaceState["files"],
+      datasets,
+      layout: {
+        windows,
+        viewport: layout.viewport as ScispaceState["viewport"],
+        plotSpecs,
+        commandHistory: Array.isArray(layout.commandHistory) ? layout.commandHistory : [],
+        columnSelections,
+        currentProjectId: id,
+      },
+      createdAt: typeof project.createdAt === "number" ? project.createdAt : now,
+      updatedAt: now,
+    };
+
+    await db.transaction("rw", db.files, db.datasets, db.layout, db.projects, async () => {
+      await db.projects.put(record);
+      await db.files.clear();
+      await db.datasets.clear();
+      await db.files.bulkPut(record.files);
+      await db.datasets.bulkPut(record.datasets);
+      await db.layout.put({ id: "main", value: record.layout });
+    });
+    const projects = (await db.projects.toArray()).map(projectSummary);
+    set({
+      files: record.files,
+      datasets: record.datasets,
+      projects,
+      currentProjectId: id,
+      projectDirty: false,
+      windows,
+      plotSpecs,
+      pendingImports: [],
+      terminalEvents: [],
+      commandHistory: record.layout.commandHistory,
+      undoStack: [],
+      redoStack: [],
+      columnSelections,
+      terminalCommandLineRequest: undefined,
+      activeDatasetId: record.datasets[0]?.id,
+      activeWindowId: undefined,
+      currentPlotId: plotSpecs[0]?.id,
+      viewport: record.layout.viewport,
     });
     persistLayout(db, get());
   },

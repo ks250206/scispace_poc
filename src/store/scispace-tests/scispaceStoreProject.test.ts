@@ -123,4 +123,30 @@ describe("scispace store project behavior", () => {
     expect(projects.find((project) => project.id === firstProjectId)?.name).toBe("Analysis");
     expect(projects.map((project) => project.name)).toContain("Analysis (1)");
   });
+
+  it("exports and imports project json as a new project", async () => {
+    const { db, store } = await makeStore();
+    await store.getState().saveCurrentProject("Analysis");
+    await store.getState().runScispace("elt waveform.csv as derived.csv");
+
+    const exported = await store.getState().exportCurrentProjectJson();
+    await store.getState().createNewProject("Scratch");
+    await store.getState().importProjectJson(exported);
+
+    expect(store.getState().projects.map((project) => project.name)).toContain("Analysis (1)");
+    expect(store.getState().projectDirty).toBe(false);
+    expect(store.getState().datasets.map((dataset) => dataset.name)).toContain("derived.csv");
+    expect((await db.projects.toArray()).map((project) => project.name)).toContain("Analysis (1)");
+    expect((await db.layout.get("main"))?.value.currentProjectId).toBe(
+      store.getState().currentProjectId,
+    );
+  });
+
+  it("rejects invalid project json", async () => {
+    const { store } = await makeStore();
+
+    await expect(
+      store.getState().importProjectJson(JSON.stringify({ nope: true })),
+    ).rejects.toThrow("Project JSON must contain files and datasets arrays");
+  });
 });

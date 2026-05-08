@@ -59,6 +59,8 @@ export interface ScispaceState {
   saveCurrentProject: (name?: string) => Promise<void>;
   switchProject: (projectId: string) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
+  exportCurrentProjectJson: () => Promise<string>;
+  importProjectJson: (json: string) => Promise<void>;
   createDirectory: (name: string, parentPath?: string) => Promise<VirtualFile | undefined>;
   renameVirtualItem: (path: string, name: string) => Promise<void>;
   moveVirtualItem: (path: string, targetDirectory: string) => Promise<void>;

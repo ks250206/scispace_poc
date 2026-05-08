@@ -22,6 +22,7 @@ export function Workbench() {
   const viewport = useScispaceStore((state) => state.viewport);
   const setViewport = useScispaceStore((state) => state.setViewport);
   const windows = useScispaceStore((state) => state.windows);
+  const projectImportInputRef = useRef<HTMLInputElement>(null);
   const projects = useScispaceStore((state) => state.projects);
   const currentProjectId = useScispaceStore((state) => state.currentProjectId);
   const projectDirty = useScispaceStore((state) => state.projectDirty);
@@ -30,6 +31,8 @@ export function Workbench() {
   const saveCurrentProject = useScispaceStore((state) => state.saveCurrentProject);
   const switchProject = useScispaceStore((state) => state.switchProject);
   const deleteProject = useScispaceStore((state) => state.deleteProject);
+  const exportCurrentProjectJson = useScispaceStore((state) => state.exportCurrentProjectJson);
+  const importProjectJson = useScispaceStore((state) => state.importProjectJson);
   const undoStackLength = useScispaceStore((state) => state.undoStack.length);
   const redoStackLength = useScispaceStore((state) => state.redoStack.length);
   const undo = useScispaceStore((state) => state.undo);
@@ -157,6 +160,23 @@ export function Workbench() {
     if (confirmed) void deleteProject(currentProjectId);
   };
 
+  const handleExportProject = async () => {
+    const json = await exportCurrentProjectJson();
+    const currentName =
+      projects.find((project) => project.id === currentProjectId)?.name ?? "scispace-project";
+    const link = document.createElement("a");
+    link.href = `data:application/json;charset=utf-8,${encodeURIComponent(json)}`;
+    link.download = `${currentName.replace(/[^\w.-]+/g, "_") || "scispace-project"}.scispace.json`;
+    link.click();
+  };
+
+  const handleImportProjectFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+    await importProjectJson(await file.text());
+  };
+
   const handleSwitchProject = (projectId: string) => {
     if (!projectId || projectId === currentProjectId) return;
     if (projectDirty && !window.confirm("Switch projects and save current unsaved changes?")) {
@@ -188,6 +208,20 @@ export function Workbench() {
           <button type="button" disabled={!currentProjectId} onClick={handleDeleteProject}>
             Delete Project
           </button>
+          <button type="button" onClick={() => void handleExportProject()}>
+            Export Project
+          </button>
+          <button type="button" onClick={() => projectImportInputRef.current?.click()}>
+            Import Project
+          </button>
+          <input
+            ref={projectImportInputRef}
+            aria-label="Import project file"
+            className="visually-hidden"
+            type="file"
+            accept="application/json,.json,.scispace.json"
+            onChange={(event) => void handleImportProjectFile(event)}
+          />
           <button type="button" disabled={undoStackLength === 0} onClick={() => void undo()}>
             Undo
           </button>
