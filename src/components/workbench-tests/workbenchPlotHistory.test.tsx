@@ -20,6 +20,44 @@ describe("Workbench plot and history UI", () => {
     expect(storeState().currentPlotId).toBe("seed-plot");
   });
 
+  it("copies plot schema and exports the current plot canvas as png", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const toDataUrl = vi
+      .spyOn(HTMLCanvasElement.prototype, "toDataURL")
+      .mockReturnValue("data:image/png;base64,plot");
+    const click = vi.fn();
+    const createElement = vi.spyOn(document, "createElement");
+    createElement.mockImplementation(((tagName: string) => {
+      const element = document.createElementNS("http://www.w3.org/1999/xhtml", tagName);
+      if (tagName === "a") {
+        Object.defineProperty(element, "click", { value: click });
+      }
+      return element;
+    }) as typeof document.createElement);
+
+    await renderWorkbench();
+    fireEvent.click(screen.getByRole("button", { name: "Copy plot schema" }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(JSON.parse(writeText.mock.calls[0]?.[0] ?? "{}")).toMatchObject({
+      id: "seed-plot",
+      size: { width: 640, height: 360 },
+    });
+    expect(storeState().commandHistory.at(-1)).toMatchObject({
+      command: "plot-schema seed-plot",
+      source: "gui",
+      status: "success",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Export plot PNG" }));
+    expect(toDataUrl).toHaveBeenCalledWith("image/png");
+    expect(click).toHaveBeenCalled();
+  });
+
   it("replays and copies commands from the command history window", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);

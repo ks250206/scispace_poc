@@ -32,6 +32,7 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
     state.datasets.find((item) => item.id === spec?.source),
   );
   const openPlotConfig = useScispaceStore((state) => state.openPlotConfig);
+  const runScispace = useScispaceStore((state) => state.runScispace);
 
   const plotData = useMemo(() => {
     if (!dataset || !spec) return undefined;
@@ -148,6 +149,19 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
 
   if (!spec || !dataset) return <div className="empty-state">Plot source not found.</div>;
 
+  const copySchema = async () => {
+    const result = await runScispace(`plot-schema ${plotId}`, { source: "gui" });
+    if (result.kind !== "error") await navigator.clipboard?.writeText(result.output);
+  };
+  const exportPng = () => {
+    const canvas = containerRef.current?.querySelector("canvas");
+    if (!canvas) return;
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/png");
+    link.download = `${spec.title.replace(/[^\w.-]+/g, "_") || "plot"}.png`;
+    link.click();
+  };
+
   return (
     <div className="plot-window">
       <div className="plot-window-toolbar">
@@ -159,6 +173,12 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
         </div>
         <button type="button" onClick={() => openPlotConfig(plotId)}>
           Config
+        </button>
+        <button type="button" onClick={() => void copySchema()} aria-label="Copy plot schema">
+          Copy schema
+        </button>
+        <button type="button" onClick={exportPng} aria-label="Export plot PNG">
+          Export PNG
         </button>
       </div>
       <div className="plot-host" style={{ width: spec.size.width, height: spec.size.height }}>
