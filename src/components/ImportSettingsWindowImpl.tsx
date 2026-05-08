@@ -9,65 +9,28 @@ import {
 } from "react";
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { Dataset, ImportDelimiter, PendingImport } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
+import { ImportControls } from "./import-window/ImportControls";
+import {
+  importColumnCommand,
+  importLineCommand,
+  importSetCommand,
+  quoteImportCommandArg,
+} from "./import-window/importCommands";
+import {
+  defaultColumnWidth,
+  formatCellValue,
+  importStatusText,
+  minColumnWidth,
+  rawLineNumberWidth,
+  rawRowClassName,
+  rawTextDefaultWidth,
+  rowHeight,
+} from "./import-window/importModel";
 
 interface ImportSettingsWindowProps {
   importId: string;
 }
-
-const delimiterOptions: Array<{ value: ImportDelimiter; label: string }> = [
-  { value: "auto", label: "Auto" },
-  { value: "comma", label: "Comma" },
-  { value: "tab", label: "Tab" },
-  { value: "space", label: "Space" },
-  { value: "semicolon", label: "Semicolon" },
-];
-
-const formatCellValue = (value: unknown): string => {
-  if (value == null) return "";
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  return JSON.stringify(value);
-};
-
-const rowHeight = 32;
-const defaultColumnWidth = 140;
-const minColumnWidth = 96;
-const rawLineNumberWidth = 64;
-const rawTextDefaultWidth = 720;
-const quoteCommandArg = (value: string): string =>
-  /[\s"']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
-
-const importLineCommand = (importId: string, lineIndex: number, value: string): string =>
-  `import-line ${importId} line=${lineIndex + 1} value=${encodeURIComponent(value)}`;
-
-const importSetCommand = (importId: string, options: string): string =>
-  `import-set ${importId} ${options}`;
-
-const importColumnCommand = (importId: string, columnId: string, exclude: boolean): string =>
-  `import-column ${importId} column=${quoteCommandArg(columnId)} action=${
-    exclude ? "exclude" : "include"
-  }`;
-
-const importStatusText = (
-  pendingImport: PendingImport,
-  preview: Dataset | undefined,
-  rawLineCount: number,
-): string | undefined => {
-  if (pendingImport.mode === "raw") return `${rawLineCount} raw lines`;
-  if (preview) return `${preview.rows.length} preview rows · ${preview.columns.length} columns`;
-  return pendingImport.error;
-};
-
-const rawRowClassName = (pendingImport: PendingImport, lineIndex: number): string | undefined => {
-  const classNames = [
-    lineIndex < pendingImport.options.skipRows ? "skipped-row" : "",
-    pendingImport.detectedPreset?.dataStartLine === lineIndex + 1 ? "data-start-row" : "",
-  ].filter(Boolean);
-  return classNames.length > 0 ? classNames.join(" ") : undefined;
-};
 
 export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   const pendingImport = useScispaceStore((state) =>
@@ -173,73 +136,12 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
 
   return (
     <div className="import-window">
-      <div className="import-controls">
-        <label>
-          <span>Skip rows</span>
-          <input
-            type="number"
-            min={0}
-            value={pendingImport.options.skipRows}
-            onChange={(event) =>
-              runImportSet(`skipRows=${Math.max(0, Number(event.currentTarget.value) || 0)}`)
-            }
-          />
-        </label>
-        <label>
-          <span>Delimiter</span>
-          <select
-            value={pendingImport.options.delimiter}
-            onChange={(event) =>
-              runImportSet(`delimiter=${event.currentTarget.value as ImportDelimiter}`)
-            }
-          >
-            {delimiterOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span>Skip prefix</span>
-          <input
-            value={pendingImport.options.commentPrefix}
-            placeholder="#"
-            onChange={(event) =>
-              runImportSet(`commentPrefix=${quoteCommandArg(event.currentTarget.value)}`)
-            }
-          />
-        </label>
-        <label className="import-checkbox">
-          <input
-            type="checkbox"
-            checked={pendingImport.options.hasHeader}
-            onChange={(event) => runImportSet(`hasHeader=${event.currentTarget.checked}`)}
-          />
-          <span>Header row</span>
-        </label>
-        <label>
-          <span>Mode</span>
-          <select
-            value={pendingImport.mode}
-            onChange={(event) => runImportSet(`mode=${event.currentTarget.value}`)}
-          >
-            <option value="tabular">Tabular</option>
-            <option value="raw">Raw</option>
-          </select>
-        </label>
-        <div className="import-actions">
-          <button
-            type="button"
-            onClick={() => void runScispace(`import-cancel ${importId}`, { source: "gui" })}
-          >
-            Cancel
-          </button>
-          <button type="button" className="primary" onClick={() => void confirmImport(importId)}>
-            Import
-          </button>
-        </div>
-      </div>
+      <ImportControls
+        pendingImport={pendingImport}
+        onImportSet={runImportSet}
+        onCancel={() => void runScispace(`import-cancel ${importId}`, { source: "gui" })}
+        onImport={() => void confirmImport(importId)}
+      />
       <div className="import-summary">
         <span className="import-file-name">{pendingImport.fileName}</span>
         <span className="import-file-meta">{importStatus}</span>
@@ -263,7 +165,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
                 onChange={(event) => {
                   const columnNames = [...pendingImport.options.columnNames];
                   columnNames[index] = event.currentTarget.value;
-                  runImportSet(`columnNames=${quoteCommandArg(columnNames.join(","))}`);
+                  runImportSet(`columnNames=${quoteImportCommandArg(columnNames.join(","))}`);
                 }}
               />
             </label>
