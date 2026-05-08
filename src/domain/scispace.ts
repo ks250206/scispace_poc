@@ -1132,39 +1132,11 @@ const executePlotCommand = (
   return undefined;
 };
 
-export const executeScispaceCommand = (
-  input: string,
+const executeImportCommand = (
+  command: string,
+  args: string[],
   context: CommandContext,
-): ScispaceCommandResult => {
-  const tokens = tokenizeCommand(input);
-  const [command, ...args] = tokens;
-
-  if (!command || command === "help") {
-    return {
-      kind: "text",
-      output: helpText,
-    };
-  }
-
-  if (command === "lsdata") {
-    const output = context.datasets
-      .map(
-        (dataset) =>
-          `${dataset.name}\t${dataset.rows.length} rows\tcolumns: ${datasetColumnNames(dataset).join(", ")}`,
-      )
-      .join("\n");
-    return { kind: "text", output: output || "No datasets loaded" };
-  }
-
-  const virtualFileResult = executeVirtualFileCommand(command, args, context);
-  if (virtualFileResult) return virtualFileResult;
-
-  const tableResult = executeTableCommand(command, args, context);
-  if (tableResult) return tableResult;
-
-  const plotResult = executePlotCommand(command, args, context);
-  if (plotResult) return plotResult;
-
+): ScispaceCommandResult | undefined => {
   if (command === "import-open") {
     const importId = args[0] ?? "";
     const fileName = readOption(args, "name");
@@ -1368,6 +1340,45 @@ export const executeScispaceCommand = (
       return { kind: "import-confirm", importId, parseError: message, output: message };
     }
   }
+
+  return undefined;
+};
+
+export const executeScispaceCommand = (
+  input: string,
+  context: CommandContext,
+): ScispaceCommandResult => {
+  const tokens = tokenizeCommand(input);
+  const [command, ...args] = tokens;
+
+  if (!command || command === "help") {
+    return {
+      kind: "text",
+      output: helpText,
+    };
+  }
+
+  if (command === "lsdata") {
+    const output = context.datasets
+      .map(
+        (dataset) =>
+          `${dataset.name}\t${dataset.rows.length} rows\tcolumns: ${datasetColumnNames(dataset).join(", ")}`,
+      )
+      .join("\n");
+    return { kind: "text", output: output || "No datasets loaded" };
+  }
+
+  const virtualFileResult = executeVirtualFileCommand(command, args, context);
+  if (virtualFileResult) return virtualFileResult;
+
+  const tableResult = executeTableCommand(command, args, context);
+  if (tableResult) return tableResult;
+
+  const plotResult = executePlotCommand(command, args, context);
+  if (plotResult) return plotResult;
+
+  const importResult = executeImportCommand(command, args, context);
+  if (importResult) return importResult;
 
   if (command === "elt") {
     const dataset = findDataset(context.datasets, args[0] ?? "");
