@@ -101,6 +101,32 @@ describe("Workbench data browser UI", () => {
     expect(storeState().commandHistory.every((entry) => entry.source === "gui")).toBe(true);
   });
 
+  it("undoes and redoes data browser file operations from the topbar", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await renderWorkbench();
+
+    await user.click(screen.getByRole("button", { name: "Delete waveform.csv" }));
+    await waitFor(() =>
+      expect(storeState().files.some((file) => file.path === "~/raw/waveform.csv")).toBe(false),
+    );
+    expect(storeState().commandHistory.at(-1)).toMatchObject({
+      command: "file-delete ~/raw/waveform.csv",
+      source: "gui",
+    });
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() =>
+      expect(storeState().files.some((file) => file.path === "~/raw/waveform.csv")).toBe(true),
+    );
+    expect(storeState().datasets[0]?.id).toBe("seed-waveform");
+
+    await user.click(screen.getByRole("button", { name: "Redo" }));
+    await waitFor(() =>
+      expect(storeState().files.some((file) => file.path === "~/raw/waveform.csv")).toBe(false),
+    );
+  });
+
   it("opens tables with the checked data browser columns", async () => {
     const user = userEvent.setup();
     await renderWorkbench();

@@ -172,4 +172,31 @@ describe("Workbench import UI", () => {
       status: "success",
     });
   });
+
+  it("undoes and redoes confirmed imports from the topbar", async () => {
+    await renderWorkbench();
+    let importId = "";
+    act(() => {
+      importId = storeState().openImportDialog("undo-import.csv", "x,y\n1,2");
+    });
+
+    await waitFor(() => expect(screen.getByText("Import - undo-import.csv")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    await waitFor(() =>
+      expect(storeState().files.some((file) => file.path === "~/raw/undo-import.csv")).toBe(true),
+    );
+    expect(storeState().commandHistory.at(-1)?.command).toContain(`import-confirm ${importId}`);
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() =>
+      expect(storeState().files.some((file) => file.path === "~/raw/undo-import.csv")).toBe(false),
+    );
+    expect(storeState().redoStack).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Redo" }));
+    await waitFor(() =>
+      expect(storeState().files.some((file) => file.path === "~/raw/undo-import.csv")).toBe(true),
+    );
+    expect(storeState().undoStack).toHaveLength(1);
+  });
 });
