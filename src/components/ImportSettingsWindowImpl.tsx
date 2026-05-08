@@ -1,13 +1,5 @@
-import {
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type Dispatch,
-  type SetStateAction,
-} from "react";
-import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import { useCallback, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useScispaceStore } from "../store/scispaceStore";
 import { ImportControls } from "./import-window/ImportControls";
@@ -18,6 +10,7 @@ import {
   quoteImportCommandArg,
 } from "./import-window/importCommands";
 import { RawTextTable } from "./import-window/RawTextTable";
+import { ParsedPreviewTable } from "./import-window/ParsedPreviewTable";
 import {
   defaultColumnWidth,
   formatCellValue,
@@ -210,85 +203,19 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
           onUpdateRawLine={updateRawLine}
         />
         {!isRawMode ? (
-          <section className="preview-editor">
-            <div className="virtual-table-title">
-              <span>Parsed preview</span>
-              <span>{preview ? `${preview.rows.length} rows` : "No preview"}</span>
-            </div>
-            <div
-              ref={previewParentRef}
-              className="table-scroll import-preview"
-              style={
-                {
-                  "--table-visible-height": "260px",
-                  "--table-width": `${previewTableWidth}px`,
-                } as CSSProperties
-              }
-            >
-              <table style={{ width: previewTableWidth, minWidth: previewTableWidth }}>
-                <thead>
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <tr key={headerGroup.id} style={{ width: previewTableWidth }}>
-                      {headerGroup.headers.map((header) => (
-                        <th
-                          key={header.id}
-                          style={{
-                            width: getPreviewColumnWidth(header.column.id),
-                            minWidth: minColumnWidth,
-                          }}
-                        >
-                          {flexRender(header.column.columnDef.header, header.getContext())}
-                          <button
-                            type="button"
-                            role="separator"
-                            aria-label={`Resize import column ${header.column.id}`}
-                            className="column-resize-handle"
-                            onPointerDown={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              startColumnResize(
-                                setPreviewColumnWidths,
-                                header.column.id,
-                                event.clientX,
-                                getPreviewColumnWidth(header.column.id),
-                              );
-                            }}
-                          />
-                        </th>
-                      ))}
-                    </tr>
-                  ))}
-                </thead>
-                <tbody style={{ height: rowVirtualizer.getTotalSize() }}>
-                  {visiblePreviewRows.map((virtualRow) => {
-                    const row = rows[virtualRow.index];
-                    if (!row) return null;
-                    return (
-                      <tr
-                        key={row.id}
-                        style={{
-                          width: previewTableWidth,
-                          transform: `translateY(${virtualRow.start}px)`,
-                        }}
-                      >
-                        {row.getVisibleCells().map((cell) => (
-                          <td
-                            key={cell.id}
-                            style={{
-                              width: getPreviewColumnWidth(cell.column.id),
-                              minWidth: minColumnWidth,
-                            }}
-                          >
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <ParsedPreviewTable
+            preview={preview}
+            parentRef={previewParentRef}
+            table={table}
+            rows={rows}
+            visibleRows={visiblePreviewRows}
+            totalSize={rowVirtualizer.getTotalSize()}
+            tableWidth={previewTableWidth}
+            getColumnWidth={getPreviewColumnWidth}
+            onStartColumnResize={(columnId, startX, startWidth) =>
+              startColumnResize(setPreviewColumnWidths, columnId, startX, startWidth)
+            }
+          />
         ) : null}
       </div>
     </div>
