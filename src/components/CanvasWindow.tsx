@@ -1,14 +1,25 @@
 import { Rnd } from "react-rnd";
-import type { MouseEvent } from "react";
+import { lazy, Suspense, type MouseEvent } from "react";
 import { CommandHistoryWindow } from "./CommandHistoryWindow";
 import { DataBrowser } from "./DataBrowser";
-import { DataTableWindow } from "./DataTableWindow";
-import { ImportSettingsWindow } from "./ImportSettingsWindow";
-import { PlotConfigWindow } from "./PlotConfigWindow";
-import { PlotWindow } from "./PlotWindow";
-import { TerminalPanel } from "./TerminalPanel";
 import type { WorkspaceWindow } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
+
+const DataTableWindow = lazy(() =>
+  import("./DataTableWindow").then((module) => ({ default: module.DataTableWindow })),
+);
+const ImportSettingsWindow = lazy(() =>
+  import("./ImportSettingsWindow").then((module) => ({ default: module.ImportSettingsWindow })),
+);
+const PlotConfigWindow = lazy(() =>
+  import("./PlotConfigWindow").then((module) => ({ default: module.PlotConfigWindow })),
+);
+const PlotWindow = lazy(() =>
+  import("./PlotWindow").then((module) => ({ default: module.PlotWindow })),
+);
+const TerminalPanel = lazy(() =>
+  import("./TerminalPanel").then((module) => ({ default: module.TerminalPanel })),
+);
 
 interface CanvasWindowProps {
   window: WorkspaceWindow;
@@ -71,20 +82,22 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
         </header>
         <div className="window-body">
           {window.kind === "browser" ? <DataBrowser /> : null}
-          {window.kind === "table" && window.datasetId ? (
-            <DataTableWindow
-              datasetId={window.datasetId}
-              windowId={window.id}
-              columnIds={window.columnIds}
-            />
-          ) : null}
-          {window.kind === "plot" && window.plotId ? <PlotWindow plotId={window.plotId} /> : null}
-          {window.kind === "plot-config" ? <PlotConfigWindow /> : null}
-          {window.kind === "terminal" ? <TerminalPanel /> : null}
           {window.kind === "history" ? <CommandHistoryWindow /> : null}
-          {window.kind === "import" && window.importId ? (
-            <ImportSettingsWindow importId={window.importId} />
-          ) : null}
+          <Suspense fallback={<div className="window-loading">Loading window...</div>}>
+            {window.kind === "table" && window.datasetId ? (
+              <DataTableWindow
+                datasetId={window.datasetId}
+                windowId={window.id}
+                columnIds={window.columnIds}
+              />
+            ) : null}
+            {window.kind === "plot" && window.plotId ? <PlotWindow plotId={window.plotId} /> : null}
+            {window.kind === "plot-config" ? <PlotConfigWindow /> : null}
+            {window.kind === "terminal" ? <TerminalPanel /> : null}
+            {window.kind === "import" && window.importId ? (
+              <ImportSettingsWindow importId={window.importId} />
+            ) : null}
+          </Suspense>
         </div>
       </article>
     </Rnd>
