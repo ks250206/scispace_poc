@@ -26,6 +26,26 @@ interface ConfigFieldProps {
   compact?: boolean;
 }
 
+interface PlotSizeDraft {
+  width: string;
+  height: string;
+}
+
+interface AnnotationDraft {
+  text: string;
+  x: string;
+  y: string;
+  dx: string;
+  dy: string;
+}
+
+interface ParsedAnnotationDraft {
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+}
+
 const quoteArg = (value: string): string =>
   /[\s=]/.test(value) ? `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"` : value;
 
@@ -41,6 +61,104 @@ const paddingToCommand = (padding: {
   bottom: number;
   left: number;
 }): string => `${padding.top}:${padding.right}:${padding.bottom}:${padding.left}`;
+
+const commandArgs = (args: Record<string, string | number | boolean>): string =>
+  Object.entries(args)
+    .map(([key, value]) => `${key}=${typeof value === "string" ? quoteArg(value) : value}`)
+    .join(" ");
+
+const plotSetCommand = (plotId: string, args: Record<string, string | number | boolean>): string =>
+  `plot-set ${plotId} ${commandArgs(args)}`;
+
+const plotGridCommand = (plotId: string, axis: "x" | "y", value: boolean): string =>
+  `plot-grid ${plotId} ${axis}=${value}`;
+
+const plotAxisCommand = (plotId: string, axis: "x" | "y", axisSpec: PlotAxisSpec): string =>
+  `plot-axis ${plotId} axis=${axis} ${commandArgs({
+    label: axisSpec.label,
+    range: rangeToCommand(axisSpec.range),
+    tick: tickToCommand(axisSpec.ticks),
+    tickDir: axisSpec.ticks.orientation,
+    scale: axisSpec.scale,
+    labelFontFamily: axisSpec.labelStyle.family,
+    labelFontSize: axisSpec.labelStyle.size,
+    valueFontFamily: axisSpec.valueStyle.family,
+    valueFontSize: axisSpec.valueStyle.size,
+    size: axisSpec.size,
+    gap: axisSpec.gap,
+    labelGap: axisSpec.labelGap,
+    labelSize: axisSpec.labelSize,
+    color: axisSpec.color,
+    gridColor: axisSpec.gridColor,
+    tickColor: axisSpec.tickColor,
+    tickLength: axisSpec.ticks.length,
+    minorTick: axisSpec.ticks.minor,
+  })}`;
+
+const plotSeriesStyleCommand = (plotId: string, series: PlotSeries): string =>
+  `plot-series ${plotId} ${commandArgs({
+    y: series.y,
+    label: series.label,
+    color: series.color,
+    lineWidth: series.lineWidth,
+    markerSize: series.markerSize,
+    markerShape: series.markerShape,
+    order: series.drawOrder,
+  })}`;
+
+const plotSeriesActionCommand = (plotId: string, y: string, action: "add" | "remove"): string =>
+  `plot-series ${plotId} y=${quoteArg(y)} action=${action}`;
+
+const addAnnotationCommand = (
+  plotId: string,
+  draft: AnnotationDraft,
+  position: ParsedAnnotationDraft,
+): string =>
+  `plot-annotation ${plotId} action=add ${commandArgs({
+    type: "text-arrow",
+    text: draft.text,
+    x: position.x,
+    y: position.y,
+    dx: position.dx,
+    dy: position.dy,
+  })}`;
+
+const updateAnnotationCommand = (plotId: string, annotation: PlotAnnotation): string =>
+  `plot-annotation ${plotId} action=update ${commandArgs({
+    id: annotation.id,
+    text: annotation.text,
+    x: annotation.x,
+    y: annotation.y,
+    dx: annotation.dx,
+    dy: annotation.dy,
+    color: annotation.color,
+    fontFamily: annotation.font.family,
+    fontSize: annotation.font.size,
+  })}`;
+
+const removeAnnotationCommand = (plotId: string, annotationId: string): string =>
+  `plot-annotation ${plotId} action=remove id=${quoteArg(annotationId)}`;
+
+const plotSizeDraftFromSpec = (size: { width: number; height: number }): PlotSizeDraft => ({
+  width: String(size.width),
+  height: String(size.height),
+});
+
+const parsePlotSizeDraft = (draft: PlotSizeDraft): { width: number; height: number } | null => {
+  const width = Number(draft.width);
+  const height = Number(draft.height);
+  return Number.isFinite(width) && Number.isFinite(height) ? { width, height } : null;
+};
+
+const parseAnnotationDraft = (draft: AnnotationDraft): ParsedAnnotationDraft | null => {
+  const parsed = {
+    x: Number(draft.x),
+    y: Number(draft.y),
+    dx: Number(draft.dx),
+    dy: Number(draft.dy),
+  };
+  return Object.values(parsed).every(Number.isFinite) ? parsed : null;
+};
 
 function ConfigGroup({ title, children }: ConfigGroupProps) {
   return (
@@ -71,8 +189,8 @@ export function PlotConfigWindow() {
   const runScispace = useScispaceStore((state) => state.runScispace);
   const [seriesToAdd, setSeriesToAdd] = useState("");
   const [activeTab, setActiveTab] = useState<PlotConfigTab>("basic");
-  const [plotSizeDraft, setPlotSizeDraft] = useState({ width: "", height: "" });
-  const [annotationDraft, setAnnotationDraft] = useState({
+  const [plotSizeDraft, setPlotSizeDraft] = useState<PlotSizeDraft>({ width: "", height: "" });
+  const [annotationDraft, setAnnotationDraft] = useState<AnnotationDraft>({
     text: "Annotation",
     x: "1",
     y: "1",
@@ -100,10 +218,7 @@ export function PlotConfigWindow() {
 
   useEffect(() => {
     if (!spec) return;
-    setPlotSizeDraft({
-      width: String(spec.size.width),
-      height: String(spec.size.height),
-    });
+    setPlotSizeDraft(plotSizeDraftFromSpec(spec.size));
   }, [spec?.size.height, spec?.size.width]);
 
   if (!spec || !dataset || !currentPlotId) {
@@ -114,103 +229,63 @@ export function PlotConfigWindow() {
     void runScispace(command, { source: "gui" });
   };
   const setPlotType = (plotType: PlotType) =>
-    runPlotCommand(`plot-set ${currentPlotId} type=${plotType}`);
-  const setBorder = (border: boolean) =>
-    runPlotCommand(`plot-set ${currentPlotId} border=${border}`);
-  const setTitle = (title: string) =>
-    runPlotCommand(`plot-set ${currentPlotId} title=${quoteArg(title)}`);
+    runPlotCommand(plotSetCommand(currentPlotId, { type: plotType }));
+  const setBorder = (border: boolean) => runPlotCommand(plotSetCommand(currentPlotId, { border }));
+  const setTitle = (title: string) => runPlotCommand(plotSetCommand(currentPlotId, { title }));
   const setPlotSize = (patch: Partial<typeof spec.size>) => {
     const next = { ...spec.size, ...patch };
-    runPlotCommand(`plot-set ${currentPlotId} width=${next.width} height=${next.height}`);
+    runPlotCommand(plotSetCommand(currentPlotId, { width: next.width, height: next.height }));
   };
   const setPlotFont = (patch: Partial<typeof spec.font>) => {
     const next = { ...spec.font, ...patch };
-    runPlotCommand(
-      `plot-set ${currentPlotId} fontFamily=${quoteArg(next.family)} fontSize=${next.size}`,
-    );
+    runPlotCommand(plotSetCommand(currentPlotId, { fontFamily: next.family, fontSize: next.size }));
   };
   const setPlotPadding = (patch: Partial<typeof spec.padding>) => {
     const next = { ...spec.padding, ...patch };
-    runPlotCommand(`plot-set ${currentPlotId} padding=${paddingToCommand(next)}`);
+    runPlotCommand(plotSetCommand(currentPlotId, { padding: paddingToCommand(next) }));
   };
   const commitPlotSize = () => {
-    const width = Number(plotSizeDraft.width);
-    const height = Number(plotSizeDraft.height);
-    if (
-      !Number.isFinite(width) ||
-      !Number.isFinite(height) ||
-      (width === spec.size.width && height === spec.size.height)
-    ) {
-      setPlotSizeDraft({ width: String(spec.size.width), height: String(spec.size.height) });
+    const parsed = parsePlotSizeDraft(plotSizeDraft);
+    if (!parsed || (parsed.width === spec.size.width && parsed.height === spec.size.height)) {
+      setPlotSizeDraft(plotSizeDraftFromSpec(spec.size));
       return;
     }
-    setPlotSize({ width, height });
+    setPlotSize(parsed);
   };
   const setGrid = (axis: "x" | "y", value: boolean) =>
-    runPlotCommand(`plot-grid ${currentPlotId} ${axis}=${value}`);
+    runPlotCommand(plotGridCommand(currentPlotId, axis, value));
   const setAxis = (axis: "x" | "y", patch: AxisPatch) => {
     const next = {
       ...spec.axes[axis],
       ...patch,
       ticks: { ...spec.axes[axis].ticks, ...patch.ticks },
     };
-    runPlotCommand(
-      `plot-axis ${currentPlotId} axis=${axis} label=${quoteArg(
-        next.label,
-      )} range=${rangeToCommand(next.range)} tick=${tickToCommand(next.ticks)} tickDir=${
-        next.ticks.orientation
-      } scale=${next.scale} labelFontFamily=${quoteArg(next.labelStyle.family)} labelFontSize=${
-        next.labelStyle.size
-      } valueFontFamily=${quoteArg(next.valueStyle.family)} valueFontSize=${
-        next.valueStyle.size
-      } size=${next.size} gap=${next.gap} labelGap=${next.labelGap} labelSize=${
-        next.labelSize
-      } color=${next.color} gridColor=${next.gridColor} tickColor=${next.tickColor} tickLength=${
-        next.ticks.length
-      } minorTick=${next.ticks.minor}`,
-    );
+    runPlotCommand(plotAxisCommand(currentPlotId, axis, next));
   };
   const updateSeries = (series: PlotSeries, patch: Partial<PlotSeries>) => {
     const next = { ...series, ...patch };
-    runPlotCommand(
-      `plot-series ${currentPlotId} y=${next.y} label=${quoteArg(next.label)} color=${next.color} lineWidth=${
-        next.lineWidth
-      } markerSize=${next.markerSize} markerShape=${next.markerShape} order=${next.drawOrder}`,
-    );
+    runPlotCommand(plotSeriesStyleCommand(currentPlotId, next));
   };
   const addSeries = () => {
     if (!seriesToAdd) return;
-    runPlotCommand(`plot-series ${currentPlotId} y=${seriesToAdd} action=add`);
+    runPlotCommand(plotSeriesActionCommand(currentPlotId, seriesToAdd, "add"));
     setSeriesToAdd("");
   };
   const removeSeries = (series: PlotSeries) => {
     if (spec.series.length <= 1) return;
-    runPlotCommand(`plot-series ${currentPlotId} y=${series.y} action=remove`);
+    runPlotCommand(plotSeriesActionCommand(currentPlotId, series.y, "remove"));
   };
   const addAnnotation = () => {
-    const x = Number(annotationDraft.x);
-    const y = Number(annotationDraft.y);
-    const dx = Number(annotationDraft.dx);
-    const dy = Number(annotationDraft.dy);
-    if (![x, y, dx, dy].every(Number.isFinite)) return;
-    runPlotCommand(
-      `plot-annotation ${currentPlotId} action=add type=text-arrow text=${quoteArg(
-        annotationDraft.text,
-      )} x=${x} y=${y} dx=${dx} dy=${dy}`,
-    );
+    const parsed = parseAnnotationDraft(annotationDraft);
+    if (!parsed) return;
+    runPlotCommand(addAnnotationCommand(currentPlotId, annotationDraft, parsed));
   };
   const updateAnnotation = (annotation: PlotAnnotation, patch: Partial<PlotAnnotation>) => {
     const next = { ...annotation, ...patch };
-    runPlotCommand(
-      `plot-annotation ${currentPlotId} action=update id=${next.id} text=${quoteArg(
-        next.text,
-      )} x=${next.x} y=${next.y} dx=${next.dx} dy=${next.dy} color=${next.color} fontFamily=${quoteArg(
-        next.font.family,
-      )} fontSize=${next.font.size}`,
-    );
+    runPlotCommand(updateAnnotationCommand(currentPlotId, next));
   };
   const removeAnnotation = (annotation: PlotAnnotation) => {
-    runPlotCommand(`plot-annotation ${currentPlotId} action=remove id=${annotation.id}`);
+    runPlotCommand(removeAnnotationCommand(currentPlotId, annotation.id));
   };
 
   return (
@@ -257,9 +332,10 @@ export function PlotConfigWindow() {
                     value={spec.x}
                     onChange={(event) =>
                       runPlotCommand(
-                        `plot-set ${currentPlotId} x=${event.target.value} axisX=${quoteArg(
-                          event.target.value,
-                        )}`,
+                        plotSetCommand(currentPlotId, {
+                          x: event.target.value,
+                          axisX: event.target.value,
+                        }),
                       )
                     }
                   >
@@ -332,10 +408,7 @@ export function PlotConfigWindow() {
                     onKeyDown={(event) => {
                       if (event.key === "Enter") event.currentTarget.blur();
                       if (event.key === "Escape") {
-                        setPlotSizeDraft({
-                          width: String(spec.size.width),
-                          height: String(spec.size.height),
-                        });
+                        setPlotSizeDraft(plotSizeDraftFromSpec(spec.size));
                         event.currentTarget.blur();
                       }
                     }}
@@ -355,10 +428,7 @@ export function PlotConfigWindow() {
                     onKeyDown={(event) => {
                       if (event.key === "Enter") event.currentTarget.blur();
                       if (event.key === "Escape") {
-                        setPlotSizeDraft({
-                          width: String(spec.size.width),
-                          height: String(spec.size.height),
-                        });
+                        setPlotSizeDraft(plotSizeDraftFromSpec(spec.size));
                         event.currentTarget.blur();
                       }
                     }}
