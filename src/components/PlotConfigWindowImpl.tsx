@@ -7,6 +7,7 @@ import type {
   PlotType,
 } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
+import { PlotConfigBasicTab } from "./plot-config/PlotConfigBasicTab";
 import { ConfigField, ConfigGroup } from "./plot-config/PlotConfigFields";
 import {
   addAnnotationCommand,
@@ -168,167 +169,21 @@ export function PlotConfigWindow() {
         ))}
       </div>
       {activeTab === "basic" ? (
-        <div className="plot-config-section" role="tabpanel">
-          <div className="plot-config-groups">
-            <ConfigGroup title="Data">
-              <div className="plot-field-grid two">
-                <ConfigField label="Title">
-                  <input
-                    aria-label="Plot title"
-                    className="plot-title-input"
-                    value={spec.title}
-                    onChange={(event) => setTitle(event.target.value)}
-                  />
-                </ConfigField>
-                <ConfigField label="X column">
-                  <select
-                    aria-label="Plot x column"
-                    value={spec.x}
-                    onChange={(event) =>
-                      runPlotCommand(
-                        plotSetCommand(currentPlotId, {
-                          x: event.target.value,
-                          axisX: event.target.value,
-                        }),
-                      )
-                    }
-                  >
-                    {dataset.columns.map((column) => (
-                      <option key={column.id} value={column.id}>
-                        {column.name}
-                      </option>
-                    ))}
-                  </select>
-                </ConfigField>
-              </div>
-            </ConfigGroup>
-
-            <ConfigGroup title="Appearance">
-              <div className="plot-field-grid three">
-                <ConfigField label="Type">
-                  <select
-                    aria-label="Plot type"
-                    value={spec.plotType}
-                    onChange={(event) => setPlotType(event.target.value as PlotType)}
-                  >
-                    <option value="line">line</option>
-                    <option value="line-marker">line + marker</option>
-                    <option value="marker">marker</option>
-                  </select>
-                </ConfigField>
-                <label className="plot-config-check">
-                  <input
-                    aria-label="Grid x"
-                    type="checkbox"
-                    checked={spec.grid.x}
-                    onChange={(event) => setGrid("x", event.target.checked)}
-                  />
-                  <span>Grid x</span>
-                </label>
-                <label className="plot-config-check">
-                  <input
-                    aria-label="Grid y"
-                    type="checkbox"
-                    checked={spec.grid.y}
-                    onChange={(event) => setGrid("y", event.target.checked)}
-                  />
-                  <span>Grid y</span>
-                </label>
-                <label className="plot-config-check">
-                  <input
-                    aria-label="Plot border"
-                    type="checkbox"
-                    checked={spec.border}
-                    onChange={(event) => setBorder(event.target.checked)}
-                  />
-                  <span>Border</span>
-                </label>
-              </div>
-            </ConfigGroup>
-
-            <ConfigGroup title="Size">
-              <div className="plot-field-grid four">
-                <ConfigField label="Width" compact>
-                  <input
-                    aria-label="Plot width"
-                    type="number"
-                    min={120}
-                    max={4000}
-                    value={plotSizeDraft.width}
-                    onChange={(event) =>
-                      setPlotSizeDraft((current) => ({ ...current, width: event.target.value }))
-                    }
-                    onBlur={commitPlotSize}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") event.currentTarget.blur();
-                      if (event.key === "Escape") {
-                        setPlotSizeDraft(plotSizeDraftFromSpec(spec.size));
-                        event.currentTarget.blur();
-                      }
-                    }}
-                  />
-                </ConfigField>
-                <ConfigField label="Height" compact>
-                  <input
-                    aria-label="Plot height"
-                    type="number"
-                    min={120}
-                    max={4000}
-                    value={plotSizeDraft.height}
-                    onChange={(event) =>
-                      setPlotSizeDraft((current) => ({ ...current, height: event.target.value }))
-                    }
-                    onBlur={commitPlotSize}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") event.currentTarget.blur();
-                      if (event.key === "Escape") {
-                        setPlotSizeDraft(plotSizeDraftFromSpec(spec.size));
-                        event.currentTarget.blur();
-                      }
-                    }}
-                  />
-                </ConfigField>
-              </div>
-            </ConfigGroup>
-
-            <ConfigGroup title="Typography">
-              <div className="plot-field-grid two">
-                <ConfigField label="Font family">
-                  <input
-                    aria-label="Plot font family"
-                    value={spec.font.family}
-                    onChange={(event) => setPlotFont({ family: event.target.value })}
-                  />
-                </ConfigField>
-                <ConfigField label="Font size" compact>
-                  <input
-                    aria-label="Plot font size"
-                    type="number"
-                    min={1}
-                    value={spec.font.size}
-                    onChange={(event) => setPlotFont({ size: Number(event.target.value) })}
-                  />
-                </ConfigField>
-              </div>
-            </ConfigGroup>
-
-            <ConfigGroup title="Plot Padding">
-              <div className="plot-field-grid four">
-                {(["top", "right", "bottom", "left"] as const).map((side) => (
-                  <ConfigField key={side} label={side} compact>
-                    <input
-                      aria-label={`Plot padding ${side}`}
-                      type="number"
-                      min={0}
-                      value={spec.padding[side]}
-                      onChange={(event) => setPlotPadding({ [side]: Number(event.target.value) })}
-                    />
-                  </ConfigField>
-                ))}
-              </div>
-            </ConfigGroup>
-          </div>
-        </div>
+        <PlotConfigBasicTab
+          currentPlotId={currentPlotId}
+          dataset={dataset}
+          spec={spec}
+          plotSizeDraft={plotSizeDraft}
+          onSetPlotSizeDraft={setPlotSizeDraft}
+          onCommitPlotSize={commitPlotSize}
+          onRunPlotCommand={runPlotCommand}
+          onSetTitle={setTitle}
+          onSetPlotType={setPlotType}
+          onSetGrid={setGrid}
+          onSetBorder={setBorder}
+          onSetPlotFont={setPlotFont}
+          onSetPlotPadding={setPlotPadding}
+        />
       ) : null}
       {activeTab === "axes" ? (
         <div className="plot-axis-panel plot-config-section" role="tabpanel">
