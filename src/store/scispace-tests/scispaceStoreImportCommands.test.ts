@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { datasetColumnNames, makeStore, openImport } from "./scispaceStoreTestUtils";
+import {
+  createScispaceStore,
+  datasetColumnNames,
+  makeStore,
+  openImport,
+} from "./scispaceStoreTestUtils";
 
 describe("scispace store import command behavior", () => {
   it("updates import settings through scispace commands", async () => {
@@ -88,30 +93,49 @@ describe("scispace store import command behavior", () => {
 
   it("opens upload dialogs through scispace commands", async () => {
     const { store } = await makeStore();
+    const uploadId = store.getState().stageUploadPayload("uploaded.csv", "x,y\n1,2");
     await store
       .getState()
-      .runScispace(
-        `upload-open upload-1 name=uploaded.csv text=${encodeURIComponent("x,y\n1,2")}`,
-        {
-          source: "gui",
-        },
-      );
+      .runScispace(`upload-open ${uploadId} name=uploaded.csv ref=${uploadId}`, {
+        source: "gui",
+      });
 
     expect(store.getState().pendingImports).toHaveLength(1);
     expect(store.getState().pendingImports[0]).toMatchObject({
-      id: "upload-1",
+      id: uploadId,
       fileName: "uploaded.csv",
       preview: { rows: [{ x: 1, y: 2 }] },
     });
-    expect(store.getState().windows.find((window) => window.importId === "upload-1")).toMatchObject(
-      {
-        title: "Import - uploaded.csv",
-        kind: "import",
-      },
-    );
+    expect(store.getState().windows.find((window) => window.importId === uploadId)).toMatchObject({
+      title: "Import - uploaded.csv",
+      kind: "import",
+    });
     expect(store.getState().commandHistory.at(-1)).toMatchObject({
-      command: `upload-open upload-1 name=uploaded.csv text=${encodeURIComponent("x,y\n1,2")}`,
+      command: `upload-open ${uploadId} name=uploaded.csv ref=${uploadId}`,
       source: "gui",
+      status: "success",
+    });
+    expect(store.getState().commandHistory.at(-1)?.command).not.toContain("x%2Cy");
+  });
+
+  it("replays compact upload commands after layout reload", async () => {
+    const { db, store } = await makeStore();
+    const uploadId = store.getState().stageUploadPayload("reload-upload.csv", "x,y\n9,10");
+    const command = `upload-open ${uploadId} name=reload-upload.csv ref=${uploadId}`;
+    await store.getState().runScispace(command, { source: "gui" });
+
+    const reloadedStore = createScispaceStore(db);
+    await reloadedStore.getState().initialize();
+    await reloadedStore.getState().runScispace(command, { source: "history" });
+
+    expect(reloadedStore.getState().pendingImports.at(-1)).toMatchObject({
+      id: uploadId,
+      fileName: "reload-upload.csv",
+      preview: { rows: [{ x: 9, y: 10 }] },
+    });
+    expect(reloadedStore.getState().commandHistory.at(-1)).toMatchObject({
+      command,
+      source: "history",
       status: "success",
     });
   });

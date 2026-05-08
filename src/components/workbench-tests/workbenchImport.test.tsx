@@ -21,13 +21,12 @@ describe("Workbench import UI", () => {
     await waitFor(() => expect(storeState().pendingImports[0]?.preview?.rows).toHaveLength(2));
     await waitFor(() =>
       expect(storeState().commandHistory.at(-1)).toMatchObject({
-        command: `upload-open ${storeState().pendingImports[0]?.id} name=dropped.csv text=${encodeURIComponent(
-          "x,y\n1,2\n3,4",
-        )} mode=tabular`,
+        command: `upload-open ${storeState().pendingImports[0]?.id} name=dropped.csv ref=${storeState().pendingImports[0]?.id} mode=tabular`,
         source: "gui",
         status: "success",
       }),
     );
+    expect(storeState().commandHistory.at(-1)?.command).not.toContain("x%2Cy");
   });
 
   it("stacks raw text and import preview virtual tables with resizable columns", async () => {

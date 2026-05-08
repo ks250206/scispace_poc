@@ -65,6 +65,7 @@ export const createProjectActions = ({
       plotSpecs: record.layout.plotSpecs ?? [],
       viewport: record.layout.viewport,
       commandHistory: record.layout.commandHistory ?? [],
+      uploadPayloads: record.layout.uploadPayloads ?? {},
       columnSelections: record.layout.columnSelections ?? {},
     };
     await db.transaction("rw", db.files, db.datasets, db.layout, db.projects, async () => {
@@ -92,6 +93,7 @@ export const createProjectActions = ({
       pendingImports: [],
       terminalEvents: [],
       commandHistory: [],
+      uploadPayloads: initialProject.uploadPayloads,
       undoStack: [],
       redoStack: [],
       columnSelections: initialProject.columnSelections,
@@ -168,6 +170,7 @@ export const createProjectActions = ({
       pendingImports: [],
       terminalEvents: [],
       commandHistory: target.layout.commandHistory ?? [],
+      uploadPayloads: target.layout.uploadPayloads ?? {},
       undoStack: [],
       redoStack: [],
       columnSelections,
@@ -219,6 +222,7 @@ export const createProjectActions = ({
       pendingImports: [],
       terminalEvents: [],
       commandHistory: [],
+      uploadPayloads: replacement.layout.uploadPayloads ?? {},
       undoStack: [],
       redoStack: [],
       columnSelections: replacement.layout.columnSelections ?? {},
@@ -269,6 +273,7 @@ export const createProjectActions = ({
       viewport?: unknown;
       plotSpecs?: unknown;
       commandHistory?: unknown;
+      uploadPayloads?: unknown;
       columnSelections?: unknown;
     };
     if (!Array.isArray(layout.windows) || typeof layout.viewport !== "object") {
@@ -306,6 +311,10 @@ export const createProjectActions = ({
         viewport: layout.viewport as ScispaceState["viewport"],
         plotSpecs,
         commandHistory: Array.isArray(layout.commandHistory) ? layout.commandHistory : [],
+        uploadPayloads:
+          typeof layout.uploadPayloads === "object" && layout.uploadPayloads !== null
+            ? (layout.uploadPayloads as ScispaceState["uploadPayloads"])
+            : {},
         columnSelections,
         currentProjectId: id,
       },
@@ -333,6 +342,7 @@ export const createProjectActions = ({
       pendingImports: [],
       terminalEvents: [],
       commandHistory: record.layout.commandHistory,
+      uploadPayloads: record.layout.uploadPayloads ?? {},
       undoStack: [],
       redoStack: [],
       columnSelections,

@@ -27,6 +27,7 @@ export function Workbench() {
   const currentProjectId = useScispaceStore((state) => state.currentProjectId);
   const projectDirty = useScispaceStore((state) => state.projectDirty);
   const runScispace = useScispaceStore((state) => state.runScispace);
+  const stageUploadPayload = useScispaceStore((state) => state.stageUploadPayload);
   const createNewProject = useScispaceStore((state) => state.createNewProject);
   const saveCurrentProject = useScispaceStore((state) => state.saveCurrentProject);
   const switchProject = useScispaceStore((state) => state.switchProject);
@@ -132,9 +133,9 @@ export function Workbench() {
     event.preventDefault();
     const files = Array.from(event.dataTransfer.files);
     for (const file of files) {
-      const importId = crypto.randomUUID();
       const text = await file.text();
-      void runScispace(uploadOpenCommand(importId, file.name, text), { source: "gui" });
+      const uploadId = stageUploadPayload(file.name, text);
+      void runScispace(uploadOpenCommand(uploadId, file.name), { source: "gui" });
     }
   };
 

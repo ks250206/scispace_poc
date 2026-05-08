@@ -25,12 +25,9 @@ const quoteCommandArg = (value: string): string =>
 export const uploadOpenCommand = (
   uploadId: string,
   fileName: string,
-  text: string,
   mode: "tabular" | "raw" = "tabular",
 ): string =>
-  `upload-open ${uploadId} name=${quoteCommandArg(fileName)} text=${encodeURIComponent(
-    text,
-  )} mode=${mode}`;
+  `upload-open ${uploadId} name=${quoteCommandArg(fileName)} ref=${uploadId} mode=${mode}`;
 
 const tableCommand = (dataset: Dataset, columnIds: string[]): string =>
   `table ${quoteCommandArg(dataset.name)} columns=${columnIds.map(quoteCommandArg).join(",")}`;
@@ -67,6 +64,7 @@ export function DataBrowser() {
   const columnSelections = useScispaceStore((state) => state.columnSelections);
   const toggleDatasetColumn = useScispaceStore((state) => state.toggleDatasetColumn);
   const runScispace = useScispaceStore((state) => state.runScispace);
+  const stageUploadPayload = useScispaceStore((state) => state.stageUploadPayload);
 
   const rawFiles = useMemo(
     () => sortRawItems(files.filter((file) => file.path.startsWith("~/raw/"))),
@@ -75,14 +73,14 @@ export function DataBrowser() {
 
   const openFiles = async (loadedFiles: File[]) => {
     for (const file of loadedFiles) {
-      const importId = crypto.randomUUID();
       const text = await file.text();
-      openImportThroughCommand(importId, file.name, text);
+      openImportThroughCommand(file.name, text);
     }
   };
 
-  const openImportThroughCommand = (importId: string, fileName: string, text: string) => {
-    void runScispace(uploadOpenCommand(importId, fileName, text), { source: "gui" });
+  const openImportThroughCommand = (fileName: string, text: string) => {
+    const uploadId = stageUploadPayload(fileName, text);
+    void runScispace(uploadOpenCommand(uploadId, fileName), { source: "gui" });
   };
 
   const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
@@ -260,13 +258,7 @@ export function DataBrowser() {
                         role="menuitem"
                         aria-label={`Load ${file.name}`}
                         onClick={() =>
-                          runItemAction(() =>
-                            openImportThroughCommand(
-                              crypto.randomUUID(),
-                              file.name,
-                              file.text ?? "",
-                            ),
-                          )
+                          runItemAction(() => openImportThroughCommand(file.name, file.text ?? ""))
                         }
                       >
                         Load

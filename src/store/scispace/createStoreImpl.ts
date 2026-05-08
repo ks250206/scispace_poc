@@ -48,6 +48,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     pendingImports: [],
     terminalEvents: [],
     commandHistory: [],
+    uploadPayloads: {},
     undoStack: [],
     redoStack: [],
     terminalCommandLineRequest: undefined,
@@ -100,6 +101,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
             viewport: layout.viewport,
             plotSpecs: nextPlotSpecs,
             commandHistory: layout.commandHistory ?? [],
+            uploadPayloads: layout.uploadPayloads ?? {},
             columnSelections: normalizeColumnSelections(
               nextDatasets,
               layout.columnSelections ?? {},
@@ -123,6 +125,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         windows: nextWindows,
         plotSpecs: nextPlotSpecs,
         commandHistory: layout.commandHistory ?? [],
+        uploadPayloads: layout.uploadPayloads ?? {},
         columnSelections: normalizeColumnSelections(nextDatasets, layout.columnSelections ?? {}),
         viewport: layout.viewport,
         activeDatasetId: nextDatasets[0]?.id,
@@ -178,6 +181,17 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       }));
 
       return { file, dataset, parseError };
+    },
+
+    stageUploadPayload: (fileName, text, mode = "tabular") => {
+      const id = `upload-${crypto.randomUUID()}`;
+      set((state) => ({
+        uploadPayloads: {
+          ...state.uploadPayloads,
+          [id]: { id, fileName, text, mode, createdAt: Date.now() },
+        },
+      }));
+      return id;
     },
 
     openImportDialog: (fileName, text) => {

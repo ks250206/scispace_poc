@@ -6,6 +6,7 @@ const defaultLayout: PersistedLayout = {
   viewport: { x: -1920, y: -1080, scale: 1 },
   plotSpecs: [],
   commandHistory: [],
+  uploadPayloads: {},
   columnSelections: {},
   currentProjectId: undefined,
 };

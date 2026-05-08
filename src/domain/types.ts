@@ -65,6 +65,14 @@ export interface CommandHistoryEntry {
   source: CommandHistorySource;
 }
 
+export interface UploadPayload {
+  id: string;
+  fileName: string;
+  text: string;
+  mode: "tabular" | "raw";
+  createdAt: number;
+}
+
 export interface VirtualFile {
   id: string;
   path: string;
@@ -220,6 +228,7 @@ export interface PersistedLayout {
   viewport: ViewportState;
   plotSpecs?: PlotSpec[];
   commandHistory?: CommandHistoryEntry[];
+  uploadPayloads?: Record<string, UploadPayload>;
   columnSelections?: Record<string, string[]>;
   currentProjectId?: string;
 }

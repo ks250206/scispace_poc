@@ -21,6 +21,7 @@ export const layoutFromState = (
   viewport: state.viewport,
   plotSpecs: state.plotSpecs.map(normalizePlotSpec),
   commandHistory: state.commandHistory,
+  uploadPayloads: state.uploadPayloads,
   columnSelections: state.columnSelections,
   currentProjectId: projectId,
 });
@@ -75,6 +76,7 @@ export const captureSnapshot = (state: ScispaceState): ProjectSnapshot => ({
   windows: cloneState(state.windows),
   plotSpecs: cloneState(state.plotSpecs),
   pendingImports: cloneState(state.pendingImports),
+  uploadPayloads: cloneState(state.uploadPayloads),
   columnSelections: cloneState(state.columnSelections),
   activeDatasetId: state.activeDatasetId,
   activeWindowId: state.activeWindowId,
@@ -115,6 +117,7 @@ export const restoreSnapshot = async (
         viewport: snapshot.viewport,
         plotSpecs: snapshot.plotSpecs.map(normalizePlotSpec),
         commandHistory,
+        uploadPayloads: snapshot.uploadPayloads,
         columnSelections: snapshot.columnSelections,
         currentProjectId: undefined,
       },

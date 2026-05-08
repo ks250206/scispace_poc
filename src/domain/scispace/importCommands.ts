@@ -16,19 +16,27 @@ export const executeImportCommand = (
 ): ScispaceCommandResult | undefined => {
   if (command === "import-open" || command === "upload-open") {
     const importId = args[0] ?? "";
-    const fileName = readOption(args, "name");
-    const text = readOption(args, "text");
-    const mode = readOption(args, "mode") ?? "tabular";
+    const isUpload = command === "upload-open";
+    const uploadRef = readOption(args, "ref") ?? importId;
+    const uploadPayload = isUpload ? context.uploadPayloads?.[uploadRef] : undefined;
+    const fileName = readOption(args, "name") ?? uploadPayload?.fileName;
+    const encodedText = readOption(args, "text");
+    const text = encodedText === undefined ? uploadPayload?.text : decodeURIComponent(encodedText);
+    const mode = readOption(args, "mode") ?? uploadPayload?.mode ?? "tabular";
     if (!importId) return { kind: "error", output: "importId is required" };
     if (!fileName) return { kind: "error", output: "name is required" };
-    if (text === undefined) return { kind: "error", output: "text is required" };
+    if (text === undefined) {
+      return isUpload
+        ? { kind: "error", output: `Upload payload not found: ${uploadRef}` }
+        : { kind: "error", output: "text is required" };
+    }
     if (mode !== "tabular" && mode !== "raw") {
       return { kind: "error", output: "mode must be tabular or raw" };
     }
     const pendingImport: PendingImport = {
       id: importId,
       fileName,
-      text: decodeURIComponent(text),
+      text,
       mode,
       options: defaultImportParseOptions,
     };

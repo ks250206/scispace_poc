@@ -185,6 +185,7 @@ export const createInitialProject = () => {
     plotSpecs: [seedPlot()],
     viewport: initialViewport(),
     commandHistory: [],
+    uploadPayloads: {},
     columnSelections: { [seed.id]: datasetColumnIds(seed) },
   };
 };

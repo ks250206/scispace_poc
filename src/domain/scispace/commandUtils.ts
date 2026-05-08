@@ -1,10 +1,11 @@
-import type { Dataset, PendingImport, PlotSpec, VirtualFile } from "../types";
+import type { Dataset, PendingImport, PlotSpec, UploadPayload, VirtualFile } from "../types";
 
 export interface CommandContext {
   datasets: Dataset[];
   files?: VirtualFile[];
   pendingImports?: PendingImport[];
   plotSpecs?: PlotSpec[];
+  uploadPayloads?: Record<string, UploadPayload>;
 }
 
 export const findDataset = (datasets: Dataset[], token: string): Dataset | undefined =>

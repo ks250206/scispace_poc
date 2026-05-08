@@ -6,6 +6,7 @@ import type {
   PendingImport,
   PlotSpec,
   ScispaceCommandResult,
+  UploadPayload,
   ViewportState,
   VirtualFile,
   WorkspaceWindow,
@@ -30,6 +31,7 @@ export interface ScispaceState {
   pendingImports: PendingImport[];
   terminalEvents: string[];
   commandHistory: CommandHistoryEntry[];
+  uploadPayloads: Record<string, UploadPayload>;
   undoStack: UndoHistoryEntry[];
   redoStack: UndoHistoryEntry[];
   terminalCommandLineRequest?: { id: string; command: string };
@@ -40,6 +42,7 @@ export interface ScispaceState {
   viewport: ViewportState;
   initialize: () => Promise<void>;
   importTextFile: (name: string, text: string) => Promise<ImportFileResult>;
+  stageUploadPayload: (fileName: string, text: string, mode?: "tabular" | "raw") => string;
   openImportDialog: (fileName: string, text: string) => string;
   confirmImport: (importId: string) => Promise<ImportFileResult | undefined>;
   setDatasetColumnSelection: (datasetId: string, columnIds: string[]) => void;
@@ -80,6 +83,7 @@ export interface ProjectSnapshot {
   windows: WorkspaceWindow[];
   plotSpecs: PlotSpec[];
   pendingImports: PendingImport[];
+  uploadPayloads: Record<string, UploadPayload>;
   columnSelections: Record<string, string[]>;
   activeDatasetId?: string;
   activeWindowId?: string;

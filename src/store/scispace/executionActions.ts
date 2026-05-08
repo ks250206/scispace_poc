@@ -32,6 +32,7 @@ export const createExecutionActions = ({
       files: get().files,
       plotSpecs: get().plotSpecs,
       pendingImports: get().pendingImports,
+      uploadPayloads: get().uploadPayloads,
     });
 
     result = await applyScispaceResult(result, {
@@ -86,6 +87,7 @@ export const createExecutionActions = ({
       windows: ensureWorkspaceWindows(cloneState(entry.before.windows)),
       plotSpecs: cloneState(entry.before.plotSpecs).map(normalizePlotSpec),
       pendingImports: cloneState(entry.before.pendingImports),
+      uploadPayloads: cloneState(entry.before.uploadPayloads),
       columnSelections: cloneState(entry.before.columnSelections),
       activeDatasetId: entry.before.activeDatasetId,
       activeWindowId: entry.before.activeWindowId,
@@ -110,6 +112,7 @@ export const createExecutionActions = ({
       windows: ensureWorkspaceWindows(cloneState(entry.after.windows)),
       plotSpecs: cloneState(entry.after.plotSpecs).map(normalizePlotSpec),
       pendingImports: cloneState(entry.after.pendingImports),
+      uploadPayloads: cloneState(entry.after.uploadPayloads),
       columnSelections: cloneState(entry.after.columnSelections),
       activeDatasetId: entry.after.activeDatasetId,
       activeWindowId: entry.after.activeWindowId,

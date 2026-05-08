@@ -20,7 +20,7 @@ export const helpText = [
   "  file-rename <path> name=<newName>",
   "  file-move <path> to=<directory>",
   "  file-delete <path>",
-  "  upload-open <uploadId> name=<fileName> text=<encodedText> mode=<tabular|raw>",
+  "  upload-open <uploadId> name=<fileName> ref=<uploadId> mode=<tabular|raw>",
   "  import-open <importId> name=<fileName> text=<encodedText>",
   "  import-preview <importId>",
   "  import-set <importId> skipRows=<n> delimiter=<auto|comma|tab|space|semicolon> hasHeader=<true|false> mode=<tabular|raw>",
