@@ -1,16 +1,9 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type KeyboardEvent,
-} from "react";
-import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { datasetColumnIds } from "../domain/csv";
 import { useScispaceStore } from "../store/scispaceStore";
+import { DataTableGrid } from "./data-table/DataTableGrid";
 import { DataTableToolbar } from "./data-table/DataTableToolbar";
 import {
   deleteColumnCommand,
@@ -31,6 +24,7 @@ import {
   tableWindowHeightForRows,
   type TableCellPosition,
   type TableCellRange,
+  type TableEditingCell,
   type TableVisibleRows,
 } from "./data-table/tableModel";
 
@@ -52,11 +46,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   const [selectedCell, setSelectedCell] = useState<TableCellPosition>();
   const [selectedRange, setSelectedRange] = useState<TableCellRange>();
   const [isRangeDragging, setIsRangeDragging] = useState(false);
-  const [editingCell, setEditingCell] = useState<{
-    rowIndex: number;
-    column: string;
-    value: string;
-  }>();
+  const [editingCell, setEditingCell] = useState<TableEditingCell>();
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -359,152 +349,37 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
           updateWindow(windowId, { height });
         }}
       />
-      <div
-        ref={parentRef}
-        className="table-scroll"
-        style={
-          {
-            "--table-visible-height": `${tableScrollHeight(visibleRows)}px`,
-            "--table-width": `${tableWidth}px`,
-          } as CSSProperties
-        }
-      >
-        <table style={{ width: tableWidth, minWidth: tableWidth }}>
-          <thead>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} style={{ width: tableWidth }}>
-                {headerGroup.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    className={selectedColumn === header.column.id ? "selected-column" : undefined}
-                    aria-selected={selectedColumn === header.column.id}
-                    style={{
-                      width: getColumnWidth(header.column.id),
-                      minWidth: minColumnWidth,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className="table-header-button"
-                      aria-label={`Select column ${header.column.id}`}
-                      onClick={() => {
-                        setSelectedColumn(header.column.id);
-                        setSelectedCell(undefined);
-                        setSelectedRange(undefined);
-                        setEditingCell(undefined);
-                      }}
-                    >
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                    </button>
-                    <button
-                      type="button"
-                      role="separator"
-                      aria-label={`Resize column ${header.column.id}`}
-                      className="column-resize-handle"
-                      onPointerDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        startColumnResize(header.column.id, event.clientX);
-                      }}
-                    />
-                  </th>
-                ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody style={{ height: rowVirtualizer.getTotalSize() }}>
-            {visibleVirtualRows.map((virtualRow) => {
-              const row = rows[virtualRow.index];
-              if (!row) return null;
-              return (
-                <tr
-                  key={row.id}
-                  style={{ width: tableWidth, transform: `translateY(${virtualRow.start}px)` }}
-                >
-                  {row.getVisibleCells().map((cell, columnIndex) => {
-                    const column = cell.column.id;
-                    const value = row.original[column];
-                    const isSelectedCell =
-                      selectedCell?.rowIndex === virtualRow.index && selectedCell.column === column;
-                    const isRangeSelected = isCellInRange(virtualRow.index, column);
-                    const isEditingCell =
-                      editingCell?.rowIndex === virtualRow.index && editingCell.column === column;
-                    const className = [
-                      selectedColumn === column ? "selected-column" : "",
-                      isRangeSelected ? "range-selected" : "",
-                      isSelectedCell ? "selected-cell" : "",
-                      isEditingCell ? "editing-cell" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ");
-
-                    return (
-                      <td
-                        key={cell.id}
-                        className={className || undefined}
-                        aria-selected={isSelectedCell || isRangeSelected}
-                        data-column-id={column}
-                        data-column-index={columnIndex}
-                        data-row-index={virtualRow.index}
-                        tabIndex={0}
-                        style={{ width: getColumnWidth(column), minWidth: minColumnWidth }}
-                        onClick={(event) => {
-                          const position = { rowIndex: virtualRow.index, column };
-                          if (event.shiftKey) extendRangeSelection(position);
-                          else selectSingleCell(position);
-                        }}
-                        onPointerDown={(event) => {
-                          if (!event.shiftKey) return;
-                          event.preventDefault();
-                          setIsRangeDragging(true);
-                          startRangeSelection({ rowIndex: virtualRow.index, column });
-                        }}
-                        onPointerEnter={() => {
-                          if (!isRangeDragging) return;
-                          extendRangeSelection({ rowIndex: virtualRow.index, column });
-                        }}
-                        onPointerUp={() => {
-                          setIsRangeDragging(false);
-                        }}
-                        onDoubleClick={() => startEdit(virtualRow.index, column, value)}
-                        onKeyDown={(event) =>
-                          handleCellKeyDown(event, virtualRow.index, column, value)
-                        }
-                      >
-                        {isEditingCell ? (
-                          <input
-                            className="table-cell-editor"
-                            aria-label={`Edit row ${virtualRow.index + 1} ${column}`}
-                            autoFocus
-                            value={editingCell.value}
-                            onChange={(event) =>
-                              setEditingCell({ ...editingCell, value: event.target.value })
-                            }
-                            onBlur={(event) => commitEdit(event.currentTarget.value)}
-                            onKeyDown={(event) => {
-                              event.stopPropagation();
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                commitEdit(event.currentTarget.value);
-                              }
-                              if (event.key === "Escape") {
-                                event.preventDefault();
-                                cancelEdit();
-                              }
-                            }}
-                          />
-                        ) : (
-                          flexRender(cell.column.columnDef.cell, cell.getContext())
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <DataTableGrid
+        parentRef={parentRef}
+        table={table}
+        rows={rows}
+        visibleVirtualRows={visibleVirtualRows}
+        visibleRows={visibleRows}
+        totalSize={rowVirtualizer.getTotalSize()}
+        tableWidth={tableWidth}
+        selectedColumn={selectedColumn}
+        selectedCell={selectedCell}
+        editingCell={editingCell}
+        isRangeDragging={isRangeDragging}
+        getColumnWidth={getColumnWidth}
+        isCellInRange={isCellInRange}
+        onSelectColumn={(columnId) => {
+          setSelectedColumn(columnId);
+          setSelectedCell(undefined);
+          setSelectedRange(undefined);
+          setEditingCell(undefined);
+        }}
+        onStartColumnResize={startColumnResize}
+        onSelectSingleCell={selectSingleCell}
+        onExtendRangeSelection={extendRangeSelection}
+        onStartRangeSelection={startRangeSelection}
+        onRangeDraggingChange={setIsRangeDragging}
+        onStartEdit={startEdit}
+        onCellKeyDown={handleCellKeyDown}
+        onEditingCellChange={setEditingCell}
+        onCommitEdit={commitEdit}
+        onCancelEdit={cancelEdit}
+      />
     </div>
   );
 }

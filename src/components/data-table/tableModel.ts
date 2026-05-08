@@ -12,6 +12,10 @@ export interface TableCellRange {
   focus: TableCellPosition;
 }
 
+export interface TableEditingCell extends TableCellPosition {
+  value: string;
+}
+
 export interface TableRangeBounds {
   minRow: number;
   maxRow: number;
