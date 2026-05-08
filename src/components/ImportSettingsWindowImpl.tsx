@@ -173,12 +173,13 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
       {pendingImport.error && !preview ? (
         <div className="import-error">{pendingImport.error}</div>
       ) : null}
-      {!pendingImport.options.hasHeader && allPreview ? (
+      {allPreview ? (
         <div className="column-name-editor">
           {allPreview.columns.map((column, index) => (
             <label key={`${column.id}-${index}`}>
               <span>{`Column ${index + 1}`}</span>
               <input
+                aria-label={`Column name ${column.id}`}
                 value={pendingImport.options.columnNames[index] ?? column.name}
                 onChange={(event) => {
                   const columnNames = [...pendingImport.options.columnNames];
@@ -206,6 +207,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
                     }
                   />
                   <span>{column.name}</span>
+                  <small>{column.dataType}</small>
                   <small>{isExcluded ? "delete" : "import"}</small>
                 </label>
               );

@@ -58,7 +58,12 @@ export function ParsedPreviewTable({
                       minWidth: minColumnWidth,
                     }}
                   >
-                    {flexRender(header.column.columnDef.header, header.getContext())}
+                    <span>{flexRender(header.column.columnDef.header, header.getContext())}</span>
+                    {preview?.columns.find((column) => column.id === header.column.id) ? (
+                      <small>
+                        {preview.columns.find((column) => column.id === header.column.id)?.dataType}
+                      </small>
+                    ) : null}
                     <button
                       type="button"
                       role="separator"

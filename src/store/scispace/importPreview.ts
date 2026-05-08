@@ -41,7 +41,7 @@ export const normalizeColumnNames = (
   options: ImportParseOptions,
   preview?: Dataset,
 ): ImportParseOptions => {
-  if (options.hasHeader || !preview) return options;
+  if (!preview) return options;
   const columnNames = preview.columns.map(
     (column, index) => options.columnNames[index]?.trim() || column.name || `column_${index + 1}`,
   );

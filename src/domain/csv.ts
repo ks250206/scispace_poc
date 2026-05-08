@@ -251,12 +251,12 @@ const tabularLines = (text: string, options: ImportParseOptions): string[] =>
     .filter((line) => line.trim().length > 0);
 
 const parseHeaders = (firstCells: string[], options: ImportParseOptions): string[] =>
-  options.hasHeader
-    ? firstCells.map((header, index) => header.trim() || `column_${index + 1}`)
-    : firstCells.map((_, index) => {
-        const columnName = options.columnNames[index]?.trim();
-        return columnName || `column_${index + 1}`;
-      });
+  firstCells.map((header, index) => {
+    const columnName = options.columnNames[index]?.trim();
+    if (columnName) return columnName;
+    if (options.hasHeader) return header.trim() || `column_${index + 1}`;
+    return `column_${index + 1}`;
+  });
 
 export const parseDelimitedText = (
   text: string,

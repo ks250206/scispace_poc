@@ -41,6 +41,8 @@ describe("Workbench import UI", () => {
     expect(screen.queryByRole("textbox", { name: "Raw text" })).not.toBeInTheDocument();
 
     expect(preview.querySelector('[aria-label="Resize import column x"]')).toBeInTheDocument();
+    expect(screen.getByDisplayValue("x")).toBeInTheDocument();
+    expect(screen.getAllByText("number").length).toBeGreaterThan(0);
     fireEvent.change(screen.getByLabelText("Raw line 2"), { target: { value: "10,20" } });
     await waitFor(() => expect(storeState().pendingImports[0]?.text).toBe("x,y\n10,20\n3,4\n5,6"));
     expect(storeState().commandHistory.at(-1)).toMatchObject({
@@ -48,6 +50,14 @@ describe("Workbench import UI", () => {
       source: "gui",
       status: "success",
     });
+
+    fireEvent.change(screen.getByLabelText("Column name x"), { target: { value: "time" } });
+    await waitFor(() =>
+      expect(storeState().pendingImports[0]?.preview?.columns[0]).toMatchObject({
+        name: "time",
+        dataType: "number",
+      }),
+    );
   });
 
   it("can mark import columns for deletion and grays skipped raw rows", async () => {

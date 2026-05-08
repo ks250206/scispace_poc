@@ -110,6 +110,28 @@ describe("scispace store import lifecycle behavior", () => {
     expect(result?.dataset?.rows[0]).toEqual({ energy: 1, intensity: 2 });
   });
 
+  it("uses edited column names for header imports before confirming", async () => {
+    const { store } = await makeStore();
+    const importId = openImport(store, "header.csv", "x,y,label\n1,2,a\n3,4,b");
+
+    await store
+      .getState()
+      .runScispace(`import-set ${importId} columnNames=time,current,note`, { source: "gui" });
+    const result = await store.getState().confirmImport(importId);
+
+    expect(result?.dataset ? datasetColumnNames(result.dataset) : []).toEqual([
+      "time",
+      "current",
+      "note",
+    ]);
+    expect(result?.dataset?.columns.map((column) => column.dataType)).toEqual([
+      "number",
+      "number",
+      "string",
+    ]);
+    expect(result?.dataset?.rows[0]).toEqual({ time: 1, current: 2, note: "a" });
+  });
+
   it("defaults import dialogs to tabular mode and excludes empty columns", async () => {
     const { store } = await makeStore();
     const importId = openImport(store, "with-empty.csv", "x,empty,y\n1,,2\n3,,4");
