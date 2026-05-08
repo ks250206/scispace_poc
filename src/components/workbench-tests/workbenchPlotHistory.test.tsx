@@ -20,7 +20,7 @@ describe("Workbench plot and history UI", () => {
     expect(storeState().currentPlotId).toBe("seed-plot");
   });
 
-  it("copies plot schema and exports the current plot canvas as png", async () => {
+  it("copies plot schema and exports the current plot canvas as png and svg", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -40,6 +40,7 @@ describe("Workbench plot and history UI", () => {
     }) as typeof document.createElement);
 
     await renderWorkbench();
+    await initializeStore();
     fireEvent.click(screen.getByRole("button", { name: "Copy plot schema" }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalled());
@@ -47,15 +48,24 @@ describe("Workbench plot and history UI", () => {
       id: "seed-plot",
       size: { width: 640, height: 360 },
     });
-    expect(storeState().commandHistory.at(-1)).toMatchObject({
-      command: "plot-schema seed-plot",
-      source: "gui",
-      status: "success",
-    });
+    await waitFor(() =>
+      expect(storeState().commandHistory.at(-1)).toMatchObject({
+        command: "plot-schema seed-plot",
+        source: "gui",
+        status: "success",
+      }),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Export plot PNG" }));
     expect(toDataUrl).toHaveBeenCalledWith("image/png");
     expect(click).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Export plot SVG" }));
+    const svgLink = createElement.mock.results
+      .map((result) => result.value as HTMLAnchorElement)
+      .find((element) => element.download?.endsWith(".svg"));
+    expect(svgLink?.href).toMatch(/^data:image\/svg\+xml/);
+    expect(svgLink?.download).toBe("waveform.csv_signal_vs_time.svg");
   });
 
   it("replays and copies commands from the command history window", async () => {

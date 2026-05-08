@@ -11,6 +11,7 @@ import {
   sortedPlotSeries,
   xAxisLabelHeight,
 } from "./plotRendering";
+import { buildPlotSvg, safePlotFileName, svgDataUrl } from "./plotExport";
 
 interface PlotWindowProps {
   plotId: string;
@@ -153,13 +154,19 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
     const result = await runScispace(`plot-schema ${plotId}`, { source: "gui" });
     if (result.kind !== "error") await navigator.clipboard?.writeText(result.output);
   };
+  const clickDownload = (href: string, download: string) => {
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = download;
+    link.click();
+  };
   const exportPng = () => {
     const canvas = containerRef.current?.querySelector("canvas");
     if (!canvas) return;
-    const link = document.createElement("a");
-    link.href = canvas.toDataURL("image/png");
-    link.download = `${spec.title.replace(/[^\w.-]+/g, "_") || "plot"}.png`;
-    link.click();
+    clickDownload(canvas.toDataURL("image/png"), safePlotFileName(spec.title, "png"));
+  };
+  const exportSvg = () => {
+    clickDownload(svgDataUrl(buildPlotSvg(spec, dataset)), safePlotFileName(spec.title, "svg"));
   };
 
   return (
@@ -179,6 +186,9 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
         </button>
         <button type="button" onClick={exportPng} aria-label="Export plot PNG">
           Export PNG
+        </button>
+        <button type="button" onClick={exportSvg} aria-label="Export plot SVG">
+          Export SVG
         </button>
       </div>
       <div className="plot-host" style={{ width: spec.size.width, height: spec.size.height }}>
