@@ -1,4 +1,4 @@
-import type { CSSProperties, RefObject } from "react";
+import { memo, type CSSProperties, type RefObject } from "react";
 import { flexRender, type Row, type Table } from "@tanstack/react-table";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import type { DataValue, Dataset } from "../../domain/types";
@@ -19,7 +19,7 @@ interface ParsedPreviewTableProps {
   onStartColumnResize: (columnId: string, startX: number, startWidth: number) => void;
 }
 
-export function ParsedPreviewTable({
+export const ParsedPreviewTable = memo(function ParsedPreviewTable({
   preview,
   parentRef,
   table,
@@ -115,4 +115,4 @@ export function ParsedPreviewTable({
       </div>
     </section>
   );
-}
+});

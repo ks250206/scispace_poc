@@ -1,4 +1,4 @@
-import { type CSSProperties, type KeyboardEvent, type RefObject } from "react";
+import { memo, type CSSProperties, type KeyboardEvent, type RefObject } from "react";
 import { flexRender, type Row, type Table } from "@tanstack/react-table";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import type { DataValue } from "../../domain/types";
@@ -45,7 +45,7 @@ interface DataTableGridProps {
   onCancelEdit: () => void;
 }
 
-export function DataTableGrid({
+export const DataTableGrid = memo(function DataTableGrid({
   parentRef,
   table,
   rows,
@@ -210,4 +210,4 @@ export function DataTableGrid({
       </table>
     </div>
   );
-}
+});

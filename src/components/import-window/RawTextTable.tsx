@@ -1,4 +1,4 @@
-import type { CSSProperties, RefObject } from "react";
+import { memo, type CSSProperties, type RefObject } from "react";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import type { PendingImport } from "../../domain/types";
 import { minColumnWidth, rawRowClassName } from "./importModel";
@@ -17,7 +17,7 @@ interface RawTextTableProps {
   onUpdateRawLine: (lineIndex: number, value: string) => void;
 }
 
-export function RawTextTable({
+export const RawTextTable = memo(function RawTextTable({
   pendingImport,
   rawLines,
   parentRef,
@@ -112,4 +112,4 @@ export function RawTextTable({
       </div>
     </section>
   );
-}
+});
