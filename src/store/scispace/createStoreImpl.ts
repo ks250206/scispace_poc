@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import {
-  detectImportPreset,
   datasetColumnIds,
   defaultImportParseOptions,
   normalizeDataset,
@@ -8,12 +7,7 @@ import {
   parseDelimitedText,
 } from "../../domain/csv";
 import { executeScispaceCommand } from "../../domain/scispace";
-import type {
-  CommandHistoryEntry,
-  Dataset,
-  PendingImport,
-  WorkspaceWindow,
-} from "../../domain/types";
+import type { CommandHistoryEntry, Dataset, WorkspaceWindow } from "../../domain/types";
 import { appDb, readPersistedLayout, type ProjectRecord, type SciSpaceDatabase } from "../db";
 import {
   captureSnapshot,
@@ -40,7 +34,7 @@ import {
   plotWindowHeightForSpec,
   seedPlot,
 } from "./workspaceDefaults";
-import { canParseAsTable, createPreviews, emptyColumnIds } from "./importPreview";
+import { canParseAsTable } from "./importPreview";
 import {
   descendantPaths,
   joinVirtualPath,
@@ -57,6 +51,7 @@ import {
   normalizeColumnSelections,
   retitleWindow,
 } from "./createStoreHelpers";
+import { createImportDialogState } from "./importDialogState";
 
 export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
   create<ScispaceState>()((set, get) => ({
@@ -201,48 +196,15 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     },
 
     openImportDialog: (fileName, text) => {
-      const id = crypto.randomUUID();
-      const detectedPreset = detectImportPreset(text, fileName);
-      const baseOptions = detectedPreset
-        ? { ...defaultImportParseOptions, ...detectedPreset.options }
-        : defaultImportParseOptions;
-      const initialPreview = createPreviews(id, fileName, text, baseOptions);
-      const options = {
-        ...baseOptions,
-        excludedColumnIds: emptyColumnIds(initialPreview.allPreview),
-      };
-      const { allPreview, preview, error } = createPreviews(id, fileName, text, options);
-
+      let id = "";
       set((state) => {
-        const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
-        const pendingImport: PendingImport = {
-          id,
-          fileName,
-          text,
-          mode: "tabular",
-          options,
-          detectedPreset,
-          allPreview,
-          preview,
-          error,
-        };
-        const position = newWindowPosition(state, 72, 84);
-        const window: WorkspaceWindow = {
-          id: `import-${id}`,
-          kind: "import",
-          title: `Import - ${fileName}`,
-          x: position.x,
-          y: position.y,
-          width: 820,
-          height: 540,
-          zIndex,
-          importId: id,
-        };
+        const dialog = createImportDialogState(fileName, text, state);
+        id = dialog.id;
 
         return {
-          pendingImports: [...state.pendingImports, pendingImport],
-          windows: [...state.windows, window],
-          activeWindowId: window.id,
+          pendingImports: [...state.pendingImports, dialog.pendingImport],
+          windows: [...state.windows, dialog.window],
+          activeWindowId: dialog.window.id,
         };
       });
       persistLayout(db, get());
