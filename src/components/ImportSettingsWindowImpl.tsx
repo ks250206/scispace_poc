@@ -17,13 +17,13 @@ import {
   importSetCommand,
   quoteImportCommandArg,
 } from "./import-window/importCommands";
+import { RawTextTable } from "./import-window/RawTextTable";
 import {
   defaultColumnWidth,
   formatCellValue,
   importStatusText,
   minColumnWidth,
   rawLineNumberWidth,
-  rawRowClassName,
   rawTextDefaultWidth,
   rowHeight,
 } from "./import-window/importModel";
@@ -196,93 +196,19 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
         </div>
       ) : null}
       <div className={`import-editor-grid stacked ${isRawMode ? "raw-only" : ""}`}>
-        <section className="raw-text-editor">
-          <div className="virtual-table-title">
-            <span>Raw text</span>
-            <span>{rawLines.length} lines</span>
-          </div>
-          <div
-            ref={rawParentRef}
-            className="table-scroll raw-text-table"
-            style={
-              {
-                "--table-visible-height": "190px",
-                "--table-width": `${rawTableWidth}px`,
-              } as CSSProperties
-            }
-          >
-            <table style={{ width: rawTableWidth, minWidth: rawTableWidth }}>
-              <thead>
-                <tr style={{ width: rawTableWidth }}>
-                  <th
-                    style={{
-                      width: getRawColumnWidth("line"),
-                      minWidth: minColumnWidth,
-                    }}
-                  >
-                    line
-                  </th>
-                  <th
-                    style={{
-                      width: getRawColumnWidth("text"),
-                      minWidth: minColumnWidth,
-                    }}
-                  >
-                    raw text
-                    <button
-                      type="button"
-                      role="separator"
-                      aria-label="Resize raw text column"
-                      className="column-resize-handle"
-                      onPointerDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        startColumnResize(
-                          setRawColumnWidths,
-                          "text",
-                          event.clientX,
-                          getRawColumnWidth("text"),
-                        );
-                      }}
-                    />
-                  </th>
-                </tr>
-              </thead>
-              <tbody style={{ height: rawVirtualizer.getTotalSize() }}>
-                {visibleRawRows.map((virtualRow) => (
-                  <tr
-                    key={virtualRow.key}
-                    className={rawRowClassName(pendingImport, virtualRow.index)}
-                    style={{ width: rawTableWidth, transform: `translateY(${virtualRow.start}px)` }}
-                  >
-                    <td
-                      style={{
-                        width: getRawColumnWidth("line"),
-                        minWidth: minColumnWidth,
-                      }}
-                    >
-                      {virtualRow.index + 1}
-                    </td>
-                    <td
-                      style={{
-                        width: getRawColumnWidth("text"),
-                        minWidth: minColumnWidth,
-                      }}
-                    >
-                      <input
-                        aria-label={`Raw line ${virtualRow.index + 1}`}
-                        className="raw-line-input"
-                        spellCheck={false}
-                        value={rawLines[virtualRow.index] ?? ""}
-                        onChange={(event) => updateRawLine(virtualRow.index, event.target.value)}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <RawTextTable
+          pendingImport={pendingImport}
+          rawLines={rawLines}
+          parentRef={rawParentRef}
+          visibleRows={visibleRawRows}
+          totalSize={rawVirtualizer.getTotalSize()}
+          tableWidth={rawTableWidth}
+          getColumnWidth={getRawColumnWidth}
+          onStartColumnResize={(columnId, startX, startWidth) =>
+            startColumnResize(setRawColumnWidths, columnId, startX, startWidth)
+          }
+          onUpdateRawLine={updateRawLine}
+        />
         {!isRawMode ? (
           <section className="preview-editor">
             <div className="virtual-table-title">
