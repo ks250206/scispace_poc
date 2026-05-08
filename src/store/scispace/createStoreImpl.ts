@@ -43,6 +43,7 @@ import {
 import { createImportDialogState } from "./importDialogState";
 import { createProjectActions } from "./projectActions";
 import { createFileActions } from "./fileActions";
+import { createWindowActions } from "./windowActions";
 
 export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
   create<ScispaceState>()((set, get) => ({
@@ -448,68 +449,9 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
       persistLayout(db, get());
     },
 
-    closeWindow: (id) => {
-      set((state) => {
-        const target = state.windows.find((window) => window.id === id);
-        if (!target) return state;
-
-        const windows = state.windows.filter((window) => window.id !== id);
-        const plotSpecs =
-          target.kind === "plot" &&
-          target.plotId &&
-          !windows.some((window) => window.kind === "plot" && window.plotId === target.plotId)
-            ? state.plotSpecs.filter((plot) => plot.id !== target.plotId)
-            : state.plotSpecs;
-
-        return {
-          windows,
-          plotSpecs,
-          activeWindowId: state.activeWindowId === id ? undefined : state.activeWindowId,
-          currentPlotId:
-            target.kind === "plot" && target.plotId === state.currentPlotId
-              ? plotSpecs[0]?.id
-              : state.currentPlotId,
-        };
-      });
-      persistLayout(db, get());
-    },
-
+    ...createWindowActions({ db, get, set }),
     ...createProjectActions({ db, get, set }),
     ...createFileActions({ db, get, set }),
-
-    updateWindow: (id, patch) => {
-      set((state) => ({
-        windows: state.windows.map((window) =>
-          window.id === id ? { ...window, ...patch } : window,
-        ),
-      }));
-      persistLayout(db, get());
-    },
-
-    focusWindow: (id) => {
-      set((state) => {
-        const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
-        const target = state.windows.find((window) => window.id === id);
-        return {
-          windows: state.windows.map((window) =>
-            window.id === id ? { ...window, zIndex } : window,
-          ),
-          activeWindowId: id,
-          currentPlotId:
-            target?.kind === "plot" && target.plotId ? target.plotId : state.currentPlotId,
-        };
-      });
-      persistLayout(db, get());
-    },
-
-    setViewport: (viewport) => {
-      set({ viewport });
-      persistLayout(db, get());
-    },
-
-    sendCommandToTerminalLine: (command) => {
-      set({ terminalCommandLineRequest: { id: crypto.randomUUID(), command } });
-    },
   }));
 
 export const useScispaceStore = createScispaceStore(appDb);
