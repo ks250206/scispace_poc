@@ -45,6 +45,7 @@ type TerminalMetrics = {
 };
 
 const terminalLogicalRowHeight = 17;
+const terminalBottomInsetRows = 1;
 
 const defaultTerminalMetrics: TerminalMetrics = {
   charWidth: 8.4,
@@ -547,7 +548,7 @@ export function TerminalPanel() {
       charWidth: metrics.charWidth,
       rowHeight: metrics.rowHeight,
       horizontalPadding: metrics.horizontalPadding,
-      verticalPadding: metrics.verticalPadding,
+      verticalPadding: metrics.verticalPadding + terminalLogicalRowHeight * terminalBottomInsetRows,
       workspaceScale,
     });
     setTerminalSize((current) =>
@@ -580,14 +581,28 @@ export function TerminalPanel() {
     [],
   );
 
+  const writeTerminalControlResult = useCallback(
+    (result: ReturnType<typeof terminalControlResult>) => {
+      const shell = shellRef.current;
+      const editableShell = shell as unknown as EditableBashShell | null;
+      if (result.mode === "repl" && shell) terminalFsStateRef.current = { cwd: shell.cwd };
+      applyTerminalControlState({ mode: result.mode, unsafe: result.unsafe });
+      resetEditableLine(shell, editableShell?._line?.trim() ?? "");
+      writeOutput(terminalPromptOutput(result.output, result.mode, terminalFsStateRef.current.cwd));
+      scrollToBottom();
+    },
+    [applyTerminalControlState, scrollToBottom, writeOutput],
+  );
+
   const toggleUnsafeMode = useCallback(() => {
-    const nextState = {
-      mode: "repl" as const,
-      unsafe: !terminalModeRef.current.unsafe,
-    };
-    applyTerminalControlState(nextState);
-    writeOutput(nextState.unsafe ? "Unsafe mode enabled\n" : "Unsafe mode disabled\n");
-  }, [applyTerminalControlState, writeOutput]);
+    writeTerminalControlResult(
+      terminalControlResult(
+        "unsafe",
+        [terminalModeRef.current.unsafe ? "off" : "on"],
+        terminalModeRef.current,
+      ),
+    );
+  }, [writeTerminalControlResult]);
 
   const openTerminalContextMenu = useCallback(
     (event: MouseEvent<HTMLElement>) => {
@@ -607,8 +622,9 @@ export function TerminalPanel() {
             label: "Enter scispace REPL",
             active: terminalControlState.mode === "repl",
             onSelect: () => {
-              applyTerminalControlState({ ...terminalModeRef.current, mode: "repl" });
-              writeOutput("Entered scispace REPL\n");
+              writeTerminalControlResult(
+                terminalControlResult("repl", [], terminalModeRef.current),
+              );
             },
           },
         ],
@@ -620,7 +636,7 @@ export function TerminalPanel() {
       terminalControlState.mode,
       terminalControlState.unsafe,
       toggleUnsafeMode,
-      writeOutput,
+      writeTerminalControlResult,
     ],
   );
 
@@ -699,13 +715,7 @@ export function TerminalPanel() {
           controlCommand.args,
           terminalModeRef.current,
         );
-        if (result.mode === "repl" && shell) terminalFsStateRef.current = { cwd: shell.cwd };
-        applyTerminalControlState({ mode: result.mode, unsafe: result.unsafe });
-        resetEditableLine(shell, editableShell?._line?.trim() ?? "");
-        writeOutput(
-          terminalPromptOutput(result.output, result.mode, terminalFsStateRef.current.cwd),
-        );
-        scrollToBottom();
+        writeTerminalControlResult(result);
         return;
       }
       const replCommand = terminalReplScispaceCommandFromInput(
@@ -723,15 +733,7 @@ export function TerminalPanel() {
         const [command = "", ...args] = replCommand.split(/\s+/);
         const controlResult = terminalControlResult(command, args, terminalModeRef.current);
         if (controlResult.handled) {
-          applyTerminalControlState({ mode: controlResult.mode, unsafe: controlResult.unsafe });
-          writeOutput(
-            terminalPromptOutput(
-              controlResult.output,
-              controlResult.mode,
-              terminalFsStateRef.current.cwd,
-            ),
-          );
-          scrollToBottom();
+          writeTerminalControlResult(controlResult);
           return;
         }
         if (command === "clear") {
@@ -762,7 +764,7 @@ export function TerminalPanel() {
       }
       void handleTerminalInput(shellRef.current, data).then(scrollToBottom);
     },
-    [applyTerminalControlState, runScispace, scrollToBottom, writeOutput],
+    [runScispace, scrollToBottom, writeOutput, writeTerminalControlResult],
   );
 
   useEffect(() => {
@@ -779,10 +781,23 @@ export function TerminalPanel() {
     if (!terminalCommandLineRequest || !shellRef.current) return;
     if (commandLineRequestIdRef.current === terminalCommandLineRequest.id) return;
     commandLineRequestIdRef.current = terminalCommandLineRequest.id;
+    const editableShell = shellRef.current as unknown as EditableBashShell;
+    if (editableShell._line) {
+      resetEditableLine(shellRef.current, "");
+      writeOutput(
+        `\r\x1b[2K${terminalPrompt(terminalModeRef.current.mode, terminalFsStateRef.current.cwd)}`,
+      );
+    }
     void shellRef.current
       .handleInput(terminalCommandLineText(terminalCommandLineRequest.command))
-      .then(scrollToBottom);
-  }, [scrollToBottom, terminalCommandLineRequest]);
+      .then(() => {
+        if (terminalCommandLineRequest.execute) {
+          handleData("\r");
+          return;
+        }
+        scrollToBottom();
+      });
+  }, [handleData, scrollToBottom, terminalCommandLineRequest]);
 
   useEffect(() => {
     const viewport = viewportRef.current;

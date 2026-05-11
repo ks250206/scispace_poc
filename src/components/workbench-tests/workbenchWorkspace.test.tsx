@@ -30,7 +30,7 @@ describe("Workbench workspace UI", () => {
   it("renders semantic toolbar menus and closes them with escape", async () => {
     const user = userEvent.setup();
     await renderWorkbench();
-    expect(screen.getByRole("combobox", { name: "Project" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Project selector" })).toBeInTheDocument();
     expect(screen.getByText("Zoom 100%")).toBeInTheDocument();
     const menuLabels = Array.from(
       document.querySelectorAll<HTMLElement>(".toolbar-menus .toolbar-menu-trigger"),
@@ -40,6 +40,7 @@ describe("Workbench workspace UI", () => {
     await user.click(screen.getByRole("button", { name: "Project" }));
     expect(screen.getByRole("menu", { name: "Project menu" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "New Project" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Recent Projects" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Export Project" })).toBeInTheDocument();
 
     await user.keyboard("{Escape}");
@@ -81,7 +82,16 @@ describe("Workbench workspace UI", () => {
       ),
     ).map((element) => element.textContent);
     expect(contextLabels).toEqual(["Project", "Data", "Table", "Plot", "Edit", "View", "Windows"]);
+    const currentProjectName =
+      storeState().projects.find((project) => project.id === storeState().currentProjectId)?.name ??
+      "";
     expect(within(menu).getByRole("menuitem", { name: "Project" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Recent Projects" })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("menu", { name: "Recent Projects submenu" })).getByRole("menuitem", {
+        name: currentProjectName,
+      }),
+    ).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Windows" })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Data" })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Table" })).toBeInTheDocument();

@@ -120,7 +120,7 @@ export const createWindowActions = ({
     persistLayout(db, get());
   },
 
-  sendCommandToTerminalLine: (command) => {
-    set({ terminalCommandLineRequest: { id: crypto.randomUUID(), command } });
+  sendCommandToTerminalLine: (command, options) => {
+    set({ terminalCommandLineRequest: { id: crypto.randomUUID(), command, ...options } });
   },
 });

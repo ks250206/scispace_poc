@@ -117,6 +117,7 @@ function ToolbarMenuContent({
               <button
                 type="button"
                 role="menuitem"
+                aria-label={item.label}
                 disabled={item.disabled}
                 className="toolbar-menu-item-main"
               >
@@ -251,9 +252,11 @@ export function Workbench() {
   const tableMenuState = useScispaceStore((state) => state.tableMenuState);
   const [isPanning, setIsPanning] = useState(false);
   const [openToolbarMenu, setOpenToolbarMenu] = useState<string>();
+  const [projectSelectorOpen, setProjectSelectorOpen] = useState(false);
   const canvasDrag = useRef<{ x: number; y: number; originX: number; originY: number } | null>(
     null,
   );
+  const projectSelectorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!openToolbarMenu) return;
@@ -271,6 +274,23 @@ export function Workbench() {
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [openToolbarMenu]);
+
+  useEffect(() => {
+    if (!projectSelectorOpen) return;
+    const closeOnPointerDown = (event: globalThis.PointerEvent) => {
+      if (projectSelectorRef.current?.contains(event.target as Node)) return;
+      setProjectSelectorOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setProjectSelectorOpen(false);
+    };
+    window.addEventListener("pointerdown", closeOnPointerDown);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", closeOnPointerDown);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [projectSelectorOpen]);
 
   const canvasStyle = useMemo(
     () => ({
@@ -414,17 +434,17 @@ export function Workbench() {
     if (name !== null) void saveCurrentProject(name);
   };
 
-  const handleDeleteProject = async () => {
-    if (!currentProjectId) return;
+  const handleDeleteProject = async (projectId = currentProjectId) => {
+    if (!projectId) return;
     const currentName =
-      projects.find((project) => project.id === currentProjectId)?.name ?? "current project";
+      projects.find((project) => project.id === projectId)?.name ?? "current project";
     const confirmed = await dialog.confirm({
       title: "Delete project",
       message: `Delete project "${currentName}"?`,
       confirmLabel: "Delete",
       tone: "destructive",
     });
-    if (confirmed) void deleteProject(currentProjectId);
+    if (confirmed) void deleteProject(projectId);
   };
 
   const handleExportProject = async () => {
@@ -458,6 +478,8 @@ export function Workbench() {
     }
     void switchProject(projectId);
   };
+  const currentProjectName =
+    projects.find((project) => project.id === currentProjectId)?.name ?? "No Project";
 
   const activeWindow = windows.find((window) => window.id === activeWindowId);
   const activeTableMenuState =
@@ -567,6 +589,17 @@ export function Workbench() {
   const directPlotConfigItems = [...windowsByKind.plotConfig].map((window) =>
     windowMenuItem(window, activeWindowId, focusWindow, closeWindow),
   );
+  const recentProjectItems: ToolbarMenuItem[] =
+    projects.length > 0
+      ? projects.map((project) => ({
+          label: project.name,
+          active: project.id === currentProjectId,
+          onSelect: () => void handleSwitchProject(project.id),
+          rightLabel: "×",
+          rightAriaLabel: `Delete project ${project.name}`,
+          onRightSelect: () => void handleDeleteProject(project.id),
+        }))
+      : [emptyWindowMenuItem()];
 
   const toolbarMenus: ToolbarMenuProps[] = [
     {
@@ -581,6 +614,9 @@ export function Workbench() {
           onSelect: () => void handleDeleteProject(),
           disabled: !currentProjectId,
         },
+        { kind: "separator" },
+        { kind: "submenu", label: "Recent Projects", items: recentProjectItems },
+        { kind: "separator" },
         { label: "Import Project", onSelect: () => projectImportInputRef.current?.click() },
         { label: "Export Project", onSelect: () => void handleExportProject() },
       ],
@@ -630,19 +666,26 @@ export function Workbench() {
           disabled: !activeTableMenuState?.hasSelectedColumn,
         },
         {
-          label: "Rows 10",
-          onSelect: () => activeTableMenuState?.actions.setVisibleRows(10),
-          disabled: !activeTableMenuState || activeTableMenuState.visibleRows === 10,
-        },
-        {
-          label: "Rows 20",
-          onSelect: () => activeTableMenuState?.actions.setVisibleRows(20),
-          disabled: !activeTableMenuState || activeTableMenuState.visibleRows === 20,
-        },
-        {
-          label: "Rows 50",
-          onSelect: () => activeTableMenuState?.actions.setVisibleRows(50),
-          disabled: !activeTableMenuState || activeTableMenuState.visibleRows === 50,
+          kind: "submenu",
+          label: "Rows",
+          disabled: !activeTableMenuState,
+          items: [
+            {
+              label: "Rows 10",
+              onSelect: () => activeTableMenuState?.actions.setVisibleRows(10),
+              disabled: !activeTableMenuState || activeTableMenuState.visibleRows === 10,
+            },
+            {
+              label: "Rows 20",
+              onSelect: () => activeTableMenuState?.actions.setVisibleRows(20),
+              disabled: !activeTableMenuState || activeTableMenuState.visibleRows === 20,
+            },
+            {
+              label: "Rows 50",
+              onSelect: () => activeTableMenuState?.actions.setVisibleRows(50),
+              disabled: !activeTableMenuState || activeTableMenuState.visibleRows === 50,
+            },
+          ],
         },
       ],
     },
@@ -755,18 +798,61 @@ export function Workbench() {
           ))}
         </nav>
         <div className="topbar-right">
-          <select
-            className="project-select"
-            aria-label="Project"
-            value={currentProjectId ?? ""}
-            onChange={(event) => void handleSwitchProject(event.target.value)}
-          >
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
+          <div ref={projectSelectorRef} className="project-picker">
+            <button
+              type="button"
+              className="project-select"
+              aria-label="Project selector"
+              aria-expanded={projectSelectorOpen}
+              aria-haspopup="menu"
+              onClick={() => {
+                setOpenToolbarMenu(undefined);
+                setProjectSelectorOpen((open) => !open);
+              }}
+            >
+              <span>{currentProjectName}</span>
+              <span aria-hidden="true">⌄</span>
+            </button>
+            {projectSelectorOpen ? (
+              <div className="project-picker-menu" role="menu" aria-label="Project menu">
+                {projects.map((project) => (
+                  <div
+                    key={project.id}
+                    className={`project-picker-row ${
+                      project.id === currentProjectId ? "active" : ""
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="project-picker-main"
+                      onClick={() => {
+                        setProjectSelectorOpen(false);
+                        void handleSwitchProject(project.id);
+                      }}
+                    >
+                      <span className="project-picker-check">
+                        {project.id === currentProjectId ? "✓" : ""}
+                      </span>
+                      <span>{project.name}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="project-picker-delete"
+                      aria-label={`Delete project ${project.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setProjectSelectorOpen(false);
+                        void handleDeleteProject(project.id);
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
           {projectDirty ? <span className="project-dirty">Unsaved</span> : null}
           <span className="zoom-control">Zoom {Math.round(viewport.scale * 100)}%</span>
         </div>

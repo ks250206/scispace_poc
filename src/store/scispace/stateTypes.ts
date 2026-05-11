@@ -67,7 +67,7 @@ export interface ScispaceState {
   uploadPayloads: Record<string, UploadPayload>;
   undoStack: UndoHistoryEntry[];
   redoStack: UndoHistoryEntry[];
-  terminalCommandLineRequest?: { id: string; command: string };
+  terminalCommandLineRequest?: { id: string; command: string; execute?: boolean };
   columnSelections: Record<string, string[]>;
   activeDatasetId?: string;
   activeWindowId?: string;
@@ -116,7 +116,7 @@ export interface ScispaceState {
   setPlotMenuState: (state: PlotMenuState) => void;
   clearPlotMenuState: (plotId: string) => void;
   setViewport: (viewport: ViewportState) => void;
-  sendCommandToTerminalLine: (command: string) => void;
+  sendCommandToTerminalLine: (command: string, options?: { execute?: boolean }) => void;
 }
 
 export interface ProjectSnapshot {

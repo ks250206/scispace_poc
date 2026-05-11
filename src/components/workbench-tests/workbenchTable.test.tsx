@@ -23,7 +23,9 @@ describe("Workbench table UI", () => {
       height: 424,
     });
 
-    await clickToolbarItem(user, "Table", "Rows 50");
+    await user.click(screen.getByRole("button", { name: "Table" }));
+    await user.click(screen.getByRole("menuitem", { name: "Rows" }));
+    await user.click(screen.getByRole("menuitem", { name: "Rows 50" }));
 
     expect(tableScroll.style.getPropertyValue("--table-visible-height")).toBe("1632px");
     expect(screen.getByText("160 rows · virtualized · rows 50")).toBeInTheDocument();

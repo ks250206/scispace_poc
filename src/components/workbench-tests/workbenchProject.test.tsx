@@ -9,6 +9,17 @@ import {
   useScispaceStore,
 } from "./workbenchTestUtils";
 
+const switchProjectFromPicker = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
+  await user.click(screen.getByRole("button", { name: "Project selector" }));
+  await user.click(screen.getByRole("menuitem", { name }));
+};
+
+const switchRecentProject = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
+  await user.click(screen.getByRole("button", { name: "Project" }));
+  await user.click(screen.getByRole("menuitem", { name: "Recent Projects" }));
+  await user.click(screen.getByRole("menuitem", { name }));
+};
+
 describe("Workbench project UI", () => {
   setupWorkbenchSuite();
 
@@ -35,7 +46,7 @@ describe("Workbench project UI", () => {
   it("shows project controls and switches saved projects", async () => {
     const user = userEvent.setup();
     await renderWorkbench();
-    expect(screen.getByRole("combobox", { name: "Project" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Project selector" })).toBeInTheDocument();
     const firstProjectName =
       useScispaceStore
         .getState()
@@ -55,9 +66,60 @@ describe("Workbench project UI", () => {
       expect(storeState().projects.map((project) => project.name)).toContain("Second Project"),
     );
 
-    await user.selectOptions(screen.getByRole("combobox", { name: "Project" }), firstProjectName);
+    await switchProjectFromPicker(user, firstProjectName);
     await waitFor(() =>
       expect(storeState().datasets.map((dataset) => dataset.name)).toContain("derived.csv"),
+    );
+  });
+
+  it("deletes a project from the project selector after confirmation", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    await act(async () => {
+      await storeState().createNewProject("Disposable Project");
+    });
+
+    expect(storeState().projects.map((project) => project.name)).toContain("Disposable Project");
+    await user.click(screen.getByRole("button", { name: "Project selector" }));
+    await user.click(screen.getByRole("button", { name: "Delete project Disposable Project" }));
+    expect(screen.getByText('Delete project "Disposable Project"?')).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() =>
+      expect(storeState().projects.map((project) => project.name)).not.toContain(
+        "Disposable Project",
+      ),
+    );
+  });
+
+  it("lists recent projects in the project menu and deletes them after confirmation", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    const firstProjectName =
+      storeState().projects.find((project) => project.id === storeState().currentProjectId)?.name ??
+      "";
+    await act(async () => {
+      await storeState().createNewProject("Recent Scratch");
+    });
+
+    await switchRecentProject(user, firstProjectName);
+    await waitFor(() =>
+      expect(
+        storeState().projects.find((project) => project.id === storeState().currentProjectId)?.name,
+      ).toBe(firstProjectName),
+    );
+    expect(
+      storeState().projects.find((project) => project.id === storeState().currentProjectId)?.name,
+    ).toBe(firstProjectName);
+
+    await user.click(screen.getByRole("button", { name: "Project" }));
+    await user.click(screen.getByRole("menuitem", { name: "Recent Projects" }));
+    await user.click(screen.getByRole("button", { name: "Delete project Recent Scratch" }));
+    expect(screen.getByText('Delete project "Recent Scratch"?')).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() =>
+      expect(storeState().projects.map((project) => project.name)).not.toContain("Recent Scratch"),
     );
   });
 
@@ -134,7 +196,9 @@ describe("Workbench project UI", () => {
     await act(async () => {
       await storeState().runScispace("elt waveform.csv as scratch-derived.csv", { source: "gui" });
     });
-    await user.selectOptions(screen.getByRole("combobox", { name: "Project" }), firstProjectId);
+    const firstProjectName =
+      storeState().projects.find((project) => project.id === firstProjectId)?.name ?? "";
+    await switchProjectFromPicker(user, firstProjectName);
 
     expect(
       screen.getByText("Switch projects and save current unsaved changes?"),

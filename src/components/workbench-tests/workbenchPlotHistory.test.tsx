@@ -150,6 +150,7 @@ describe("Workbench plot and history UI", () => {
     await waitFor(() =>
       expect(storeState().commandHistory.at(-1)?.command).toBe("table waveform.csv"),
     );
+    expect(screen.getByText("1 commands")).toBeInTheDocument();
     const historyEntry = document.querySelector(".history-entry");
     expect(historyEntry).toHaveTextContent("table waveform.csv");
     const [runButton, copyButton, toCommandLineButton] = Array.from(
@@ -164,12 +165,17 @@ describe("Workbench plot and history UI", () => {
     expect(storeState().terminalCommandLineRequest).toMatchObject({
       command: "table waveform.csv",
     });
+    expect(storeState().terminalCommandLineRequest?.execute).toBeUndefined();
 
     await user.click(runButton);
+    expect(storeState().terminalCommandLineRequest).toMatchObject({
+      command: "table waveform.csv",
+      execute: true,
+    });
     await waitFor(() =>
       expect(storeState().commandHistory.at(-1)).toMatchObject({
         command: "table waveform.csv",
-        source: "history",
+        source: "terminal",
       }),
     );
   });
@@ -187,7 +193,7 @@ describe("Workbench plot and history UI", () => {
     await waitFor(() =>
       expect(storeState().commandHistory.at(-1)).toMatchObject({
         command: "file-list ~/raw",
-        source: "history",
+        source: "terminal",
         status: "success",
       }),
     );
