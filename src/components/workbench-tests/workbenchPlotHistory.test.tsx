@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -14,19 +14,17 @@ describe("Workbench plot and history UI", () => {
   setupWorkbenchSuite();
 
   it("opens shared plot config and edits the current plot", async () => {
+    const user = userEvent.setup();
     await renderWorkbench();
     expect(screen.queryByText("Plot Config")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Config" }));
+    expect(screen.queryByRole("button", { name: "Config" })).not.toBeInTheDocument();
+    await clickToolbarItem(user, "Plot", "Plot Config");
     await waitFor(() => expect(screen.getByText("Plot Config")).toBeInTheDocument());
     expect(storeState().currentPlotId).toBe("seed-plot");
   });
 
   it("copies plot schema and exports the current plot canvas as png and svg", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText },
-    });
+    const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
     const toDataUrl = vi
       .spyOn(HTMLCanvasElement.prototype, "toDataURL")
       .mockReturnValue("data:image/png;base64,plot");
@@ -42,7 +40,8 @@ describe("Workbench plot and history UI", () => {
 
     await renderWorkbench();
     await initializeStore();
-    fireEvent.click(screen.getByRole("button", { name: "Copy plot schema" }));
+    expect(screen.queryByRole("button", { name: "Copy plot schema" })).not.toBeInTheDocument();
+    await clickToolbarItem(userEvent.setup(), "Plot", "Copy plot schema");
 
     await waitFor(() => expect(writeText).toHaveBeenCalled());
     expect(JSON.parse(writeText.mock.calls[0]?.[0] ?? "{}")).toMatchObject({
@@ -57,11 +56,11 @@ describe("Workbench plot and history UI", () => {
       }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Export plot PNG" }));
+    await clickToolbarItem(userEvent.setup(), "Plot", "Export plot PNG");
     expect(toDataUrl).toHaveBeenCalledWith("image/png");
     expect(click).toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Export plot SVG" }));
+    await clickToolbarItem(userEvent.setup(), "Plot", "Export plot SVG");
     const svgLink = createElement.mock.results
       .map((result) => result.value as HTMLAnchorElement)
       .find((element) => element.download?.endsWith(".svg"));
@@ -71,11 +70,7 @@ describe("Workbench plot and history UI", () => {
 
   it("replays and copies commands from the command history window", async () => {
     const user = userEvent.setup();
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText },
-    });
+    const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
     await renderWorkbench();
     await initializeStore();
     await act(async () => {

@@ -15,7 +15,7 @@ describe("Workbench workspace UI", () => {
     await renderWorkbench();
     expect(screen.getByText("~/raw")).toBeInTheDocument();
     expect(screen.getByText("Table - waveform.csv")).toBeInTheDocument();
-    expect(screen.getByText("160 rows · virtualized")).toBeInTheDocument();
+    expect(screen.getByText((text) => text.includes("160 rows · virtualized"))).toBeInTheDocument();
     expect(screen.getByText("Plot - waveform.csv")).toBeInTheDocument();
     expect(screen.getByText("Terminal")).toBeInTheDocument();
     expect(screen.getByText("Command History")).toBeInTheDocument();

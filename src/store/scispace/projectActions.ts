@@ -101,6 +101,8 @@ export const createProjectActions = ({
       activeDatasetId: initialProject.datasets[0]?.id,
       activeWindowId: undefined,
       currentPlotId: initialProject.plotSpecs[0]?.id,
+      tableMenuState: undefined,
+      plotMenuState: undefined,
       viewport: initialProject.viewport,
     });
     persistLayout(db, get());
@@ -180,6 +182,8 @@ export const createProjectActions = ({
         persistedConfigPlotId && plotSpecs.some((plot) => plot.id === persistedConfigPlotId)
           ? persistedConfigPlotId
           : plotSpecs[0]?.id,
+      tableMenuState: undefined,
+      plotMenuState: undefined,
       viewport: target.layout.viewport,
     });
     persistLayout(db, get());
@@ -230,6 +234,8 @@ export const createProjectActions = ({
       activeDatasetId: datasets[0]?.id,
       activeWindowId: undefined,
       currentPlotId: replacement.layout.plotSpecs?.[0]?.id,
+      tableMenuState: undefined,
+      plotMenuState: undefined,
       viewport: replacement.layout.viewport,
     });
     persistLayout(db, get());
@@ -350,6 +356,8 @@ export const createProjectActions = ({
       activeDatasetId: record.datasets[0]?.id,
       activeWindowId: undefined,
       currentPlotId: plotSpecs[0]?.id,
+      tableMenuState: undefined,
+      plotMenuState: undefined,
       viewport: record.layout.viewport,
     });
     persistLayout(db, get());

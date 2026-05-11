@@ -54,6 +54,8 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     terminalCommandLineRequest: undefined,
     columnSelections: {},
     currentPlotId: undefined,
+    tableMenuState: undefined,
+    plotMenuState: undefined,
     viewport: initialViewport(),
 
     initialize: async () => {
@@ -133,6 +135,8 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           persistedConfigPlotId && nextPlotSpecs.some((plot) => plot.id === persistedConfigPlotId)
             ? persistedConfigPlotId
             : nextPlotSpecs[0]?.id,
+        tableMenuState: undefined,
+        plotMenuState: undefined,
       });
       persistLayout(db, get());
     },
@@ -233,6 +237,34 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     ...createWorkspaceActions({ db, get, set }),
     ...createExecutionActions({ db, get, set }),
     ...createWindowActions({ db, get, set }),
+    setTableMenuState: (state) =>
+      set((current) => {
+        const previous = current.tableMenuState;
+        if (
+          previous?.windowId === state.windowId &&
+          previous.datasetId === state.datasetId &&
+          previous.rowCount === state.rowCount &&
+          previous.visibleRows === state.visibleRows &&
+          previous.hasSelectedRange === state.hasSelectedRange &&
+          previous.canFillDownRange === state.canFillDownRange &&
+          previous.canPlotSelection === state.canPlotSelection &&
+          previous.hasSelectedCell === state.hasSelectedCell &&
+          previous.hasSelectedColumn === state.hasSelectedColumn
+        ) {
+          return current;
+        }
+        return { tableMenuState: state };
+      }),
+    clearTableMenuState: (windowId) =>
+      set((state) => ({
+        tableMenuState:
+          state.tableMenuState?.windowId === windowId ? undefined : state.tableMenuState,
+      })),
+    setPlotMenuState: (state) => set({ plotMenuState: state }),
+    clearPlotMenuState: (plotId) =>
+      set((state) => ({
+        plotMenuState: state.plotMenuState?.plotId === plotId ? undefined : state.plotMenuState,
+      })),
     ...createProjectActions({ db, get, set }),
     ...createFileActions({ db, get, set }),
   }));

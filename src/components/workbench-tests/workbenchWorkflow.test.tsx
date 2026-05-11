@@ -48,8 +48,7 @@ describe("Workbench reproducible workflow", () => {
       expect(screen.getAllByText("workflow.csv: signal vs time").length).toBeGreaterThan(0),
     );
 
-    const exportSvgButtons = screen.getAllByRole("button", { name: "Export plot SVG" });
-    await user.click(exportSvgButtons.at(-1) as HTMLElement);
+    await clickToolbarItem(user, "Plot", "Export plot SVG");
     expect(
       createElement.mock.results
         .map((result) => result.value as HTMLAnchorElement)

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 import { useScispaceStore } from "../store/scispaceStore";
@@ -34,6 +34,8 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
   );
   const openPlotConfig = useScispaceStore((state) => state.openPlotConfig);
   const runScispace = useScispaceStore((state) => state.runScispace);
+  const setPlotMenuState = useScispaceStore((state) => state.setPlotMenuState);
+  const clearPlotMenuState = useScispaceStore((state) => state.clearPlotMenuState);
 
   const plotData = useMemo(() => {
     if (!dataset || !spec) return undefined;
@@ -148,26 +150,56 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
     };
   }, [plotData, spec, workspaceScale]);
 
-  if (!spec || !dataset) return <div className="empty-state">Plot source not found.</div>;
-
-  const copySchema = async () => {
+  const copySchema = useCallback(async () => {
     const result = await runScispace(`plot-schema ${plotId}`, { source: "gui" });
     if (result.kind !== "error") await navigator.clipboard?.writeText(result.output);
-  };
-  const clickDownload = (href: string, download: string) => {
+  }, [plotId, runScispace]);
+  const clickDownload = useCallback((href: string, download: string) => {
     const link = document.createElement("a");
     link.href = href;
     link.download = download;
     link.click();
-  };
-  const exportPng = () => {
+  }, []);
+  const exportPng = useCallback(() => {
+    if (!spec) return;
     const canvas = containerRef.current?.querySelector("canvas");
     if (!canvas) return;
     clickDownload(canvas.toDataURL("image/png"), safePlotFileName(spec.title, "png"));
-  };
-  const exportSvg = () => {
+  }, [clickDownload, spec]);
+  const exportSvg = useCallback(() => {
+    if (!spec || !dataset) return;
     clickDownload(svgDataUrl(buildPlotSvg(spec, dataset)), safePlotFileName(spec.title, "svg"));
-  };
+  }, [clickDownload, dataset, spec]);
+
+  useEffect(() => {
+    if (!spec || !dataset) {
+      clearPlotMenuState(plotId);
+      return;
+    }
+    setPlotMenuState({
+      plotId,
+      actions: {
+        openConfig: () => openPlotConfig(plotId),
+        copySchema: () => void copySchema(),
+        exportPng,
+        exportSvg,
+      },
+    });
+  }, [
+    clearPlotMenuState,
+    copySchema,
+    dataset,
+    exportPng,
+    exportSvg,
+    openPlotConfig,
+    plotId,
+    setPlotMenuState,
+    spec,
+  ]);
+
+  useEffect(() => () => clearPlotMenuState(plotId), [clearPlotMenuState, plotId]);
+
+  if (!spec || !dataset) return <div className="empty-state">Plot source not found.</div>;
 
   return (
     <div className="plot-window">
@@ -178,18 +210,6 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
             {dataset.name} / x={spec.x} / {spec.series.length} series
           </span>
         </div>
-        <button type="button" onClick={() => openPlotConfig(plotId)}>
-          Config
-        </button>
-        <button type="button" onClick={() => void copySchema()} aria-label="Copy plot schema">
-          Copy schema
-        </button>
-        <button type="button" onClick={exportPng} aria-label="Export plot PNG">
-          Export PNG
-        </button>
-        <button type="button" onClick={exportSvg} aria-label="Export plot SVG">
-          Export SVG
-        </button>
       </div>
       <div className="plot-host" style={{ width: spec.size.width, height: spec.size.height }}>
         <div

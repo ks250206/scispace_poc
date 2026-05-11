@@ -4,7 +4,6 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { datasetColumnIds } from "../domain/csv";
 import { useScispaceStore } from "../store/scispaceStore";
 import { DataTableGrid } from "./data-table/DataTableGrid";
-import { DataTableToolbar } from "./data-table/DataTableToolbar";
 import { useDialog } from "./dialog/DialogProvider";
 import {
   deleteColumnCommand,
@@ -41,6 +40,8 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   const dataset = useScispaceStore((state) => state.datasets.find((item) => item.id === datasetId));
   const updateWindow = useScispaceStore((state) => state.updateWindow);
   const runScispace = useScispaceStore((state) => state.runScispace);
+  const setTableMenuState = useScispaceStore((state) => state.setTableMenuState);
+  const clearTableMenuState = useScispaceStore((state) => state.clearTableMenuState);
   const [visibleRows, setVisibleRows] = useState<TableVisibleRows>(10);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const parentRef = useRef<HTMLDivElement>(null);
@@ -212,6 +213,14 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     void runScispace(plotCommand(dataset.name, selectionPlotSpec), { source: "gui" });
   };
 
+  const updateVisibleRows = useCallback(
+    (nextVisibleRows: TableVisibleRows) => {
+      setVisibleRows(nextVisibleRows);
+      updateWindow(windowId, { height: tableWindowHeightForRows(nextVisibleRows) });
+    },
+    [updateWindow, windowId],
+  );
+
   const isCellInRange = (rowIndex: number, column: string): boolean => {
     return positionInRange(rowIndex, column, rangeBounds, visibleDatasetColumns);
   };
@@ -254,29 +263,57 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     visibleDatasetColumns,
   ]);
 
+  useEffect(() => {
+    if (!dataset) {
+      clearTableMenuState(windowId);
+      return;
+    }
+    setTableMenuState({
+      windowId,
+      datasetId,
+      rowCount: dataset.rows.length,
+      visibleRows,
+      hasSelectedRange,
+      canFillDownRange,
+      canPlotSelection: Boolean(selectionPlotSpec),
+      hasSelectedCell: Boolean(selectedCell),
+      hasSelectedColumn: Boolean(selectedColumn),
+      actions: {
+        copySelectedRange,
+        clearSelectedRange,
+        fillDownSelectedRange,
+        plotSelectedColumns,
+        deleteSelectedRow,
+        deleteSelectedColumn,
+        setVisibleRows: updateVisibleRows,
+      },
+    });
+  }, [
+    canFillDownRange,
+    clearTableMenuState,
+    dataset,
+    datasetId,
+    hasSelectedRange,
+    selectedCell,
+    selectedColumn,
+    selectionPlotSpec,
+    setTableMenuState,
+    updateVisibleRows,
+    visibleRows,
+    windowId,
+  ]);
+
+  useEffect(() => () => clearTableMenuState(windowId), [clearTableMenuState, windowId]);
+
   if (!dataset) return <div className="empty-state">Dataset not found.</div>;
 
   return (
     <div className="table-window">
-      <DataTableToolbar
-        rowCount={dataset.rows.length}
-        visibleRows={visibleRows}
-        hasSelectedRange={hasSelectedRange}
-        canFillDownRange={canFillDownRange}
-        canPlotSelection={Boolean(selectionPlotSpec)}
-        hasSelectedCell={Boolean(selectedCell)}
-        hasSelectedColumn={Boolean(selectedColumn)}
-        onCopySelectedRange={copySelectedRange}
-        onClearSelectedRange={clearSelectedRange}
-        onFillDownSelectedRange={fillDownSelectedRange}
-        onPlotSelectedColumns={plotSelectedColumns}
-        onDeleteSelectedRow={deleteSelectedRow}
-        onDeleteSelectedColumn={deleteSelectedColumn}
-        onVisibleRowsChange={(nextVisibleRows, height) => {
-          setVisibleRows(nextVisibleRows);
-          updateWindow(windowId, { height });
-        }}
-      />
+      <div className="window-controls table-window-summary">
+        <span>
+          {dataset.rows.length} rows · virtualized · rows {visibleRows}
+        </span>
+      </div>
       <DataTableGrid
         parentRef={parentRef}
         table={table}

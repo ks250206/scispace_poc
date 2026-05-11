@@ -43,7 +43,11 @@ describe("Workbench performance regressions", () => {
       </DialogProvider>,
     );
 
-    await waitFor(() => expect(screen.getByText("800 rows · virtualized")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByText((text) => text.includes("800 rows · virtualized")),
+      ).toBeInTheDocument(),
+    );
     expect(document.querySelectorAll(".table-scroll tbody tr").length).toBeLessThan(40);
   });
 });

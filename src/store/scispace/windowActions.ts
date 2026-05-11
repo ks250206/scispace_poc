@@ -35,6 +35,11 @@ export const createWindowActions = ({
         plotSpecs,
         projectDirty: true,
         activeWindowId: state.activeWindowId === id ? undefined : state.activeWindowId,
+        tableMenuState: state.tableMenuState?.windowId === id ? undefined : state.tableMenuState,
+        plotMenuState:
+          target.kind === "plot" && target.plotId === state.plotMenuState?.plotId
+            ? undefined
+            : state.plotMenuState,
         currentPlotId:
           target.kind === "plot" && target.plotId === state.currentPlotId
             ? plotSpecs[0]?.id

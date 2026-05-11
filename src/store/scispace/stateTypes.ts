@@ -19,6 +19,39 @@ export interface ProjectSummary {
   updatedAt: number;
 }
 
+export type TableVisibleRows = 10 | 20 | 50;
+
+export interface TableMenuState {
+  windowId: string;
+  datasetId: string;
+  rowCount: number;
+  visibleRows: TableVisibleRows;
+  hasSelectedRange: boolean;
+  canFillDownRange: boolean;
+  canPlotSelection: boolean;
+  hasSelectedCell: boolean;
+  hasSelectedColumn: boolean;
+  actions: {
+    copySelectedRange: () => void;
+    clearSelectedRange: () => void;
+    fillDownSelectedRange: () => void;
+    plotSelectedColumns: () => void;
+    deleteSelectedRow: () => void;
+    deleteSelectedColumn: () => void;
+    setVisibleRows: (visibleRows: TableVisibleRows) => void;
+  };
+}
+
+export interface PlotMenuState {
+  plotId: string;
+  actions: {
+    openConfig: () => void;
+    copySchema: () => void;
+    exportPng: () => void;
+    exportSvg: () => void;
+  };
+}
+
 export interface ScispaceState {
   initialized: boolean;
   files: VirtualFile[];
@@ -39,6 +72,8 @@ export interface ScispaceState {
   activeDatasetId?: string;
   activeWindowId?: string;
   currentPlotId?: string;
+  tableMenuState?: TableMenuState;
+  plotMenuState?: PlotMenuState;
   viewport: ViewportState;
   initialize: () => Promise<void>;
   importTextFile: (name: string, text: string) => Promise<ImportFileResult>;
@@ -73,6 +108,10 @@ export interface ScispaceState {
     patch: Partial<Pick<WorkspaceWindow, "x" | "y" | "width" | "height">>,
   ) => void;
   focusWindow: (id: string) => void;
+  setTableMenuState: (state: TableMenuState) => void;
+  clearTableMenuState: (windowId: string) => void;
+  setPlotMenuState: (state: PlotMenuState) => void;
+  clearPlotMenuState: (plotId: string) => void;
   setViewport: (viewport: ViewportState) => void;
   sendCommandToTerminalLine: (command: string) => void;
 }

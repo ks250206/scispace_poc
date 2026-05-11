@@ -11,6 +11,7 @@ import {
 import { CanvasWindow } from "./CanvasWindow";
 import { uploadOpenCommand } from "./DataBrowser";
 import { useDialog } from "./dialog/DialogProvider";
+import { buildPlotSvg, safePlotFileName, svgDataUrl } from "./plotExport";
 import { useScispaceStore } from "../store/scispaceStore";
 
 const centerViewport = { x: -1920, y: -1080, scale: 1 };
@@ -76,12 +77,17 @@ export function Workbench() {
   const viewport = useScispaceStore((state) => state.viewport);
   const setViewport = useScispaceStore((state) => state.setViewport);
   const windows = useScispaceStore((state) => state.windows);
+  const datasets = useScispaceStore((state) => state.datasets);
+  const plotSpecs = useScispaceStore((state) => state.plotSpecs);
+  const activeWindowId = useScispaceStore((state) => state.activeWindowId);
   const projectImportInputRef = useRef<HTMLInputElement>(null);
   const dataLoadInputRef = useRef<HTMLInputElement>(null);
   const projects = useScispaceStore((state) => state.projects);
   const currentProjectId = useScispaceStore((state) => state.currentProjectId);
   const projectDirty = useScispaceStore((state) => state.projectDirty);
+  const currentPlotId = useScispaceStore((state) => state.currentPlotId);
   const runScispace = useScispaceStore((state) => state.runScispace);
+  const openPlotConfig = useScispaceStore((state) => state.openPlotConfig);
   const stageUploadPayload = useScispaceStore((state) => state.stageUploadPayload);
   const createNewProject = useScispaceStore((state) => state.createNewProject);
   const saveCurrentProject = useScispaceStore((state) => state.saveCurrentProject);
@@ -93,6 +99,7 @@ export function Workbench() {
   const redoStackLength = useScispaceStore((state) => state.redoStack.length);
   const undo = useScispaceStore((state) => state.undo);
   const redo = useScispaceStore((state) => state.redo);
+  const tableMenuState = useScispaceStore((state) => state.tableMenuState);
   const [isPanning, setIsPanning] = useState(false);
   const [openToolbarMenu, setOpenToolbarMenu] = useState<string>();
   const canvasDrag = useRef<{ x: number; y: number; originX: number; originY: number } | null>(
@@ -302,6 +309,70 @@ export function Workbench() {
     void switchProject(projectId);
   };
 
+  const activeWindow = windows.find((window) => window.id === activeWindowId);
+  const activeTableMenuState =
+    (!activeWindow || activeWindow.kind === "table") &&
+    (!activeWindow || tableMenuState?.windowId === activeWindow.id)
+      ? tableMenuState
+      : undefined;
+  const activePlotSpec = plotSpecs.find((plot) => plot.id === currentPlotId) ?? plotSpecs[0];
+  const activePlotDataset = datasets.find((dataset) => dataset.id === activePlotSpec?.source);
+  const hasResolvablePlotDataset =
+    Boolean(activePlotDataset) || Boolean(resolveActivePlotDatasetFromStore());
+  const resolveActivePlot = () => {
+    const state = useScispaceStore.getState();
+    const spec =
+      state.plotSpecs.find((plot) => plot.id === state.currentPlotId) ?? state.plotSpecs[0];
+    return {
+      spec,
+      dataset: state.datasets.find((dataset) => dataset.id === spec?.source),
+      registeredActions:
+        spec && state.plotMenuState?.plotId === spec.id ? state.plotMenuState.actions : undefined,
+    };
+  };
+  function resolveActivePlotDatasetFromStore() {
+    const state = useScispaceStore.getState();
+    const spec =
+      state.plotSpecs.find((plot) => plot.id === state.currentPlotId) ?? state.plotSpecs[0];
+    return state.datasets.find((dataset) => dataset.id === spec?.source);
+  }
+  const clickDownload = (href: string, download: string) => {
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = download;
+    link.click();
+  };
+  const copyActivePlotSchema = async () => {
+    const { spec } = resolveActivePlot();
+    if (!spec) return;
+    const result = await runScispace(`plot-schema ${spec.id}`, { source: "gui" });
+    if (result.kind !== "error") await navigator.clipboard?.writeText(result.output);
+  };
+  const openActivePlotConfig = () => {
+    const { spec, registeredActions } = resolveActivePlot();
+    if (registeredActions) {
+      registeredActions.openConfig();
+      return;
+    }
+    if (spec) openPlotConfig(spec.id);
+  };
+  const exportActivePlotPng = () => {
+    const { spec, registeredActions } = resolveActivePlot();
+    if (registeredActions) {
+      registeredActions.exportPng();
+      return;
+    }
+    if (!spec) return;
+    const canvas = document.querySelector<HTMLCanvasElement>(".plot-window canvas");
+    if (!canvas) return;
+    clickDownload(canvas.toDataURL("image/png"), safePlotFileName(spec.title, "png"));
+  };
+  const exportActivePlotSvg = () => {
+    const { spec, dataset } = resolveActivePlot();
+    if (!spec || !dataset) return;
+    clickDownload(svgDataUrl(buildPlotSvg(spec, dataset)), safePlotFileName(spec.title, "svg"));
+  };
+
   const toolbarMenus: ToolbarMenuProps[] = [
     {
       label: "Project",
@@ -333,9 +404,51 @@ export function Workbench() {
       openMenu: openToolbarMenu,
       setOpenMenu: setOpenToolbarMenu,
       items: [
-        { label: "Open Table", disabled: true },
-        { label: "Delete Row", disabled: true },
-        { label: "Delete Column", disabled: true },
+        {
+          label: "Copy TSV",
+          onSelect: () => activeTableMenuState?.actions.copySelectedRange(),
+          disabled: !activeTableMenuState?.hasSelectedRange,
+        },
+        {
+          label: "Delete selected cells",
+          onSelect: () => activeTableMenuState?.actions.clearSelectedRange(),
+          disabled: !activeTableMenuState?.hasSelectedRange,
+        },
+        {
+          label: "Fill down",
+          onSelect: () => activeTableMenuState?.actions.fillDownSelectedRange(),
+          disabled: !activeTableMenuState?.canFillDownRange,
+        },
+        {
+          label: "Plot selection",
+          onSelect: () => activeTableMenuState?.actions.plotSelectedColumns(),
+          disabled: !activeTableMenuState?.canPlotSelection,
+        },
+        {
+          label: "Delete row",
+          onSelect: () => activeTableMenuState?.actions.deleteSelectedRow(),
+          disabled: !activeTableMenuState?.hasSelectedCell,
+        },
+        {
+          label: "Delete column",
+          onSelect: () => activeTableMenuState?.actions.deleteSelectedColumn(),
+          disabled: !activeTableMenuState?.hasSelectedColumn,
+        },
+        {
+          label: "Rows 10",
+          onSelect: () => activeTableMenuState?.actions.setVisibleRows(10),
+          disabled: !activeTableMenuState || activeTableMenuState.visibleRows === 10,
+        },
+        {
+          label: "Rows 20",
+          onSelect: () => activeTableMenuState?.actions.setVisibleRows(20),
+          disabled: !activeTableMenuState || activeTableMenuState.visibleRows === 20,
+        },
+        {
+          label: "Rows 50",
+          onSelect: () => activeTableMenuState?.actions.setVisibleRows(50),
+          disabled: !activeTableMenuState || activeTableMenuState.visibleRows === 50,
+        },
       ],
     },
     {
@@ -343,9 +456,23 @@ export function Workbench() {
       openMenu: openToolbarMenu,
       setOpenMenu: setOpenToolbarMenu,
       items: [
-        { label: "New Plot", disabled: true },
-        { label: "Plot Config", disabled: true },
-        { label: "Export Plot", disabled: true },
+        {
+          label: "Plot Config",
+          onSelect: openActivePlotConfig,
+        },
+        {
+          label: "Copy plot schema",
+          onSelect: () => void copyActivePlotSchema(),
+        },
+        {
+          label: "Export plot PNG",
+          onSelect: exportActivePlotPng,
+        },
+        {
+          label: "Export plot SVG",
+          onSelect: exportActivePlotSvg,
+          disabled: !hasResolvablePlotDataset,
+        },
       ],
     },
     {

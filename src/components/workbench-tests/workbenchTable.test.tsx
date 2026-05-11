@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
+  clickToolbarItem,
   renderWorkbench,
   setupWorkbenchSuite,
   storeState,
@@ -13,17 +14,19 @@ describe("Workbench table UI", () => {
   setupWorkbenchSuite();
 
   it("resizes the table window when changing visible row count", async () => {
+    const user = userEvent.setup();
     await renderWorkbench();
     const tableScroll = document.querySelector(".table-scroll") as HTMLElement;
-    expect(screen.getByLabelText("Visible rows")).toHaveValue("10");
+    expect(screen.getByText("160 rows · virtualized · rows 10")).toBeInTheDocument();
     expect(tableScroll.style.getPropertyValue("--table-visible-height")).toBe("352px");
     expect(storeState().windows.find((window) => window.id === "table-seed")).toMatchObject({
       height: 424,
     });
 
-    fireEvent.change(screen.getByLabelText("Visible rows"), { target: { value: "50" } });
+    await clickToolbarItem(user, "Table", "Rows 50");
 
     expect(tableScroll.style.getPropertyValue("--table-visible-height")).toBe("1632px");
+    expect(screen.getByText("160 rows · virtualized · rows 50")).toBeInTheDocument();
     await waitFor(() =>
       expect(storeState().windows.find((window) => window.id === "table-seed")).toMatchObject({
         height: 1704,
@@ -105,24 +108,22 @@ describe("Workbench table UI", () => {
 
   it("copies, clears, and fills selected table ranges through scispace commands", async () => {
     const user = userEvent.setup();
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText },
-    });
+    const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
     await renderWorkbench();
-    expect(screen.getByRole("button", { name: "Copy TSV" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Delete selected cells" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Fill down" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Table" }));
+    expect(screen.getByRole("menuitem", { name: "Copy TSV" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Delete selected cells" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Fill down" })).toBeDisabled();
+    await user.keyboard("{Escape}");
 
     const cells = await waitForTableBodyCells(10);
     await user.click(cells[1] as HTMLElement);
     fireEvent.click(cells[6], { shiftKey: true });
 
-    await user.click(screen.getByRole("button", { name: "Copy TSV" }));
+    await clickToolbarItem(user, "Table", "Copy TSV");
     expect(writeText).toHaveBeenCalledWith("0\t3\n0.125\t4.4902");
 
-    await user.click(screen.getByRole("button", { name: "Delete selected cells" }));
+    await clickToolbarItem(user, "Table", "Delete selected cells");
     await user.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(storeState().datasets[0]?.rows[0]?.time).toBe(""));
     expect(storeState().datasets[0]?.rows[1]?.signal).toBe("");
@@ -133,7 +134,7 @@ describe("Workbench table UI", () => {
 
     await user.click(cells[3] as HTMLElement);
     fireEvent.click(cells[11], { shiftKey: true });
-    await user.click(screen.getByRole("button", { name: "Fill down" }));
+    await clickToolbarItem(user, "Table", "Fill down");
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Fill down" }));
     await waitFor(() => expect(storeState().datasets[0]?.rows[1]?.background).toBe(7));
     expect(storeState().datasets[0]?.rows[2]?.background).toBe(7);
@@ -146,13 +147,15 @@ describe("Workbench table UI", () => {
   it("creates plots from selected table columns through scispace commands", async () => {
     const user = userEvent.setup();
     await renderWorkbench();
-    expect(screen.getByRole("button", { name: "Plot selection" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Table" }));
+    expect(screen.getByRole("menuitem", { name: "Plot selection" })).toBeDisabled();
+    await user.keyboard("{Escape}");
 
     const cells = await waitForTableBodyCells(10);
     await user.click(cells[1] as HTMLElement);
     fireEvent.click(cells[7], { shiftKey: true });
 
-    await user.click(screen.getByRole("button", { name: "Plot selection" }));
+    await clickToolbarItem(user, "Table", "Plot selection");
 
     await waitFor(() =>
       expect(storeState().commandHistory.at(-1)).toMatchObject({
@@ -170,13 +173,16 @@ describe("Workbench table UI", () => {
   it("deletes selected table rows and columns through scispace commands", async () => {
     const user = userEvent.setup();
     await renderWorkbench();
-    expect(screen.getByRole("button", { name: "Delete row" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Delete column" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Table" }));
+    expect(screen.getByRole("menuitem", { name: "Delete row" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Delete column" })).toBeDisabled();
+    await user.keyboard("{Escape}");
 
     const cells = await waitForTableBodyCells(2);
     await user.click(cells[2] as HTMLElement);
-    expect(screen.getByRole("button", { name: "Delete row" })).toBeEnabled();
-    await user.click(screen.getByRole("button", { name: "Delete row" }));
+    await user.click(screen.getByRole("button", { name: "Table" }));
+    expect(screen.getByRole("menuitem", { name: "Delete row" })).toBeEnabled();
+    await user.click(screen.getByRole("menuitem", { name: "Delete row" }));
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(storeState().datasets[0]?.rows).toHaveLength(159));
@@ -186,8 +192,9 @@ describe("Workbench table UI", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "Select column background" }));
-    expect(screen.getByRole("button", { name: "Delete column" })).toBeEnabled();
-    await user.click(screen.getByRole("button", { name: "Delete column" }));
+    await user.click(screen.getByRole("button", { name: "Table" }));
+    expect(screen.getByRole("menuitem", { name: "Delete column" })).toBeEnabled();
+    await user.click(screen.getByRole("menuitem", { name: "Delete column" }));
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() =>
@@ -209,7 +216,7 @@ describe("Workbench table UI", () => {
     await renderWorkbench();
     const cells = await waitForTableBodyCells(2);
     await user.click(cells[2] as HTMLElement);
-    await user.click(screen.getByRole("button", { name: "Delete row" }));
+    await clickToolbarItem(user, "Table", "Delete row");
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(storeState().datasets[0]?.rows).toHaveLength(160);

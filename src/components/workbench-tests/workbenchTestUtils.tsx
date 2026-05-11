@@ -10,7 +10,9 @@ export const storeState = () => useScispaceStore.getState();
 export const renderWorkbench = async () => {
   render(<App />);
   await waitFor(() => expect(screen.getByText("SciSpace")).toBeInTheDocument());
-  await waitFor(() => expect(screen.getByText("160 rows · virtualized")).toBeInTheDocument());
+  await waitFor(() =>
+    expect(screen.getByText((text) => text.includes("160 rows · virtualized"))).toBeInTheDocument(),
+  );
 };
 
 export const initializeStore = async () => {
