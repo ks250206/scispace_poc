@@ -127,6 +127,9 @@ export const terminalPrompt = (mode: TerminalMode, cwd: string): string => {
   return mode === "repl" ? `scispace-repl:${path}> ` : `unsafe-shell:${path}$ `;
 };
 
+export const terminalPromptOutput = (output: string, mode: TerminalMode, cwd: string): string =>
+  `\r\n${output}\r\n${terminalPrompt(mode, cwd)}`;
+
 export const terminalControlResult = (
   command: string,
   args: string[],
@@ -665,7 +668,7 @@ export function TerminalPanel() {
           editableShell._cursor = 0;
         }
         writeOutput(
-          `\r\n${result.output}\n${terminalPrompt(result.mode, terminalFsStateRef.current.cwd)}`,
+          terminalPromptOutput(result.output, result.mode, terminalFsStateRef.current.cwd),
         );
         scrollToBottom();
         return;
@@ -682,7 +685,11 @@ export function TerminalPanel() {
         }
         void runScispace(replCommand, { source: "terminal" }).then((result) => {
           writeOutput(
-            `\r\n${result.output}\n${terminalPrompt(terminalModeRef.current.mode, terminalFsStateRef.current.cwd)}`,
+            terminalPromptOutput(
+              result.output,
+              terminalModeRef.current.mode,
+              terminalFsStateRef.current.cwd,
+            ),
           );
           scrollToBottom();
         });
