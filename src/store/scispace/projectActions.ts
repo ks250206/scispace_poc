@@ -12,30 +12,14 @@ import {
 import type { ScispaceState } from "./stateTypes";
 import { normalizeColumnSelections } from "./createStoreHelpers";
 import { ensureWorkspaceWindows, normalizePlotSpec, seedPlot } from "./workspaceDefaults";
+import { importedProjectRecord } from "./projectJson";
+import { uniqueProjectName } from "./projectNames";
 
 interface ProjectActionContext {
   db: SciSpaceDatabase;
   get: StoreApi<ScispaceState>["getState"];
   set: StoreApi<ScispaceState>["setState"];
 }
-
-const uniqueProjectName = (
-  requestedName: string,
-  projects: { id: string; name: string }[],
-  currentProjectId?: string,
-): string => {
-  const existingNames = new Set(
-    projects.filter((project) => project.id !== currentProjectId).map((project) => project.name),
-  );
-  if (!existingNames.has(requestedName)) return requestedName;
-  let index = 1;
-  let candidate = `${requestedName} (${index})`;
-  while (existingNames.has(candidate)) {
-    index += 1;
-    candidate = `${requestedName} (${index})`;
-  }
-  return candidate;
-};
 
 export const createProjectActions = ({
   db,
@@ -253,80 +237,13 @@ export const createProjectActions = ({
   },
 
   importProjectJson: async (json) => {
-    const parsed: unknown = JSON.parse(json);
-    const candidate =
-      typeof parsed === "object" && parsed !== null && "project" in parsed
-        ? (parsed as { project?: unknown }).project
-        : parsed;
-    if (typeof candidate !== "object" || candidate === null) {
-      throw new Error("Project JSON must contain a project object");
-    }
-    const project = candidate as {
-      name?: unknown;
-      files?: unknown;
-      datasets?: unknown;
-      layout?: unknown;
-      createdAt?: unknown;
-    };
-    if (!Array.isArray(project.files) || !Array.isArray(project.datasets)) {
-      throw new Error("Project JSON must contain files and datasets arrays");
-    }
-    if (typeof project.layout !== "object" || project.layout === null) {
-      throw new Error("Project JSON must contain a layout object");
-    }
-    const layout = project.layout as {
-      windows?: unknown;
-      viewport?: unknown;
-      plotSpecs?: unknown;
-      commandHistory?: unknown;
-      uploadPayloads?: unknown;
-      columnSelections?: unknown;
-    };
-    if (!Array.isArray(layout.windows) || typeof layout.viewport !== "object") {
-      throw new Error("Project JSON layout must contain windows and viewport");
-    }
-
     if (get().initialized && get().currentProjectId) {
       await get().saveCurrentProject();
     }
 
     const id = `project-${crypto.randomUUID()}`;
-    const name = uniqueProjectName(
-      typeof project.name === "string" && project.name.trim()
-        ? project.name.trim()
-        : "Imported Project",
-      get().projects,
-    );
-    const datasets = project.datasets.map(normalizeDataset);
-    const plotSpecs = (Array.isArray(layout.plotSpecs) ? layout.plotSpecs : [seedPlot()]).map(
-      normalizePlotSpec,
-    );
-    const windows = ensureWorkspaceWindows(layout.windows as ScispaceState["windows"]);
-    const columnSelections = normalizeColumnSelections(
-      datasets,
-      (layout.columnSelections ?? {}) as Record<string, string[]>,
-    );
-    const now = Date.now();
-    const record = {
-      id,
-      name,
-      files: project.files as ScispaceState["files"],
-      datasets,
-      layout: {
-        windows,
-        viewport: layout.viewport as ScispaceState["viewport"],
-        plotSpecs,
-        commandHistory: Array.isArray(layout.commandHistory) ? layout.commandHistory : [],
-        uploadPayloads:
-          typeof layout.uploadPayloads === "object" && layout.uploadPayloads !== null
-            ? (layout.uploadPayloads as ScispaceState["uploadPayloads"])
-            : {},
-        columnSelections,
-        currentProjectId: id,
-      },
-      createdAt: typeof project.createdAt === "number" ? project.createdAt : now,
-      updatedAt: now,
-    };
+    const record = importedProjectRecord(json, id, get().projects);
+    const { columnSelections, plotSpecs, windows } = record.layout;
 
     await db.transaction("rw", db.files, db.datasets, db.layout, db.projects, async () => {
       await db.projects.put(record);
@@ -351,11 +268,11 @@ export const createProjectActions = ({
       uploadPayloads: record.layout.uploadPayloads ?? {},
       undoStack: [],
       redoStack: [],
-      columnSelections,
+      columnSelections: columnSelections ?? {},
       terminalCommandLineRequest: undefined,
       activeDatasetId: record.datasets[0]?.id,
       activeWindowId: undefined,
-      currentPlotId: plotSpecs[0]?.id,
+      currentPlotId: plotSpecs?.[0]?.id,
       tableMenuState: undefined,
       plotMenuState: undefined,
       viewport: record.layout.viewport,
