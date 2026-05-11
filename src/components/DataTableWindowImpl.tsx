@@ -3,6 +3,7 @@ import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { datasetColumnIds } from "../domain/csv";
 import { useScispaceStore } from "../store/scispaceStore";
+import { useContextMenu, type ContextMenuItem } from "./context-menu/ContextMenuProvider";
 import { DataTableGrid } from "./data-table/DataTableGrid";
 import { useDialog } from "./dialog/DialogProvider";
 import {
@@ -22,6 +23,8 @@ import {
   rowHeight,
   tableScrollHeight,
   tableWindowHeightForRows,
+  type TableCellPosition,
+  type TableRangeBounds,
   type TableVisibleRows,
 } from "./data-table/tableModel";
 import { useTableSelection } from "./data-table/useTableSelection";
@@ -37,8 +40,10 @@ export type { TableVisibleRows };
 
 export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWindowProps) {
   const dialog = useDialog();
+  const { openContextMenu } = useContextMenu();
   const dataset = useScispaceStore((state) => state.datasets.find((item) => item.id === datasetId));
   const updateWindow = useScispaceStore((state) => state.updateWindow);
+  const focusWindow = useScispaceStore((state) => state.focusWindow);
   const runScispace = useScispaceStore((state) => state.runScispace);
   const setTableMenuState = useScispaceStore((state) => state.setTableMenuState);
   const clearTableMenuState = useScispaceStore((state) => state.clearTableMenuState);
@@ -136,9 +141,9 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     });
   };
 
-  const deleteSelectedRow = async () => {
-    if (!dataset || !selectedCell) return;
-    const rowNumber = selectedCell.rowIndex + 1;
+  const deleteRowAt = async (rowIndex: number) => {
+    if (!dataset) return;
+    const rowNumber = rowIndex + 1;
     const confirmed = await dialog.confirm({
       title: "Delete row",
       message: `Delete row ${rowNumber} from ${dataset.name}?`,
@@ -147,20 +152,30 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     });
     if (!confirmed) return;
     clearSelection();
-    void runScispace(deleteRowCommand(dataset.name, selectedCell.rowIndex), { source: "gui" });
+    void runScispace(deleteRowCommand(dataset.name, rowIndex), { source: "gui" });
   };
 
-  const deleteSelectedColumn = async () => {
-    if (!dataset || !selectedColumn) return;
+  const deleteSelectedRow = async () => {
+    if (!selectedCell) return;
+    await deleteRowAt(selectedCell.rowIndex);
+  };
+
+  const deleteColumn = async (columnId: string) => {
+    if (!dataset) return;
     const confirmed = await dialog.confirm({
       title: "Delete column",
-      message: `Delete column ${selectedColumn} from ${dataset.name}?`,
+      message: `Delete column ${columnId} from ${dataset.name}?`,
       confirmLabel: "Delete",
       tone: "destructive",
     });
     if (!confirmed) return;
     clearSelection();
-    void runScispace(deleteColumnCommand(dataset.name, selectedColumn), { source: "gui" });
+    void runScispace(deleteColumnCommand(dataset.name, columnId), { source: "gui" });
+  };
+
+  const deleteSelectedColumn = async () => {
+    if (!selectedColumn) return;
+    await deleteColumn(selectedColumn);
   };
 
   const rangeBounds = rangeBoundsFromSelection(selectedRange, visibleDatasetColumns);
@@ -172,45 +187,63 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     return plotSelectionFromTableSelection(rangeBounds, selectedColumn, visibleDatasetColumns);
   }, [dataset, rangeBounds, selectedColumn, visibleDatasetColumns]);
 
-  const copySelectedRange = () => {
-    if (!dataset || !rangeBounds) return;
+  const copyRange = (bounds: TableRangeBounds) => {
+    if (!dataset) return;
     const tsv = dataset.rows
-      .slice(rangeBounds.minRow, rangeBounds.maxRow + 1)
-      .map((row) =>
-        rangeBounds.rangeColumns.map((column) => formatCellValue(row[column])).join("\t"),
-      )
+      .slice(bounds.minRow, bounds.maxRow + 1)
+      .map((row) => bounds.rangeColumns.map((column) => formatCellValue(row[column])).join("\t"))
       .join("\n");
     void navigator.clipboard?.writeText(tsv);
   };
 
-  const clearSelectedRange = async () => {
-    if (!dataset || !rangeBounds) return;
+  const copySelectedRange = () => {
+    if (!rangeBounds) return;
+    copyRange(rangeBounds);
+  };
+
+  const clearRange = async (bounds: TableRangeBounds) => {
+    if (!dataset) return;
     const confirmed = await dialog.confirm({
       title: "Delete selected cells",
-      message: `Delete selected cells from rows ${rangeBounds.minRow + 1}-${rangeBounds.maxRow + 1} in ${dataset.name}?`,
+      message: `Delete selected cells from rows ${bounds.minRow + 1}-${bounds.maxRow + 1} in ${dataset.name}?`,
       confirmLabel: "Delete",
       tone: "destructive",
     });
     if (!confirmed) return;
     clearSelection();
-    void runScispace(rangeCommand(dataset.name, "clear", rangeBounds), { source: "gui" });
+    void runScispace(rangeCommand(dataset.name, "clear", bounds), { source: "gui" });
   };
 
-  const fillDownSelectedRange = async () => {
-    if (!dataset || !rangeBounds || rangeBounds.maxRow <= rangeBounds.minRow) return;
+  const clearSelectedRange = async () => {
+    if (!rangeBounds) return;
+    await clearRange(rangeBounds);
+  };
+
+  const fillDownRange = async (bounds: TableRangeBounds) => {
+    if (!dataset || bounds.maxRow <= bounds.minRow) return;
     const confirmed = await dialog.confirm({
       title: "Fill down",
-      message: `Fill down rows ${rangeBounds.minRow + 1}-${rangeBounds.maxRow + 1} in ${dataset.name}?`,
+      message: `Fill down rows ${bounds.minRow + 1}-${bounds.maxRow + 1} in ${dataset.name}?`,
       confirmLabel: "Fill down",
     });
     if (!confirmed) return;
     clearSelection();
-    void runScispace(rangeCommand(dataset.name, "fill-down", rangeBounds), { source: "gui" });
+    void runScispace(rangeCommand(dataset.name, "fill-down", bounds), { source: "gui" });
+  };
+
+  const fillDownSelectedRange = async () => {
+    if (!rangeBounds) return;
+    await fillDownRange(rangeBounds);
+  };
+
+  const plotSelection = (selection: NonNullable<typeof selectionPlotSpec>) => {
+    if (!dataset) return;
+    void runScispace(plotCommand(dataset.name, selection), { source: "gui" });
   };
 
   const plotSelectedColumns = () => {
-    if (!dataset || !selectionPlotSpec) return;
-    void runScispace(plotCommand(dataset.name, selectionPlotSpec), { source: "gui" });
+    if (!selectionPlotSpec) return;
+    plotSelection(selectionPlotSpec);
   };
 
   const updateVisibleRows = useCallback(
@@ -223,6 +256,86 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
 
   const isCellInRange = (rowIndex: number, column: string): boolean => {
     return positionInRange(rowIndex, column, rangeBounds, visibleDatasetColumns);
+  };
+
+  const singleCellRange = (position: TableCellPosition): TableRangeBounds | undefined =>
+    rangeBoundsFromSelection({ anchor: position, focus: position }, visibleDatasetColumns);
+
+  const openTableContextMenu = (
+    position: { x: number; y: number },
+    context?: { cell?: TableCellPosition; column?: string },
+  ) => {
+    focusWindow(windowId);
+    const bounds = context?.cell ? singleCellRange(context.cell) : rangeBounds;
+    const column = context?.column ?? context?.cell?.column ?? selectedColumn;
+    const plotSelectionSpec = plotSelectionFromTableSelection(
+      bounds,
+      context?.column ?? selectedColumn,
+      visibleDatasetColumns,
+    );
+    const items: ContextMenuItem[] = [
+      {
+        label: "Copy TSV",
+        disabled: !bounds,
+        onSelect: () => {
+          if (bounds) copyRange(bounds);
+        },
+      },
+      {
+        label: "Delete selected cells",
+        disabled: !bounds,
+        danger: true,
+        onSelect: () => {
+          if (bounds) void clearRange(bounds);
+        },
+      },
+      {
+        label: "Fill down",
+        disabled: !bounds || bounds.maxRow <= bounds.minRow,
+        onSelect: () => {
+          if (bounds) void fillDownRange(bounds);
+        },
+      },
+      {
+        label: "Plot selection",
+        disabled: !plotSelectionSpec,
+        onSelect: () => {
+          if (plotSelectionSpec) plotSelection(plotSelectionSpec);
+        },
+      },
+      {
+        label: "Delete row",
+        disabled: context?.cell?.rowIndex == null,
+        danger: true,
+        onSelect: () => {
+          if (context?.cell) void deleteRowAt(context.cell.rowIndex);
+        },
+      },
+      {
+        label: "Delete column",
+        disabled: !column,
+        danger: true,
+        onSelect: () => {
+          if (column) void deleteColumn(column);
+        },
+      },
+      {
+        label: "Rows 10",
+        disabled: visibleRows === 10,
+        onSelect: () => updateVisibleRows(10),
+      },
+      {
+        label: "Rows 20",
+        disabled: visibleRows === 20,
+        onSelect: () => updateVisibleRows(20),
+      },
+      {
+        label: "Rows 50",
+        disabled: visibleRows === 50,
+        onSelect: () => updateVisibleRows(50),
+      },
+    ];
+    openContextMenu({ x: position.x, y: position.y, title: dataset?.name, items });
   };
 
   useEffect(() => {
@@ -339,6 +452,15 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
         onEditingCellChange={setEditingCell}
         onCommitEdit={commitEdit}
         onCancelEdit={cancelEdit}
+        onOpenTableContextMenu={(position) => openTableContextMenu(position)}
+        onOpenCellContextMenu={(position, cell) => {
+          startRangeSelection(cell);
+          openTableContextMenu(position, { cell });
+        }}
+        onOpenColumnContextMenu={(position, column) => {
+          selectColumn(column);
+          openTableContextMenu(position, { column });
+        }}
       />
     </div>
   );

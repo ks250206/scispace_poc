@@ -41,6 +41,19 @@ describe("Workbench workspace UI", () => {
     expect(screen.getByRole("menuitem", { name: "New Folder" })).toBeInTheDocument();
   });
 
+  it("shows common window context actions and closes them with escape", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    fireEvent.contextMenu(screen.getByText("Plot - waveform.csv"), { clientX: 400, clientY: 160 });
+
+    expect(screen.getByRole("menu", { name: "Plot - waveform.csv" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Bring to Front" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Close Window" })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("menu", { name: "Plot - waveform.csv" })).not.toBeInTheDocument();
+  });
+
   it("pans the workspace from empty background drag without panning from windows", async () => {
     await renderWorkbench();
     const plane = document.querySelector(".workspace-plane") as HTMLElement;

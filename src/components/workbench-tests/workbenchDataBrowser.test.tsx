@@ -210,4 +210,14 @@ describe("Workbench data browser UI", () => {
     expect(screen.queryByRole("menuitem", { name: "Plot analysis" })).not.toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Rename analysis" })).toBeInTheDocument();
   });
+
+  it("opens data browser item actions from right click", async () => {
+    await renderWorkbench();
+    const waveformRow = document.querySelector(".tree-row.file") as HTMLElement;
+    fireEvent.contextMenu(waveformRow, { clientX: 90, clientY: 140 });
+
+    expect(screen.getByRole("menu", { name: "~/raw/waveform.csv" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Table" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Plot waveform.csv" })).toBeInTheDocument();
+  });
 });

@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { datasetColumnIds } from "../domain/csv";
 import type { Dataset, VirtualFile } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
+import { useContextMenu, type ContextMenuItem } from "./context-menu/ContextMenuProvider";
 import { useDialog } from "./dialog/DialogProvider";
 
 const depthOf = (path: string): number =>
@@ -57,9 +58,9 @@ const columnsSelectedForDataset = (
 
 export function DataBrowser() {
   const dialog = useDialog();
+  const { openContextMenu } = useContextMenu();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [collapsedDatasetIds, setCollapsedDatasetIds] = useState<Set<string>>(() => new Set());
-  const [openMenuFileId, setOpenMenuFileId] = useState<string>();
   const files = useScispaceStore((state) => state.files);
   const datasets = useScispaceStore((state) => state.datasets);
   const activeDatasetId = useScispaceStore((state) => state.activeDatasetId);
@@ -98,13 +99,6 @@ export function DataBrowser() {
       confirmLabel: "Create",
     });
     if (name) void runScispace(`file-mkdir ~/raw/${quoteCommandArg(name)}`, { source: "gui" });
-  };
-
-  const closeItemMenu = () => setOpenMenuFileId(undefined);
-
-  const runItemAction = (action: () => void) => {
-    closeItemMenu();
-    action();
   };
 
   const handleRename = async (file: VirtualFile) => {
@@ -173,6 +167,62 @@ export function DataBrowser() {
     });
   };
 
+  const fileContextItems = (file: VirtualFile, dataset?: Dataset): ContextMenuItem[] => {
+    const items: ContextMenuItem[] = [];
+    if (dataset) {
+      items.push(
+        {
+          label: "Table",
+          onSelect: () => handleOpenTable(dataset.id),
+        },
+        {
+          label: "Plot",
+          ariaLabel: `Plot ${file.name}`,
+          onSelect: () => handlePlotDataset(dataset.id),
+        },
+      );
+    }
+    if (!dataset && file.kind === "file") {
+      items.push({
+        label: "Load",
+        ariaLabel: `Load ${file.name}`,
+        onSelect: () => openImportThroughCommand(file.name, file.text ?? ""),
+      });
+    }
+    items.push(
+      {
+        label: "Move",
+        ariaLabel: `Move ${file.name}`,
+        onSelect: () => void handleMove(file),
+      },
+      {
+        label: "Rename",
+        ariaLabel: `Rename ${file.name}`,
+        onSelect: () => void handleRename(file),
+      },
+      {
+        label: "Delete",
+        ariaLabel: `Delete ${file.name}`,
+        danger: true,
+        onSelect: () => void handleDelete(file),
+      },
+    );
+    return items;
+  };
+
+  const openFileContextMenu = (
+    file: VirtualFile,
+    dataset: Dataset | undefined,
+    position: { x: number; y: number },
+  ) => {
+    openContextMenu({
+      x: position.x,
+      y: position.y,
+      title: file.path,
+      items: fileContextItems(file, dataset),
+    });
+  };
+
   return (
     <div
       className="data-browser"
@@ -205,7 +255,8 @@ export function DataBrowser() {
                 style={{ "--tree-depth": depthOf(file.path) } as CSSProperties}
                 onContextMenu={(event) => {
                   event.preventDefault();
-                  setOpenMenuFileId(file.id);
+                  event.stopPropagation();
+                  openFileContextMenu(file, dataset, { x: event.clientX, y: event.clientY });
                 }}
               >
                 <span className="tree-indent" />
@@ -241,74 +292,17 @@ export function DataBrowser() {
                   <button
                     type="button"
                     aria-label={`Actions ${file.name}`}
-                    aria-expanded={openMenuFileId === file.id}
+                    aria-haspopup="menu"
                     className="tree-action tree-menu-trigger"
-                    onClick={() =>
-                      setOpenMenuFileId((current) => (current === file.id ? undefined : file.id))
-                    }
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      openFileContextMenu(file, dataset, { x: rect.left, y: rect.bottom + 4 });
+                    }}
                   >
                     ⋯
                   </button>
                 </div>
-                {openMenuFileId === file.id ? (
-                  <div className="tree-menu" role="menu" aria-label={`Actions for ${file.name}`}>
-                    {dataset ? (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => runItemAction(() => handleOpenTable(dataset.id))}
-                      >
-                        Table
-                      </button>
-                    ) : null}
-                    {dataset ? (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        aria-label={`Plot ${file.name}`}
-                        onClick={() => runItemAction(() => handlePlotDataset(dataset.id))}
-                      >
-                        Plot
-                      </button>
-                    ) : null}
-                    {!dataset && file.kind === "file" ? (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        aria-label={`Load ${file.name}`}
-                        onClick={() =>
-                          runItemAction(() => openImportThroughCommand(file.name, file.text ?? ""))
-                        }
-                      >
-                        Load
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      role="menuitem"
-                      aria-label={`Move ${file.name}`}
-                      onClick={() => runItemAction(() => void handleMove(file))}
-                    >
-                      Move
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      aria-label={`Rename ${file.name}`}
-                      onClick={() => runItemAction(() => void handleRename(file))}
-                    >
-                      Rename
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      aria-label={`Delete ${file.name}`}
-                      onClick={() => runItemAction(() => void handleDelete(file))}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                ) : null}
               </div>
               {dataset && !isCollapsed
                 ? dataset.columns.map((column) => (

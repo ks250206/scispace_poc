@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { DataTableWindow } from "../DataTableWindow";
+import { ContextMenuProvider } from "../context-menu/ContextMenuProvider";
 import { DialogProvider } from "../dialog/DialogProvider";
 import { ImportSettingsWindow } from "../ImportSettingsWindow";
 import { setupWorkbenchSuite, storeState } from "./workbenchTestUtils";
@@ -39,7 +40,9 @@ describe("Workbench performance regressions", () => {
 
     render(
       <DialogProvider>
-        <DataTableWindow datasetId={dataset?.id ?? ""} windowId="large-table-window" />
+        <ContextMenuProvider>
+          <DataTableWindow datasetId={dataset?.id ?? ""} windowId="large-table-window" />
+        </ContextMenuProvider>
       </DialogProvider>,
     );
 

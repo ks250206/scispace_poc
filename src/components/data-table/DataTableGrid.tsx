@@ -43,6 +43,9 @@ interface DataTableGridProps {
   onEditingCellChange: (editingCell: TableEditingCell) => void;
   onCommitEdit: (value?: string) => void;
   onCancelEdit: () => void;
+  onOpenTableContextMenu: (position: { x: number; y: number }) => void;
+  onOpenCellContextMenu: (position: { x: number; y: number }, cell: TableCellPosition) => void;
+  onOpenColumnContextMenu: (position: { x: number; y: number }, column: string) => void;
 }
 
 export const DataTableGrid = memo(function DataTableGrid({
@@ -70,6 +73,9 @@ export const DataTableGrid = memo(function DataTableGrid({
   onEditingCellChange,
   onCommitEdit,
   onCancelEdit,
+  onOpenTableContextMenu,
+  onOpenCellContextMenu,
+  onOpenColumnContextMenu,
 }: DataTableGridProps) {
   return (
     <div
@@ -81,6 +87,12 @@ export const DataTableGrid = memo(function DataTableGrid({
           "--table-width": `${tableWidth}px`,
         } as CSSProperties
       }
+      onContextMenu={(event) => {
+        if (event.target !== event.currentTarget) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onOpenTableContextMenu({ x: event.clientX, y: event.clientY });
+      }}
     >
       <table style={{ width: tableWidth, minWidth: tableWidth }}>
         <thead>
@@ -101,6 +113,14 @@ export const DataTableGrid = memo(function DataTableGrid({
                     className="table-header-button"
                     aria-label={`Select column ${header.column.id}`}
                     onClick={() => onSelectColumn(header.column.id)}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onOpenColumnContextMenu(
+                        { x: event.clientX, y: event.clientY },
+                        header.column.id,
+                      );
+                    }}
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
                   </button>
@@ -174,6 +194,14 @@ export const DataTableGrid = memo(function DataTableGrid({
                       onPointerUp={() => onRangeDraggingChange(false)}
                       onDoubleClick={() => onStartEdit(virtualRow.index, column, value)}
                       onKeyDown={(event) => onCellKeyDown(event, virtualRow.index, column, value)}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onOpenCellContextMenu(
+                          { x: event.clientX, y: event.clientY },
+                          { rowIndex: virtualRow.index, column },
+                        );
+                      }}
                     >
                       {isEditingCell ? (
                         <input

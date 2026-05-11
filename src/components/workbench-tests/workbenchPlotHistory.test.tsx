@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -66,6 +66,37 @@ describe("Workbench plot and history UI", () => {
       .find((element) => element.download?.endsWith(".svg"));
     expect(svgLink?.href).toMatch(/^data:image\/svg\+xml/);
     expect(svgLink?.download).toBe("waveform.csv_signal_vs_time.svg");
+  });
+
+  it("runs plot actions from the right click context menu", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
+    const toDataUrl = vi
+      .spyOn(HTMLCanvasElement.prototype, "toDataURL")
+      .mockReturnValue("data:image/png;base64,plot");
+    const click = vi.fn();
+    const createElement = vi.spyOn(document, "createElement");
+    createElement.mockImplementation(((tagName: string) => {
+      const element = document.createElementNS("http://www.w3.org/1999/xhtml", tagName);
+      if (tagName === "a") {
+        Object.defineProperty(element, "click", { value: click });
+      }
+      return element;
+    }) as typeof document.createElement);
+
+    await renderWorkbench();
+    const plotHost = document.querySelector(".plot-host") as HTMLElement;
+    fireEvent.contextMenu(plotHost, { clientX: 360, clientY: 240 });
+    await user.click(screen.getByRole("menuitem", { name: "Copy plot schema" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+
+    fireEvent.contextMenu(plotHost, { clientX: 360, clientY: 240 });
+    await user.click(screen.getByRole("menuitem", { name: "Export plot PNG" }));
+    expect(toDataUrl).toHaveBeenCalledWith("image/png");
+
+    fireEvent.contextMenu(plotHost, { clientX: 360, clientY: 240 });
+    await user.click(screen.getByRole("menuitem", { name: "Export plot SVG" }));
+    expect(click).toHaveBeenCalled();
   });
 
   it("replays and copies commands from the command history window", async () => {

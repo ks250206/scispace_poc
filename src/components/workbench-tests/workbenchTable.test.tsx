@@ -144,6 +144,54 @@ describe("Workbench table UI", () => {
     });
   });
 
+  it("runs table actions from the right click context menu", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
+    await renderWorkbench();
+    const cells = await waitForTableBodyCells(10);
+
+    fireEvent.contextMenu(cells[2], { clientX: 120, clientY: 140 });
+    expect(cells[2]).toHaveClass("range-selected");
+    await user.click(screen.getByRole("menuitem", { name: "Copy TSV" }));
+    expect(writeText).toHaveBeenCalledWith("3");
+
+    fireEvent.contextMenu(cells[2], { clientX: 120, clientY: 140 });
+    await user.click(screen.getByRole("menuitem", { name: "Delete selected cells" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(storeState().datasets[0]?.rows[0]?.signal).toBe(""));
+    expect(storeState().commandHistory.at(-1)).toMatchObject({
+      command: "table-range waveform.csv action=clear r1=1 c1=signal r2=1 c2=signal",
+      source: "gui",
+    });
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Select column background" }), {
+      clientX: 140,
+      clientY: 120,
+    });
+    await user.click(screen.getByRole("menuitem", { name: "Delete column" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() =>
+      expect(storeState().datasets[0]?.columns.map((column) => column.id)).not.toContain(
+        "background",
+      ),
+    );
+  });
+
+  it("changes visible rows from the table context menu", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    const cells = await waitForTableBodyCells(2);
+    fireEvent.contextMenu(cells[1], { clientX: 120, clientY: 140 });
+    await user.click(screen.getByRole("menuitem", { name: "Rows 50" }));
+
+    expect(screen.getByText("160 rows · virtualized · rows 50")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(storeState().windows.find((window) => window.id === "table-seed")).toMatchObject({
+        height: 1704,
+      }),
+    );
+  });
+
   it("creates plots from selected table columns through scispace commands", async () => {
     const user = userEvent.setup();
     await renderWorkbench();

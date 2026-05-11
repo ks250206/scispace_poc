@@ -12,9 +12,11 @@ import {
   xAxisLabelHeight,
 } from "./plotRendering";
 import { buildPlotSvg, safePlotFileName, svgDataUrl } from "./plotExport";
+import { useContextMenu } from "./context-menu/ContextMenuProvider";
 
 interface PlotWindowProps {
   plotId: string;
+  windowId: string;
 }
 
 const zoomAxisFromDrag = (width: number, height: number): "x" | "y" | "xy" | undefined => {
@@ -24,7 +26,8 @@ const zoomAxisFromDrag = (width: number, height: number): "x" | "y" | "xy" | und
   return width >= height ? "x" : "y";
 };
 
-export function PlotWindow({ plotId }: PlotWindowProps) {
+export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
+  const { openContextMenu } = useContextMenu();
   const containerRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
   const spec = useScispaceStore((state) => state.plotSpecs.find((item) => item.id === plotId));
@@ -34,6 +37,7 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
   );
   const openPlotConfig = useScispaceStore((state) => state.openPlotConfig);
   const runScispace = useScispaceStore((state) => state.runScispace);
+  const focusWindow = useScispaceStore((state) => state.focusWindow);
   const setPlotMenuState = useScispaceStore((state) => state.setPlotMenuState);
   const clearPlotMenuState = useScispaceStore((state) => state.clearPlotMenuState);
 
@@ -170,6 +174,20 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
     if (!spec || !dataset) return;
     clickDownload(svgDataUrl(buildPlotSvg(spec, dataset)), safePlotFileName(spec.title, "svg"));
   }, [clickDownload, dataset, spec]);
+  const openPlotContextMenu = (position: { x: number; y: number }) => {
+    focusWindow(windowId);
+    openContextMenu({
+      x: position.x,
+      y: position.y,
+      title: spec?.title,
+      items: [
+        { label: "Plot Config", onSelect: () => openPlotConfig(plotId) },
+        { label: "Copy plot schema", onSelect: () => void copySchema() },
+        { label: "Export plot PNG", onSelect: exportPng },
+        { label: "Export plot SVG", onSelect: exportSvg },
+      ],
+    });
+  };
 
   useEffect(() => {
     if (!spec || !dataset) {
@@ -202,7 +220,14 @@ export function PlotWindow({ plotId }: PlotWindowProps) {
   if (!spec || !dataset) return <div className="empty-state">Plot source not found.</div>;
 
   return (
-    <div className="plot-window">
+    <div
+      className="plot-window"
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openPlotContextMenu({ x: event.clientX, y: event.clientY });
+      }}
+    >
       <div className="plot-window-toolbar">
         <div className="plot-window-summary">
           <strong>{spec.title}</strong>
