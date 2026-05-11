@@ -5,503 +5,65 @@ import type { WTerm } from "@wterm/dom";
 import { BashShell } from "@wterm/just-bash";
 import { defineCommand } from "just-bash";
 import { useContextMenu } from "./context-menu/ContextMenuProvider";
-import { formatVirtualFileList } from "../domain/scispace/fileCommands";
-import type { Dataset, VirtualFile } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
+import { buildInitialFiles, syncBashFiles } from "./terminal/terminalFs";
+import {
+  clearVisibleScreenSequence,
+  handleTerminalInput,
+  scrollTerminalToBottom,
+  writeTerminalOutput,
+} from "./terminal/terminalIo";
+import {
+  applyReplTabCompletion,
+  resetEditableLine,
+  stripScispacePrefix,
+  tabSequence,
+  terminalCommandLineText,
+  terminalControlCommandFromInput,
+  terminalControlResult,
+  terminalPrompt,
+  terminalPromptOutput,
+  terminalReplScispaceCommandFromInput,
+  terminalReplShellCommandMessage,
+} from "./terminal/terminalRepl";
+import {
+  applyTerminalLogicalMetrics,
+  calculateTerminalGrid,
+  measureTerminalMetrics,
+  terminalBottomInsetRows,
+  terminalLogicalRowHeight,
+} from "./terminal/terminalSizing";
+import type {
+  EditableBashShell,
+  TerminalFsState,
+  TerminalMode,
+  TerminalSize,
+} from "./terminal/terminalTypes";
 
-const toBashPath = (path: string): string => path.replace(/^~\//, "/home/user/");
-const deleteSequence = "\x1b[3~";
-const clearVisibleScreenSequence = "\x1b[2J\x1b[H";
-const clearScrollbackSequence = "\x1b[3J";
-const tabSequence = "\t";
-
-type EditableBashShell = {
-  _buffer?: string;
-  _cursor?: number;
-  _history?: string[];
-  _historyPos?: number;
-  _line?: string;
-  _tabComplete?: () => Promise<void>;
-  _write?: (data: string) => void;
-};
-
-type TerminalMode = "repl" | "bash";
-
-type TerminalSize = { cols: number; rows: number };
-export type TerminalFsState = { cwd: string };
-
-export type TerminalFsCommandResult = {
-  clear?: boolean;
-  cwd: string;
-  exitCode: number;
-  output: string;
-};
-
-type TerminalMetrics = {
-  charWidth: number;
-  horizontalPadding: number;
-  rowHeight: number;
-  verticalPadding: number;
-};
-
-const terminalLogicalRowHeight = 17;
-const terminalBottomInsetRows = 2;
-
-const defaultTerminalMetrics: TerminalMetrics = {
-  charWidth: 8.4,
-  horizontalPadding: 24,
-  rowHeight: terminalLogicalRowHeight,
-  verticalPadding: 16,
-};
-
-const scispaceReplCommands = [
-  "help",
-  "lsdata",
-  "table",
-  "table-edit",
-  "table-range",
-  "plot",
-  "plot-set",
-  "plot-axis",
-  "plot-grid",
-  "plot-series",
-  "plot-annotation",
-  "plot-schema",
-  "file-list",
-  "file-mkdir",
-  "file-rename",
-  "file-move",
-  "file-delete",
-  "upload-open",
-  "import-open",
-  "import-preview",
-  "import-set",
-  "import-column",
-  "import-line",
-  "import-cancel",
-  "import-confirm",
-  "elt",
-] as const;
-
-const scispaceReplLocalCommands = ["help", "clear", "repl", "unsafe", "shell"] as const;
-const scispaceReplCompletionCommands = [
-  ...scispaceReplLocalCommands,
-  ...scispaceReplCommands.filter((command) => command !== "help"),
-].sort();
-const shellOnlyCommands = new Set(["cat", "cd", "ls", "pwd", "rm"]);
-
-const workspaceScaleOrDefault = (scale: number): number => Math.max(0.1, scale || 1);
-
-const buildInitialFiles = (files: VirtualFile[]): Record<string, string> =>
-  Object.fromEntries([
-    ["/home/user/README.txt", "SciSpace REPL. Try: help or file-list ~/raw\n"],
-    ...files.filter((file) => file.text).map((file) => [toBashPath(file.path), file.text ?? ""]),
-  ]);
-
-const normalizeShellPath = (path: string): string => {
-  if (path === "~") return "/home/user";
-  if (path.startsWith("~/")) return toBashPath(path);
-  return path.replace(/\/+$/, "") || "/";
-};
-
-const joinShellPath = (cwd: string, path?: string): string => {
-  if (!path || path === ".") return cwd;
-  if (path === "..") return cwd === "/home/user" ? cwd : cwd.slice(0, cwd.lastIndexOf("/"));
-  if (path.startsWith("/") || path.startsWith("~")) return normalizeShellPath(path);
-  return normalizeShellPath(`${cwd}/${path}`);
-};
-
-const shellPathToVirtualPath = (shellPath: string): string | undefined => {
-  const normalized = normalizeShellPath(shellPath);
-  if (normalized === "/home/user") return "~/raw";
-  if (normalized === "/home/user/raw") return "~/raw";
-  if (normalized.startsWith("/home/user/raw/"))
-    return `~/${normalized.slice("/home/user/".length)}`;
-  return undefined;
-};
-
-const shellPathForPrompt = (shellPath: string): string => shellPath.replace("/home/user", "~");
-
-const isKnownDirectory = (path: string, files: VirtualFile[]): boolean => {
-  const virtualPath = shellPathToVirtualPath(path);
-  if (!virtualPath) return false;
-  if (virtualPath === "~/raw") return true;
-  return files.some((file) => file.kind === "directory" && file.path === virtualPath);
-};
-
-export const terminalCommandLineText = (command: string): string => command;
-
-export const scispaceReplCommandLine = (command: string, args: string[]): string =>
-  [command, ...args].join(" ").trim();
-
-export const stripScispacePrefix = (commandLine: string): string =>
-  commandLine.trim().replace(/^scispace\s+/, "");
-
-export const terminalPrompt = (mode: TerminalMode, cwd: string): string => {
-  const path = cwd.replace("/home/user", "~");
-  return mode === "repl" ? `scispace-repl:${path}> ` : `unsafe-shell:${path}$ `;
-};
-
-const terminalCrlf = (output: string): string => output.replace(/\r?\n/g, "\r\n");
-
-export const terminalPromptOutput = (output: string, mode: TerminalMode, cwd: string): string =>
-  `\r\n${terminalCrlf(output)}\r\n${terminalPrompt(mode, cwd)}`;
-
-export const terminalControlResult = (
-  command: string,
-  args: string[],
-  state: { mode: TerminalMode; unsafe: boolean },
-): { handled: boolean; mode: TerminalMode; unsafe: boolean; output: string; exitCode: number } => {
-  const next = { ...state };
-  if (command === "repl") {
-    next.mode = "repl";
-    return { handled: true, ...next, output: "Entered scispace REPL", exitCode: 0 };
-  }
-
-  if (command === "unsafe") {
-    const setting = args[0];
-    if (setting === "on") {
-      next.unsafe = true;
-      return { handled: true, ...next, output: "Unsafe mode enabled", exitCode: 0 };
-    }
-    if (setting === "off") {
-      next.unsafe = false;
-      next.mode = "repl";
-      return {
-        handled: true,
-        ...next,
-        output: "Unsafe mode disabled; returned to scispace REPL",
-        exitCode: 0,
-      };
-    }
-    return { handled: true, ...next, output: "Usage: unsafe on|off", exitCode: 1 };
-  }
-
-  if (command === "shell") {
-    if (!state.unsafe) {
-      return {
-        handled: true,
-        ...next,
-        output: "shell is disabled. Run `unsafe on` before entering just-bash shell.",
-        exitCode: 1,
-      };
-    }
-    next.mode = "bash";
-    return { handled: true, ...next, output: "Entered unsafe just-bash shell", exitCode: 0 };
-  }
-
-  if (command === "exit") {
-    if (state.mode === "bash") {
-      next.mode = "repl";
-      return { handled: true, ...next, output: "Returned to scispace REPL", exitCode: 0 };
-    }
-    return { handled: true, ...next, output: "Already in scispace REPL", exitCode: 0 };
-  }
-
-  return { handled: false, ...next, output: "", exitCode: 0 };
-};
-
-export const terminalControlCommandFromInput = (
-  data: string,
-  line: string | undefined,
-  mode: TerminalMode,
-): { command: string; args: string[] } | undefined => {
-  if (mode !== "bash" || !/[\r\n]/.test(data)) return undefined;
-  const commandLine = line?.trim() ?? "";
-  if (commandLine === "exit") return { command: "exit", args: [] };
-  if (commandLine === "scispace repl") return { command: "repl", args: [] };
-  if (commandLine === "unsafe off") return { command: "unsafe", args: ["off"] };
-  return undefined;
-};
-
-export const terminalReplScispaceCommandFromInput = (
-  data: string,
-  line: string | undefined,
-  mode: TerminalMode,
-): string | undefined => {
-  if (mode !== "repl" || !/[\r\n]/.test(data)) return undefined;
-  return stripScispacePrefix(line?.trim() ?? "");
-};
-
-export const terminalReplShellCommandMessage = (command: string): string | undefined =>
-  shellOnlyCommands.has(command)
-    ? `\`${command}\` is only available in unsafe just-bash shell. Use scispace commands such as \`file-list [path]\` in the REPL.`
-    : undefined;
-
-export const replTabCompletion = (line: string): { insert?: string; choices?: string[] } => {
-  const trimmedLeft = line.trimStart();
-  if (trimmedLeft.includes(" ")) return {};
-  const matches = scispaceReplCompletionCommands.filter((command) =>
-    command.startsWith(trimmedLeft),
-  );
-  if (matches.length === 1) {
-    const insert = matches[0].slice(trimmedLeft.length);
-    return { insert: `${insert} ` };
-  }
-  return matches.length > 1 ? { choices: matches } : {};
-};
-
-export const applyReplTabCompletion = (shell: BashShell | null, cwd: string): boolean => {
-  const editableShell = shell as unknown as EditableBashShell | null;
-  if (!editableShell?._write || typeof editableShell._line !== "string") return false;
-  if (editableShell._cursor !== editableShell._line.length) return false;
-  const completion = replTabCompletion(editableShell._line);
-  if (completion.insert) {
-    editableShell._line += completion.insert;
-    editableShell._cursor = editableShell._line.length;
-    editableShell._write(completion.insert);
-    return true;
-  }
-  if (completion.choices?.length) {
-    editableShell._write(
-      `\r\n${completion.choices.join("  ")}\r\n${terminalPrompt("repl", cwd)}${editableShell._line}`,
-    );
-    return true;
-  }
-  return false;
-};
-
-const resetEditableLine = (shell: BashShell | null, commandLine: string): void => {
-  const editableShell = shell as unknown as EditableBashShell | null;
-  if (!editableShell) return;
-  if (commandLine) {
-    editableShell._history?.push(commandLine);
-    editableShell._historyPos = -1;
-  }
-  editableShell._line = "";
-  editableShell._cursor = 0;
-  editableShell._buffer = "";
-};
-
-export const executeTerminalFsCommand = (
-  commandLine: string,
-  state: TerminalFsState,
-  files: VirtualFile[],
-  datasets: Dataset[],
-): TerminalFsCommandResult => {
-  const commands = commandLine
-    .split("&&")
-    .map((command) => command.trim())
-    .filter(Boolean);
-  let cwd = state.cwd;
-  const output: string[] = [];
-
-  for (const commandText of commands) {
-    const [command, ...args] = commandText.split(/\s+/);
-    if (command === "pwd") {
-      output.push(shellPathForPrompt(cwd));
-      continue;
-    }
-
-    if (command === "cd") {
-      const nextPath = joinShellPath(cwd, args[0] ?? "~");
-      if (!isKnownDirectory(nextPath, files)) {
-        return { cwd, exitCode: 1, output: `cd: no such directory: ${args[0] ?? "~"}` };
-      }
-      cwd = nextPath;
-      continue;
-    }
-
-    if (command === "ls") {
-      const target = shellPathToVirtualPath(joinShellPath(cwd, args[0]));
-      if (!target) return { cwd, exitCode: 1, output: `ls: unsupported path: ${args[0] ?? "."}` };
-      output.push(formatVirtualFileList(target, files, datasets));
-      continue;
-    }
-
-    if (command === "cat") {
-      const target = shellPathToVirtualPath(joinShellPath(cwd, args[0]));
-      const file = target
-        ? files.find((item) => item.kind === "file" && item.path === target)
-        : undefined;
-      if (!target || !file) {
-        return { cwd, exitCode: 1, output: `cat: no such file: ${args[0] ?? ""}` };
-      }
-      output.push(file.text ?? "");
-      continue;
-    }
-
-    if (command === "clear") {
-      return { clear: true, cwd, exitCode: 0, output: clearVisibleScreenSequence };
-    }
-
-    return { cwd, exitCode: 127, output: `${command}: command not found` };
-  }
-
-  return { cwd, exitCode: 0, output: output.join("\n") };
-};
-
-const sumStylePixels = (style: CSSStyleDeclaration | undefined, properties: string[]): number =>
-  style
-    ? properties.reduce((total, property) => {
-        return total + (Number.parseFloat(style.getPropertyValue(property)) || 0);
-      }, 0)
-    : 0;
-
-const measureTerminalMetrics = (
-  viewport: HTMLElement,
-  terminal: HTMLElement | undefined,
-  workspaceScale: number,
-): TerminalMetrics => {
-  const scale = workspaceScaleOrDefault(workspaceScale);
-  const terminalStyle = terminal ? getComputedStyle(terminal) : undefined;
-  const probe = document.createElement("span");
-  probe.textContent = "M";
-  probe.style.visibility = "hidden";
-  probe.style.position = "absolute";
-  probe.style.font = terminalStyle?.font ?? "14px Menlo, Consolas, monospace";
-  viewport.append(probe);
-  const charWidth = probe.getBoundingClientRect().width || defaultTerminalMetrics.charWidth * scale;
-  probe.remove();
-
-  const rowHeight =
-    (terminalStyle
-      ? Number.parseFloat(terminalStyle.getPropertyValue("--term-row-height")) ||
-        defaultTerminalMetrics.rowHeight
-      : defaultTerminalMetrics.rowHeight) * scale;
-
-  return {
-    charWidth,
-    horizontalPadding:
-      sumStylePixels(terminalStyle, ["padding-left", "padding-right"]) ||
-      defaultTerminalMetrics.horizontalPadding,
-    rowHeight,
-    verticalPadding:
-      sumStylePixels(terminalStyle, ["padding-top", "padding-bottom"]) ||
-      defaultTerminalMetrics.verticalPadding,
-  };
-};
-
-export const applyTerminalLogicalMetrics = (terminal: WTerm | null | undefined): void => {
-  if (!terminal) return;
-  terminal.element.style.setProperty("--term-row-height", `${terminalLogicalRowHeight}px`);
-  (terminal as unknown as Record<string, number>)._rowHeight = terminalLogicalRowHeight;
-};
-
-const syncBashFiles = async (
-  bash: BashShell["bash"] | null | undefined,
-  files: VirtualFile[],
-): Promise<void> => {
-  if (!bash) return;
-  await bash.fs.rm("/home/user/raw", { recursive: true, force: true });
-  await bash.fs.mkdir("/home/user/raw", { recursive: true });
-  await Promise.all(
-    files
-      .filter((file) => file.kind === "directory")
-      .map((file) => bash.fs.mkdir(toBashPath(file.path), { recursive: true })),
-  );
-  await Promise.all(
-    files
-      .filter((file) => file.text)
-      .map((file) => bash.fs.writeFile(toBashPath(file.path), file.text ?? "")),
-  );
-};
-
-export const calculateTerminalGrid = ({
-  viewportWidth,
-  viewportHeight,
-  charWidth,
-  rowHeight,
-  horizontalPadding,
-  verticalPadding,
-  workspaceScale,
-}: {
-  viewportWidth: number;
-  viewportHeight: number;
-  charWidth: number;
-  rowHeight: number;
-  horizontalPadding: number;
-  verticalPadding: number;
-  workspaceScale: number;
-}): TerminalSize => {
-  const scale = workspaceScaleOrDefault(workspaceScale);
-  const logicalWidth = viewportWidth / scale;
-  const logicalHeight = viewportHeight / scale;
-  const logicalCharWidth = Math.max(1, charWidth / scale);
-  const logicalRowHeight = Math.max(1, rowHeight / scale);
-  return {
-    cols: Math.max(1, Math.floor((logicalWidth - horizontalPadding) / logicalCharWidth)),
-    rows: Math.max(1, Math.floor((logicalHeight - verticalPadding) / logicalRowHeight)),
-  };
-};
-
-export const scrollTerminalToBottom = (
-  terminalElement?: HTMLElement | null,
-  viewportElement?: HTMLElement | null,
-): void => {
-  const scrollTargets = [
-    terminalElement,
-    terminalElement?.querySelector<HTMLElement>("[data-terminal-viewport]"),
-    viewportElement,
-  ].filter((element): element is HTMLElement => Boolean(element));
-
-  window.requestAnimationFrame(() => {
-    for (const element of scrollTargets) {
-      element.scrollTop = element.scrollHeight;
-    }
-  });
-};
-
-export const normalizeTerminalOutput = (data: string): string =>
-  data.replaceAll(
-    clearVisibleScreenSequence,
-    `${clearScrollbackSequence}${clearVisibleScreenSequence}`,
-  );
-
-export const clearTerminalScrollbackRows = (terminalElement?: HTMLElement | null): void => {
-  terminalElement
-    ?.querySelectorAll<HTMLElement>(".term-scrollback-row")
-    .forEach((row) => row.remove());
-};
-
-export const writeTerminalOutput = (
-  data: string,
-  write: (data: string) => void,
-  terminalElement?: HTMLElement | null,
-  viewportElement?: HTMLElement | null,
-): void => {
-  const output = normalizeTerminalOutput(data);
-  write(output);
-  if (output.includes(clearScrollbackSequence)) {
-    clearTerminalScrollbackRows(terminalElement);
-    if (terminalElement) terminalElement.scrollTop = 0;
-    if (viewportElement) viewportElement.scrollTop = 0;
-  }
-  scrollTerminalToBottom(terminalElement, viewportElement);
-};
-
-export const handleForwardDelete = (shell: BashShell | null): void => {
-  const editableShell = shell as unknown as EditableBashShell | null;
-  if (
-    !editableShell ||
-    typeof editableShell._line !== "string" ||
-    typeof editableShell._cursor !== "number" ||
-    typeof editableShell._write !== "function" ||
-    editableShell._cursor >= editableShell._line.length
-  ) {
-    return;
-  }
-  const tail = editableShell._line.slice(editableShell._cursor + 1);
-  editableShell._line = editableShell._line.slice(0, editableShell._cursor) + tail;
-  editableShell._write(tail + "\x1b[K");
-  if (tail.length > 0) editableShell._write(`\x1b[${tail.length}D`);
-};
-
-export const handleTerminalInput = async (shell: BashShell | null, data: string): Promise<void> => {
-  if (!shell) return;
-  let remaining = data;
-  while (remaining.length > 0) {
-    const deleteIndex = remaining.indexOf(deleteSequence);
-    if (deleteIndex < 0) {
-      await shell.handleInput(remaining);
-      return;
-    }
-    const beforeDelete = remaining.slice(0, deleteIndex);
-    if (beforeDelete) await shell.handleInput(beforeDelete);
-    handleForwardDelete(shell);
-    remaining = remaining.slice(deleteIndex + deleteSequence.length);
-  }
-};
+export type { TerminalFsCommandResult, TerminalFsState } from "./terminal/terminalTypes";
+export { executeTerminalFsCommand } from "./terminal/terminalFs";
+export {
+  clearTerminalScrollbackRows,
+  handleForwardDelete,
+  handleTerminalInput,
+  normalizeTerminalOutput,
+  scrollTerminalToBottom,
+  writeTerminalOutput,
+} from "./terminal/terminalIo";
+export {
+  applyReplTabCompletion,
+  replTabCompletion,
+  scispaceReplCommandLine,
+  stripScispacePrefix,
+  terminalCommandLineText,
+  terminalControlCommandFromInput,
+  terminalControlResult,
+  terminalPrompt,
+  terminalPromptOutput,
+  terminalReplScispaceCommandFromInput,
+  terminalReplShellCommandMessage,
+} from "./terminal/terminalRepl";
+export { applyTerminalLogicalMetrics, calculateTerminalGrid } from "./terminal/terminalSizing";
 
 export function TerminalPanel() {
   const { ref, write, resize } = useTerminal();
