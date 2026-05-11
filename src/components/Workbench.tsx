@@ -239,6 +239,7 @@ export function Workbench() {
   const undo = useScispaceStore((state) => state.undo);
   const redo = useScispaceStore((state) => state.redo);
   const focusWindow = useScispaceStore((state) => state.focusWindow);
+  const blurActiveWindow = useScispaceStore((state) => state.blurActiveWindow);
   const closeWindow = useScispaceStore((state) => state.closeWindow);
   const toggleUtilityWindow = useScispaceStore((state) => state.toggleUtilityWindow);
   const tableMenuState = useScispaceStore((state) => state.tableMenuState);
@@ -321,6 +322,7 @@ export function Workbench() {
     const target = event.target as HTMLElement;
     const isBackground =
       target.classList.contains("canvas-shell") || target.classList.contains("workspace-plane");
+    if (event.button === 0 && isBackground) blurActiveWindow();
     if (event.button !== 1 && !event.altKey && !(event.button === 0 && isBackground)) return;
     canvasDrag.current = {
       x: event.clientX,

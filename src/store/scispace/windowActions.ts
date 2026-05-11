@@ -25,6 +25,7 @@ export const createWindowActions = ({
   | "toggleUtilityWindow"
   | "updateWindow"
   | "focusWindow"
+  | "blurActiveWindow"
   | "setViewport"
   | "sendCommandToTerminalLine"
 > => ({
@@ -106,6 +107,11 @@ export const createWindowActions = ({
           target?.kind === "plot" && target.plotId ? target.plotId : state.currentPlotId,
       };
     });
+    persistLayout(db, get());
+  },
+
+  blurActiveWindow: () => {
+    set({ activeWindowId: undefined });
     persistLayout(db, get());
   },
 

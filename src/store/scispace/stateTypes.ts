@@ -109,6 +109,7 @@ export interface ScispaceState {
     patch: Partial<Pick<WorkspaceWindow, "x" | "y" | "width" | "height">>,
   ) => void;
   focusWindow: (id: string) => void;
+  blurActiveWindow: () => void;
   setTableMenuState: (state: TableMenuState) => void;
   clearTableMenuState: (windowId: string) => void;
   setPlotMenuState: (state: PlotMenuState) => void;

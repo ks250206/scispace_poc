@@ -160,6 +160,23 @@ describe("Workbench workspace UI", () => {
     expect(screen.queryByRole("menu", { name: "Plot - waveform.csv" })).not.toBeInTheDocument();
   });
 
+  it("clears active window highlight when clicking empty background", async () => {
+    await renderWorkbench();
+    const plane = document.querySelector(".workspace-plane") as HTMLElement;
+    const plotWindow = Array.from(document.querySelectorAll<HTMLElement>(".canvas-window")).find(
+      (element) => element.textContent?.includes("Plot - waveform.csv"),
+    );
+    expect(plotWindow).toBeDefined();
+
+    fireEvent.mouseDown(plotWindow as HTMLElement);
+    expect(storeState().activeWindowId).toBe("plot-seed");
+    expect(plotWindow).toHaveClass("is-active");
+
+    fireEvent.pointerDown(plane, { button: 0, clientX: 20, clientY: 20, pointerId: 1 });
+    expect(storeState().activeWindowId).toBeUndefined();
+    expect(plotWindow).not.toHaveClass("is-active");
+  });
+
   it("pans the workspace from empty background drag without panning from windows", async () => {
     await renderWorkbench();
     const plane = document.querySelector(".workspace-plane") as HTMLElement;
