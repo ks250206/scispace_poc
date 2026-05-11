@@ -202,10 +202,7 @@ export const terminalReplScispaceCommandFromInput = (
   if (mode !== "repl" || !/[\r\n]/.test(data)) return undefined;
   const commandLine = stripScispacePrefix(line?.trim() ?? "");
   const [command] = commandLine.split(/\s+/);
-  if (!command) return undefined;
-  return scispaceReplCommands.includes(command as (typeof scispaceReplCommands)[number])
-    ? commandLine
-    : undefined;
+  return command === "help" ? commandLine : undefined;
 };
 
 export const executeTerminalFsCommand = (

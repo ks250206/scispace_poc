@@ -262,12 +262,10 @@ describe("terminal input handling", () => {
     expect(terminalControlCommandFromInput("x", "exit", "bash")).toBeUndefined();
   });
 
-  it("intercepts repl scispace commands before just-bash builtins handle them", () => {
+  it("intercepts repl help before the just-bash builtin handles it", () => {
     expect(terminalReplScispaceCommandFromInput("\r", "help", "repl")).toBe("help");
     expect(terminalReplScispaceCommandFromInput("\r", "scispace help", "repl")).toBe("help");
-    expect(terminalReplScispaceCommandFromInput("\r", "file-list ~/raw", "repl")).toBe(
-      "file-list ~/raw",
-    );
+    expect(terminalReplScispaceCommandFromInput("\r", "plot waveform.csv", "repl")).toBeUndefined();
     expect(terminalReplScispaceCommandFromInput("\r", "help", "bash")).toBeUndefined();
     expect(terminalReplScispaceCommandFromInput("x", "help", "repl")).toBeUndefined();
     expect(terminalReplScispaceCommandFromInput("\r", "unknown", "repl")).toBeUndefined();
