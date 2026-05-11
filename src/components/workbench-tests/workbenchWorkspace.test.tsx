@@ -75,6 +75,12 @@ describe("Workbench workspace UI", () => {
     fireEvent.contextMenu(shell, { clientX: 160, clientY: 120 });
 
     const menu = screen.getByRole("menu", { name: "SciSpace" });
+    const contextLabels = Array.from(
+      menu.querySelectorAll<HTMLElement>(
+        ":scope > .context-menu-row > .context-menu-item-main > .context-menu-label",
+      ),
+    ).map((element) => element.textContent);
+    expect(contextLabels).toEqual(["Project", "Data", "Table", "Plot", "Edit", "View", "Windows"]);
     expect(within(menu).getByRole("menuitem", { name: "Project" })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Windows" })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Data" })).toBeInTheDocument();
