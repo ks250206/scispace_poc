@@ -585,29 +585,6 @@ export function Workbench() {
       ],
     },
     {
-      label: "Windows",
-      openMenu: openToolbarMenu,
-      setOpenMenu: setOpenToolbarMenu,
-      items: [
-        {
-          label: "Bring to Front",
-          onSelect: () => {
-            if (activeWindowId) focusWindow(activeWindowId);
-          },
-          disabled: !activeWindowId,
-        },
-        { label: "Send to Back", disabled: true },
-        { kind: "separator" },
-        ...directWindowItems,
-        ...directPlotConfigItems,
-        { kind: "separator" },
-        { kind: "submenu", label: "Tables", items: windowItems(windowsByKind.tables) },
-        { kind: "submenu", label: "Graphs", items: windowItems(windowsByKind.graphs) },
-        { kind: "submenu", label: "Imports", items: windowItems(windowsByKind.imports) },
-        { kind: "submenu", label: "Other Windows", items: windowItems(windowsByKind.other) },
-      ],
-    },
-    {
       label: "Data",
       openMenu: openToolbarMenu,
       setOpenMenu: setOpenToolbarMenu,
@@ -708,6 +685,29 @@ export function Workbench() {
       items: [
         { label: "Reset View", onSelect: () => setViewport(centerViewport) },
         { label: `Zoom ${Math.round(viewport.scale * 100)}%`, disabled: true },
+      ],
+    },
+    {
+      label: "Windows",
+      openMenu: openToolbarMenu,
+      setOpenMenu: setOpenToolbarMenu,
+      items: [
+        {
+          label: "Bring to Front",
+          onSelect: () => {
+            if (activeWindowId) focusWindow(activeWindowId);
+          },
+          disabled: !activeWindowId,
+        },
+        { label: "Send to Back", disabled: true },
+        { kind: "separator" },
+        ...directWindowItems,
+        ...directPlotConfigItems,
+        { kind: "separator" },
+        { kind: "submenu", label: "Tables", items: windowItems(windowsByKind.tables) },
+        { kind: "submenu", label: "Graphs", items: windowItems(windowsByKind.graphs) },
+        { kind: "submenu", label: "Imports", items: windowItems(windowsByKind.imports) },
+        { kind: "submenu", label: "Other Windows", items: windowItems(windowsByKind.other) },
       ],
     },
   ];

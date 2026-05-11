@@ -32,6 +32,10 @@ describe("Workbench workspace UI", () => {
     await renderWorkbench();
     expect(screen.getByRole("combobox", { name: "Project" })).toBeInTheDocument();
     expect(screen.getByText("Zoom 100%")).toBeInTheDocument();
+    const menuLabels = Array.from(
+      document.querySelectorAll<HTMLElement>(".toolbar-menus .toolbar-menu-trigger"),
+    ).map((button) => button.textContent);
+    expect(menuLabels).toEqual(["Project", "Data", "Table", "Plot", "Edit", "View", "Windows"]);
 
     await user.click(screen.getByRole("button", { name: "Project" }));
     expect(screen.getByRole("menu", { name: "Project menu" })).toBeInTheDocument();
@@ -53,13 +57,13 @@ describe("Workbench workspace UI", () => {
     await user.click(screen.getByRole("button", { name: "Project" }));
     expect(screen.getByRole("menu", { name: "Project menu" })).toBeInTheDocument();
 
-    await user.hover(screen.getByRole("button", { name: "Windows" }));
-    expect(screen.queryByRole("menu", { name: "Project menu" })).not.toBeInTheDocument();
-    expect(screen.getByRole("menu", { name: "Windows menu" })).toBeInTheDocument();
-
     await user.hover(screen.getByRole("button", { name: "Data" }));
-    expect(screen.queryByRole("menu", { name: "Windows menu" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "Project menu" })).not.toBeInTheDocument();
     expect(screen.getByRole("menu", { name: "Data menu" })).toBeInTheDocument();
+
+    await user.hover(screen.getByRole("button", { name: "Windows" }));
+    expect(screen.queryByRole("menu", { name: "Data menu" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menu", { name: "Windows menu" })).toBeInTheDocument();
   });
 
   it("opens toolbar actions from the empty workspace context menu", async () => {
