@@ -1009,10 +1009,12 @@
 .history-table tbody {
   position: relative;
   display: block;
+  margin-top: 28px;
 }
 
 .history-table thead,
-.history-table tr {
+.history-table thead tr,
+.history-table tbody tr {
   display: table;
   width: 100%;
   table-layout: fixed;
@@ -1020,6 +1022,7 @@
 
 .history-entry {
   position: absolute;
+  top: 0;
   left: 0;
   height: 38px;
   border-bottom: 1px solid var(--border);
@@ -1302,6 +1305,12 @@
   height: var(--table-visible-height, 672px);
   flex: 0 0 var(--table-visible-height, 672px);
   overflow: auto;
+}
+
+.table-window > .table-scroll {
+  height: auto;
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 .table-scroll table {
@@ -2343,6 +2352,8 @@
   min-height: 0;
   flex: 1;
   overflow: hidden;
+  padding-bottom: 8px;
+  box-sizing: border-box;
 }
 
 .terminal-host {
@@ -2359,5 +2370,14 @@
   box-shadow: none;
   overflow: auto;
   font-family: var(--mono);
-  padding: 8px 12px;
+  padding: 8px 12px 18px;
+}
+
+.terminal-host .term-cursor {
+  display: inline-block;
+  width: 1ch;
+  height: var(--term-row-height);
+  box-sizing: border-box;
+  line-height: var(--term-row-height);
+  vertical-align: top;
 }

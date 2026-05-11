@@ -4,6 +4,7 @@ import type { VirtualItem } from "@tanstack/react-virtual";
 import type { DataValue } from "../../domain/types";
 import {
   minColumnWidth,
+  tableFallbackVisibleRows,
   type TableCellPosition,
   type TableEditingCell,
   type TableVisibleRows,
@@ -83,7 +84,10 @@ export const DataTableGrid = memo(function DataTableGrid({
       className="table-scroll"
       style={
         {
-          "--table-visible-height": `${tableScrollHeight(visibleRows)}px`,
+          "--table-visible-height":
+            visibleRows === "auto"
+              ? undefined
+              : `${tableScrollHeight(tableFallbackVisibleRows(visibleRows))}px`,
           "--table-width": `${tableWidth}px`,
         } as CSSProperties
       }

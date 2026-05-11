@@ -671,6 +671,11 @@ export function Workbench() {
           disabled: !activeTableMenuState,
           items: [
             {
+              label: "Rows Auto",
+              onSelect: () => activeTableMenuState?.actions.setVisibleRows("auto"),
+              disabled: !activeTableMenuState || activeTableMenuState.visibleRows === "auto",
+            },
+            {
               label: "Rows 10",
               onSelect: () => activeTableMenuState?.actions.setVisibleRows(10),
               disabled: !activeTableMenuState || activeTableMenuState.visibleRows === 10,

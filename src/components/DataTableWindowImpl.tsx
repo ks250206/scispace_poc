@@ -21,6 +21,7 @@ import {
   positionInRange,
   rangeBoundsFromSelection,
   rowHeight,
+  tableFallbackVisibleRows,
   tableScrollHeight,
   tableWindowHeightForRows,
   type TableCellPosition,
@@ -47,7 +48,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   const runScispace = useScispaceStore((state) => state.runScispace);
   const setTableMenuState = useScispaceStore((state) => state.setTableMenuState);
   const clearTableMenuState = useScispaceStore((state) => state.clearTableMenuState);
-  const [visibleRows, setVisibleRows] = useState<TableVisibleRows>(10);
+  const [visibleRows, setVisibleRows] = useState<TableVisibleRows>("auto");
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -101,14 +102,14 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     count: rows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => rowHeight,
-    initialRect: { width: 650, height: tableScrollHeight(visibleRows) },
+    initialRect: { width: 650, height: tableScrollHeight(tableFallbackVisibleRows(visibleRows)) },
     overscan: 6,
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
   const visibleVirtualRows =
     virtualRows.length > 0
       ? virtualRows
-      : rows.slice(0, visibleRows + 6).map((_, index) => ({
+      : rows.slice(0, tableFallbackVisibleRows(visibleRows) + 6).map((_, index) => ({
           index,
           start: index * rowHeight,
         }));
@@ -249,7 +250,9 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   const updateVisibleRows = useCallback(
     (nextVisibleRows: TableVisibleRows) => {
       setVisibleRows(nextVisibleRows);
-      updateWindow(windowId, { height: tableWindowHeightForRows(nextVisibleRows) });
+      if (nextVisibleRows !== "auto") {
+        updateWindow(windowId, { height: tableWindowHeightForRows(nextVisibleRows) });
+      }
     },
     [updateWindow, windowId],
   );
@@ -320,19 +323,30 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
         },
       },
       {
-        label: "Rows 10",
-        disabled: visibleRows === 10,
-        onSelect: () => updateVisibleRows(10),
-      },
-      {
-        label: "Rows 20",
-        disabled: visibleRows === 20,
-        onSelect: () => updateVisibleRows(20),
-      },
-      {
-        label: "Rows 50",
-        disabled: visibleRows === 50,
-        onSelect: () => updateVisibleRows(50),
+        kind: "submenu",
+        label: "Rows",
+        items: [
+          {
+            label: "Rows Auto",
+            disabled: visibleRows === "auto",
+            onSelect: () => updateVisibleRows("auto"),
+          },
+          {
+            label: "Rows 10",
+            disabled: visibleRows === 10,
+            onSelect: () => updateVisibleRows(10),
+          },
+          {
+            label: "Rows 20",
+            disabled: visibleRows === 20,
+            onSelect: () => updateVisibleRows(20),
+          },
+          {
+            label: "Rows 50",
+            disabled: visibleRows === 50,
+            onSelect: () => updateVisibleRows(50),
+          },
+        ],
       },
     ];
     openContextMenu({ x: position.x, y: position.y, title: dataset?.name, items });
@@ -424,7 +438,8 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     <div className="table-window">
       <div className="window-controls table-window-summary">
         <span>
-          {dataset.rows.length} rows · virtualized · rows {visibleRows}
+          {dataset.rows.length} rows · virtualized · rows{" "}
+          {visibleRows === "auto" ? "auto" : visibleRows}
         </span>
       </div>
       <DataTableGrid

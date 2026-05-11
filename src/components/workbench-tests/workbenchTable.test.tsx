@@ -17,8 +17,8 @@ describe("Workbench table UI", () => {
     const user = userEvent.setup();
     await renderWorkbench();
     const tableScroll = document.querySelector(".table-scroll") as HTMLElement;
-    expect(screen.getByText("160 rows · virtualized · rows 10")).toBeInTheDocument();
-    expect(tableScroll.style.getPropertyValue("--table-visible-height")).toBe("352px");
+    expect(screen.getByText("160 rows · virtualized · rows auto")).toBeInTheDocument();
+    expect(tableScroll.style.getPropertyValue("--table-visible-height")).toBe("");
     expect(storeState().windows.find((window) => window.id === "table-seed")).toMatchObject({
       height: 424,
     });

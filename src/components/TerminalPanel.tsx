@@ -45,7 +45,7 @@ type TerminalMetrics = {
 };
 
 const terminalLogicalRowHeight = 17;
-const terminalBottomInsetRows = 1;
+const terminalBottomInsetRows = 2;
 
 const defaultTerminalMetrics: TerminalMetrics = {
   charWidth: 8.4,

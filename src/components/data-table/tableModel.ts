@@ -1,6 +1,7 @@
 import type { DatasetColumn } from "../../domain/types";
 
-export type TableVisibleRows = 10 | 20 | 50;
+export type FixedTableVisibleRows = 10 | 20 | 50;
+export type TableVisibleRows = "auto" | FixedTableVisibleRows;
 
 export interface TableCellPosition {
   rowIndex: number;
@@ -44,10 +45,13 @@ export const formatCellValue = (value: unknown): string => {
   return JSON.stringify(value);
 };
 
-export const tableScrollHeight = (visibleRows: TableVisibleRows): number =>
+export const tableFallbackVisibleRows = (visibleRows: TableVisibleRows): FixedTableVisibleRows =>
+  visibleRows === "auto" ? 10 : visibleRows;
+
+export const tableScrollHeight = (visibleRows: FixedTableVisibleRows): number =>
   tableHeaderHeight + visibleRows * rowHeight;
 
-export const tableWindowHeightForRows = (visibleRows: TableVisibleRows): number =>
+export const tableWindowHeightForRows = (visibleRows: FixedTableVisibleRows): number =>
   tableTitlebarHeight + tableControlsHeight + tableScrollHeight(visibleRows);
 
 export const rangeBoundsFromSelection = (

@@ -90,19 +90,30 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
           onSelect: tableMenuState.actions.deleteSelectedColumn,
         },
         {
-          label: "Rows 10",
-          disabled: tableMenuState.visibleRows === 10,
-          onSelect: () => tableMenuState.actions.setVisibleRows(10),
-        },
-        {
-          label: "Rows 20",
-          disabled: tableMenuState.visibleRows === 20,
-          onSelect: () => tableMenuState.actions.setVisibleRows(20),
-        },
-        {
-          label: "Rows 50",
-          disabled: tableMenuState.visibleRows === 50,
-          onSelect: () => tableMenuState.actions.setVisibleRows(50),
+          kind: "submenu",
+          label: "Rows",
+          items: [
+            {
+              label: "Rows Auto",
+              disabled: tableMenuState.visibleRows === "auto",
+              onSelect: () => tableMenuState.actions.setVisibleRows("auto"),
+            },
+            {
+              label: "Rows 10",
+              disabled: tableMenuState.visibleRows === 10,
+              onSelect: () => tableMenuState.actions.setVisibleRows(10),
+            },
+            {
+              label: "Rows 20",
+              disabled: tableMenuState.visibleRows === 20,
+              onSelect: () => tableMenuState.actions.setVisibleRows(20),
+            },
+            {
+              label: "Rows 50",
+              disabled: tableMenuState.visibleRows === 50,
+              onSelect: () => tableMenuState.actions.setVisibleRows(50),
+            },
+          ],
         },
       );
     }

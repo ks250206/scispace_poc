@@ -1,4 +1,8 @@
-import { tableWindowHeightForRows, type TableVisibleRows } from "./tableModel";
+import {
+  tableWindowHeightForRows,
+  type FixedTableVisibleRows,
+  type TableVisibleRows,
+} from "./tableModel";
 
 interface DataTableToolbarProps {
   rowCount: number;
@@ -62,7 +66,7 @@ export function DataTableToolbar({
           aria-label="Visible rows"
           value={visibleRows}
           onChange={(event) => {
-            const nextVisibleRows = Number(event.target.value) as TableVisibleRows;
+            const nextVisibleRows = Number(event.target.value) as FixedTableVisibleRows;
             onVisibleRowsChange(nextVisibleRows, tableWindowHeightForRows(nextVisibleRows));
           }}
         >

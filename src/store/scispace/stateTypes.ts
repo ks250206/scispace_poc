@@ -19,7 +19,7 @@ export interface ProjectSummary {
   updatedAt: number;
 }
 
-export type TableVisibleRows = 10 | 20 | 50;
+export type TableVisibleRows = "auto" | 10 | 20 | 50;
 
 export interface TableMenuState {
   windowId: string;
