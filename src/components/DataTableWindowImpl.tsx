@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { datasetColumnIds } from "../domain/csv";
 import { useScispaceStore } from "../store/scispaceStore";
-import { useContextMenu, type ContextMenuItem } from "./context-menu/ContextMenuProvider";
+import { useContextMenu } from "./context-menu/ContextMenuProvider";
+import { DataTableSummary } from "./data-table/DataTableSummary";
 import { DataTableGrid } from "./data-table/DataTableGrid";
 import { useDialog } from "./dialog/DialogProvider";
 import {
@@ -24,10 +25,12 @@ import {
   tableFallbackVisibleRows,
   tableScrollHeight,
   tableWindowHeightForRows,
-  type TableCellPosition,
   type TableRangeBounds,
   type TableVisibleRows,
 } from "./data-table/tableModel";
+import { useTableContextMenu } from "./data-table/useTableContextMenu";
+import { useSelectedCellFocus } from "./data-table/useSelectedCellFocus";
+import { useTableMenuRegistration } from "./data-table/useTableMenuRegistration";
 import { useTableSelection } from "./data-table/useTableSelection";
 
 interface DataTableWindowProps {
@@ -261,187 +264,67 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     return positionInRange(rowIndex, column, rangeBounds, visibleDatasetColumns);
   };
 
-  const singleCellRange = (position: TableCellPosition): TableRangeBounds | undefined =>
-    rangeBoundsFromSelection({ anchor: position, focus: position }, visibleDatasetColumns);
+  const openTableContextMenu = useTableContextMenu({
+    clearRange,
+    copyRange,
+    deleteColumn,
+    deleteRowAt,
+    fillDownRange,
+    focusWindow,
+    openContextMenu,
+    plotSelection,
+    rangeBounds,
+    selectedColumn,
+    title: dataset?.name,
+    updateVisibleRows,
+    visibleDatasetColumns,
+    visibleRows,
+    windowId,
+  });
 
-  const openTableContextMenu = (
-    position: { x: number; y: number },
-    context?: { cell?: TableCellPosition; column?: string },
-  ) => {
-    focusWindow(windowId);
-    const bounds = context?.cell ? singleCellRange(context.cell) : rangeBounds;
-    const column = context?.column ?? context?.cell?.column ?? selectedColumn;
-    const plotSelectionSpec = plotSelectionFromTableSelection(
-      bounds,
-      context?.column ?? selectedColumn,
-      visibleDatasetColumns,
-    );
-    const items: ContextMenuItem[] = [
-      {
-        label: "Copy TSV",
-        disabled: !bounds,
-        onSelect: () => {
-          if (bounds) copyRange(bounds);
-        },
-      },
-      {
-        label: "Delete selected cells",
-        disabled: !bounds,
-        danger: true,
-        onSelect: () => {
-          if (bounds) void clearRange(bounds);
-        },
-      },
-      {
-        label: "Fill down",
-        disabled: !bounds || bounds.maxRow <= bounds.minRow,
-        onSelect: () => {
-          if (bounds) void fillDownRange(bounds);
-        },
-      },
-      {
-        label: "Plot selection",
-        disabled: !plotSelectionSpec,
-        onSelect: () => {
-          if (plotSelectionSpec) plotSelection(plotSelectionSpec);
-        },
-      },
-      {
-        label: "Delete row",
-        disabled: context?.cell?.rowIndex == null,
-        danger: true,
-        onSelect: () => {
-          if (context?.cell) void deleteRowAt(context.cell.rowIndex);
-        },
-      },
-      {
-        label: "Delete column",
-        disabled: !column,
-        danger: true,
-        onSelect: () => {
-          if (column) void deleteColumn(column);
-        },
-      },
-      {
-        kind: "submenu",
-        label: "Rows",
-        items: [
-          {
-            label: "Rows Auto",
-            disabled: visibleRows === "auto",
-            onSelect: () => updateVisibleRows("auto"),
-          },
-          {
-            label: "Rows 10",
-            disabled: visibleRows === 10,
-            onSelect: () => updateVisibleRows(10),
-          },
-          {
-            label: "Rows 20",
-            disabled: visibleRows === 20,
-            onSelect: () => updateVisibleRows(20),
-          },
-          {
-            label: "Rows 50",
-            disabled: visibleRows === 50,
-            onSelect: () => updateVisibleRows(50),
-          },
-        ],
-      },
-    ];
-    openContextMenu({ x: position.x, y: position.y, title: dataset?.name, items });
-  };
-
-  useEffect(() => {
-    if (!selectedCell || !parentRef.current) return;
-    if (
-      editingCell?.rowIndex === selectedCell.rowIndex &&
-      editingCell.column === selectedCell.column
-    ) {
-      return;
-    }
-    rowVirtualizer.scrollToIndex(selectedCell.rowIndex, { align: "auto" });
-    const selectedCellColumnIndex = cellColumnIndex(selectedCell.column);
-    if (selectedCellColumnIndex >= 0) {
-      const left = visibleDatasetColumns
-        .slice(0, selectedCellColumnIndex)
-        .reduce((total, column) => total + getColumnWidth(column.id), 0);
-      const width = getColumnWidth(selectedCell.column);
-      const scroll = parentRef.current;
-      if (left < scroll.scrollLeft) scroll.scrollLeft = left;
-      if (left + width > scroll.scrollLeft + scroll.clientWidth) {
-        scroll.scrollLeft = left + width - scroll.clientWidth;
-      }
-    }
-    const frame = requestAnimationFrame(() => {
-      parentRef.current
-        ?.querySelector<HTMLElement>(
-          `[data-row-index="${selectedCell.rowIndex}"][data-column-index="${selectedCellColumnIndex}"]`,
-        )
-        ?.focus();
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [
+  useSelectedCellFocus({
     cellColumnIndex,
     editingCell,
     getColumnWidth,
-    rowVirtualizer,
+    parentRef,
+    scrollToIndex: rowVirtualizer.scrollToIndex,
     selectedCell,
     visibleDatasetColumns,
-  ]);
+  });
 
-  useEffect(() => {
-    if (!dataset) {
-      clearTableMenuState(windowId);
-      return;
-    }
-    setTableMenuState({
-      windowId,
-      datasetId,
-      rowCount: dataset.rows.length,
-      visibleRows,
-      hasSelectedRange,
-      canFillDownRange,
-      canPlotSelection: Boolean(selectionPlotSpec),
-      hasSelectedCell: Boolean(selectedCell),
-      hasSelectedColumn: Boolean(selectedColumn),
-      actions: {
-        copySelectedRange,
-        clearSelectedRange,
-        fillDownSelectedRange,
-        plotSelectedColumns,
-        deleteSelectedRow,
-        deleteSelectedColumn,
-        setVisibleRows: updateVisibleRows,
-      },
-    });
-  }, [
+  const tableMenuActions = useMemo(
+    () => ({
+      copySelectedRange,
+      clearSelectedRange,
+      fillDownSelectedRange,
+      plotSelectedColumns,
+      deleteSelectedRow,
+      deleteSelectedColumn,
+      setVisibleRows: updateVisibleRows,
+    }),
+    [updateVisibleRows, rangeBounds, selectedCell, selectedColumn, selectionPlotSpec],
+  );
+
+  useTableMenuRegistration({
+    actions: tableMenuActions,
     canFillDownRange,
+    canPlotSelection: Boolean(selectionPlotSpec),
     clearTableMenuState,
     dataset,
     datasetId,
     hasSelectedRange,
-    selectedCell,
-    selectedColumn,
-    selectionPlotSpec,
+    hasSelectedCell: Boolean(selectedCell),
+    hasSelectedColumn: Boolean(selectedColumn),
     setTableMenuState,
-    updateVisibleRows,
     visibleRows,
     windowId,
-  ]);
-
-  useEffect(() => () => clearTableMenuState(windowId), [clearTableMenuState, windowId]);
+  });
 
   if (!dataset) return <div className="empty-state">Dataset not found.</div>;
 
   return (
     <div className="table-window">
-      <div className="window-controls table-window-summary">
-        <span>
-          {dataset.rows.length} rows · virtualized · rows{" "}
-          {visibleRows === "auto" ? "auto" : visibleRows}
-        </span>
-      </div>
+      <DataTableSummary rowCount={dataset.rows.length} visibleRows={visibleRows} />
       <DataTableGrid
         parentRef={parentRef}
         table={table}
