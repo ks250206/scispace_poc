@@ -30,17 +30,41 @@ export const newWindowPosition = (
   };
 };
 
+export const defaultBrowserWindow = (zIndex = 1): WorkspaceWindow => ({
+  id: "browser-main",
+  kind: "browser",
+  title: "Data Browser",
+  x: centerTileX + 64,
+  y: centerTileY + 72,
+  width: 300,
+  height: 440,
+  zIndex,
+});
+
+export const defaultTerminalWindow = (zIndex = 4): WorkspaceWindow => ({
+  id: "terminal-main",
+  kind: "terminal",
+  title: "Terminal",
+  x: centerTileX + 64,
+  y: centerTileY + 756,
+  width: 1664,
+  height: 300,
+  zIndex,
+});
+
+export const defaultHistoryWindow = (zIndex = 5): WorkspaceWindow => ({
+  id: "history-main",
+  kind: "history",
+  title: "Command History",
+  x: centerTileX + 1328,
+  y: centerTileY + 532,
+  width: 420,
+  height: 520,
+  zIndex,
+});
+
 export const initialWindows = (): WorkspaceWindow[] => [
-  {
-    id: "browser-main",
-    kind: "browser",
-    title: "Data Browser",
-    x: centerTileX + 64,
-    y: centerTileY + 72,
-    width: 300,
-    height: 440,
-    zIndex: 1,
-  },
+  defaultBrowserWindow(1),
   {
     id: "table-seed",
     kind: "table",
@@ -64,61 +88,19 @@ export const initialWindows = (): WorkspaceWindow[] => [
     datasetId: "seed-waveform",
     plotId: "seed-plot",
   },
-  {
-    id: "terminal-main",
-    kind: "terminal",
-    title: "Terminal",
-    x: centerTileX + 64,
-    y: centerTileY + 756,
-    width: 1664,
-    height: 300,
-    zIndex: 4,
-  },
-  {
-    id: "history-main",
-    kind: "history",
-    title: "Command History",
-    x: centerTileX + 1328,
-    y: centerTileY + 532,
-    width: 420,
-    height: 520,
-    zIndex: 5,
-  },
+  defaultTerminalWindow(4),
+  defaultHistoryWindow(5),
 ];
 
 export const ensureWorkspaceWindows = (windows: WorkspaceWindow[]): WorkspaceWindow[] => {
   let nextWindows = windows;
   if (!nextWindows.some((window) => window.kind === "terminal")) {
     const zIndex = Math.max(0, ...nextWindows.map((window) => window.zIndex)) + 1;
-    nextWindows = [
-      ...nextWindows,
-      {
-        id: "terminal-main",
-        kind: "terminal",
-        title: "Terminal",
-        x: centerTileX + 64,
-        y: centerTileY + 756,
-        width: 1664,
-        height: 300,
-        zIndex,
-      },
-    ];
+    nextWindows = [...nextWindows, defaultTerminalWindow(zIndex)];
   }
   if (!nextWindows.some((window) => window.kind === "history")) {
     const zIndex = Math.max(0, ...nextWindows.map((window) => window.zIndex)) + 1;
-    nextWindows = [
-      ...nextWindows,
-      {
-        id: "history-main",
-        kind: "history",
-        title: "Command History",
-        x: centerTileX + 1328,
-        y: centerTileY + 532,
-        width: 420,
-        height: 520,
-        zIndex,
-      },
-    ];
+    nextWindows = [...nextWindows, defaultHistoryWindow(zIndex)];
   }
   return nextWindows;
 };

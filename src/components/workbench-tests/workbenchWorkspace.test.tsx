@@ -93,6 +93,30 @@ describe("Workbench workspace UI", () => {
     ).toBeGreaterThan(beforeZ);
   });
 
+  it("toggles utility windows from the Windows menu", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+
+    await user.click(screen.getByRole("button", { name: "Windows" }));
+    await user.click(screen.getByRole("menuitem", { name: "Terminal" }));
+    expect(storeState().windows.some((window) => window.kind === "terminal")).toBe(false);
+    expect(screen.queryByText("Terminal")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Windows" }));
+    expect(screen.getByRole("menuitem", { name: "Terminal" })).toBeInTheDocument();
+    await user.click(screen.getByRole("menuitem", { name: "Terminal" }));
+    expect(storeState().windows.some((window) => window.kind === "terminal")).toBe(true);
+    expect(getWindowTitle("Terminal")).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: "Windows" }));
+    await user.click(screen.getByRole("menuitem", { name: "Command History" }));
+    expect(storeState().windows.some((window) => window.kind === "history")).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "Windows" }));
+    await user.click(screen.getByRole("menuitem", { name: "Data Browser" }));
+    expect(storeState().windows.some((window) => window.kind === "browser")).toBe(false);
+  });
+
   it("updates current plot and closes closable windows from the Windows menu", async () => {
     const user = userEvent.setup();
     await renderWorkbench();

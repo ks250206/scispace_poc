@@ -1,7 +1,13 @@
 import type { StoreApi } from "zustand/vanilla";
+import type { WorkspaceWindow } from "../../domain/types";
 import type { SciSpaceDatabase } from "../db";
 import { persistLayout } from "./projectPersistence";
 import type { ScispaceState } from "./stateTypes";
+import {
+  defaultBrowserWindow,
+  defaultHistoryWindow,
+  defaultTerminalWindow,
+} from "./workspaceDefaults";
 
 interface WindowActionContext {
   db: SciSpaceDatabase;
@@ -15,7 +21,12 @@ export const createWindowActions = ({
   set,
 }: WindowActionContext): Pick<
   ScispaceState,
-  "closeWindow" | "updateWindow" | "focusWindow" | "setViewport" | "sendCommandToTerminalLine"
+  | "closeWindow"
+  | "toggleUtilityWindow"
+  | "updateWindow"
+  | "focusWindow"
+  | "setViewport"
+  | "sendCommandToTerminalLine"
 > => ({
   closeWindow: (id) => {
     set((state) => {
@@ -44,6 +55,33 @@ export const createWindowActions = ({
           target.kind === "plot" && target.plotId === state.currentPlotId
             ? plotSpecs[0]?.id
             : state.currentPlotId,
+      };
+    });
+    persistLayout(db, get());
+  },
+
+  toggleUtilityWindow: (kind) => {
+    set((state) => {
+      const target = state.windows.find((window) => window.kind === kind);
+      if (target) {
+        return {
+          windows: state.windows.filter((window) => window.id !== target.id),
+          activeWindowId: state.activeWindowId === target.id ? undefined : state.activeWindowId,
+          projectDirty: true,
+        };
+      }
+
+      const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
+      const nextWindow: WorkspaceWindow =
+        kind === "browser"
+          ? defaultBrowserWindow(zIndex)
+          : kind === "terminal"
+            ? defaultTerminalWindow(zIndex)
+            : defaultHistoryWindow(zIndex);
+      return {
+        windows: [...state.windows, nextWindow],
+        activeWindowId: nextWindow.id,
+        projectDirty: true,
       };
     });
     persistLayout(db, get());

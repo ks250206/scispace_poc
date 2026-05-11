@@ -61,6 +61,7 @@ function ToolbarActionItem({ item, setOpenMenu }: ToolbarActionItemProps) {
       <button
         type="button"
         role="menuitem"
+        aria-label={label}
         disabled={disabled}
         className="toolbar-menu-item-main"
         onClick={() => {
@@ -239,6 +240,7 @@ export function Workbench() {
   const redo = useScispaceStore((state) => state.redo);
   const focusWindow = useScispaceStore((state) => state.focusWindow);
   const closeWindow = useScispaceStore((state) => state.closeWindow);
+  const toggleUtilityWindow = useScispaceStore((state) => state.toggleUtilityWindow);
   const tableMenuState = useScispaceStore((state) => state.tableMenuState);
   const [isPanning, setIsPanning] = useState(false);
   const [openToolbarMenu, setOpenToolbarMenu] = useState<string>();
@@ -532,11 +534,31 @@ export function Workbench() {
       ? items.map((window) => windowMenuItem(window, activeWindowId, focusWindow, closeWindow))
       : [emptyWindowMenuItem()];
   const directWindowItems = [
-    ...windowsByKind.browser,
-    ...windowsByKind.terminal,
-    ...windowsByKind.history,
-    ...windowsByKind.plotConfig,
-  ].map((window) => windowMenuItem(window, activeWindowId, focusWindow, closeWindow));
+    {
+      kind: "browser" as const,
+      label: "Data Browser",
+      visible: windowsByKind.browser.length > 0,
+    },
+    {
+      kind: "terminal" as const,
+      label: "Terminal",
+      visible: windowsByKind.terminal.length > 0,
+    },
+    {
+      kind: "history" as const,
+      label: "Command History",
+      visible: windowsByKind.history.length > 0,
+    },
+  ].map(
+    (window): ToolbarMenuItem => ({
+      label: window.label,
+      active: window.visible,
+      onSelect: () => toggleUtilityWindow(window.kind),
+    }),
+  );
+  const directPlotConfigItems = [...windowsByKind.plotConfig].map((window) =>
+    windowMenuItem(window, activeWindowId, focusWindow, closeWindow),
+  );
 
   const toolbarMenus: ToolbarMenuProps[] = [
     {
@@ -570,6 +592,7 @@ export function Workbench() {
         { label: "Send to Back", disabled: true },
         { kind: "separator" },
         ...directWindowItems,
+        ...directPlotConfigItems,
         { kind: "separator" },
         { kind: "submenu", label: "Tables", items: windowItems(windowsByKind.tables) },
         { kind: "submenu", label: "Graphs", items: windowItems(windowsByKind.graphs) },

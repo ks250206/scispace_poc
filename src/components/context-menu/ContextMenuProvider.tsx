@@ -101,7 +101,7 @@ function ContextMenuItems({
             <button
               type="button"
               role="menuitem"
-              aria-label={item.ariaLabel}
+              aria-label={item.ariaLabel ?? item.label}
               disabled={item.disabled}
               className="context-menu-item-main"
               onClick={() => {
