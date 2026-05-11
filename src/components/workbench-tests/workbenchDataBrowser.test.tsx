@@ -20,7 +20,7 @@ describe("Workbench data browser UI", () => {
     await user.click(fileButton);
 
     expect(document.querySelector(".tree-row.file")).toHaveClass("selected");
-    expect(screen.getByText("Table - waveform.csv")).toBeInTheDocument();
+    expect(screen.getAllByText("Table - waveform.csv").length).toBeGreaterThan(0);
   });
 
   it("collapses and expands dataset columns in the data browser", async () => {
@@ -40,7 +40,9 @@ describe("Workbench data browser UI", () => {
     const file = new File(["x,y\n5,6"], "clicked.csv", { type: "text/csv" });
     fireEvent.change(screen.getByLabelText("Load data files"), { target: { files: [file] } });
 
-    await waitFor(() => expect(screen.getByText("Import - clicked.csv")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getAllByText("Import - clicked.csv").length).toBeGreaterThan(0),
+    );
     expect(storeState().pendingImports[0]?.fileName).toBe("clicked.csv");
     expect(storeState().pendingImports[0]?.text).toBe("x,y\n5,6");
   });
@@ -54,7 +56,9 @@ describe("Workbench data browser UI", () => {
     await user.click(screen.getByRole("button", { name: "Actions notes.txt" }));
     await user.click(screen.getByRole("menuitem", { name: "Load notes.txt" }));
 
-    await waitFor(() => expect(screen.getByText("Import - notes.txt")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getAllByText("Import - notes.txt").length).toBeGreaterThan(0),
+    );
   });
 
   it("shows close buttons only on table and plot windows and removes the clicked window", async () => {
@@ -95,7 +99,7 @@ describe("Workbench data browser UI", () => {
     fireEvent.change(input, { target: { value: "renamed.csv" } });
     await user.click(screen.getByRole("button", { name: "Rename" }));
     await waitFor(() => expect(screen.getByText("renamed.csv")).toBeInTheDocument());
-    expect(screen.getByText("Table - renamed.csv")).toBeInTheDocument();
+    expect(screen.getAllByText("Table - renamed.csv").length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "Actions renamed.csv" }));
     await user.click(screen.getByRole("menuitem", { name: "Delete renamed.csv" }));

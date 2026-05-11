@@ -55,6 +55,125 @@
   gap: 2px;
 }
 
+.window-tabs {
+  display: inline-flex;
+  min-width: 120px;
+  max-width: min(42vw, 640px);
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 3px;
+  overflow-x: auto;
+  padding: 2px 0;
+  scrollbar-width: none;
+}
+
+.window-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.window-tab {
+  display: inline-flex;
+  height: 28px;
+  max-width: 168px;
+  flex: 0 0 auto;
+  align-items: center;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.window-tab:hover {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.window-tab.active {
+  background: rgba(37, 99, 235, 0.12);
+  color: #123a68;
+}
+
+.window-tab-main {
+  display: inline-flex;
+  height: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 7px;
+  font: inherit;
+}
+
+.window-tab-main:focus-visible,
+.window-tab-close:focus-visible {
+  border-radius: 5px;
+  outline: 2px solid rgba(37, 99, 235, 0.32);
+  outline-offset: -2px;
+}
+
+.window-tab-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 999px;
+  background: var(--blue);
+}
+
+.window-tab-dot.browser {
+  background: var(--orange);
+}
+
+.window-tab-dot.table {
+  background: var(--green);
+}
+
+.window-tab-dot.plot-config {
+  background: #4f46e5;
+}
+
+.window-tab-dot.terminal {
+  background: #111827;
+}
+
+.window-tab-dot.import {
+  background: #7c3aed;
+}
+
+.window-tab-dot.history {
+  background: #0891b2;
+}
+
+.window-tab-title {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.window-tab-close {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.window-tab-close:hover {
+  background: rgba(15, 23, 42, 0.1);
+  color: var(--text);
+}
+
 .topbar-right {
   margin-left: auto;
   min-width: 120px;

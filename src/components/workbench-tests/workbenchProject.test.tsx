@@ -24,10 +24,12 @@ describe("Workbench project UI", () => {
     fireEvent.change(projectName, { target: { value: "Scratch Project" } });
     await user.click(screen.getByRole("button", { name: "Create" }));
 
-    await waitFor(() => expect(screen.getByText("Table - waveform.csv")).toBeInTheDocument());
-    expect(screen.getByText("Plot - waveform.csv")).toBeInTheDocument();
-    expect(screen.getByText("Terminal")).toBeInTheDocument();
-    expect(screen.getByText("Command History")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getAllByText("Table - waveform.csv").length).toBeGreaterThan(0),
+    );
+    expect(screen.getAllByText("Plot - waveform.csv").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Terminal").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Command History").length).toBeGreaterThan(0);
   });
 
   it("shows project controls and switches saved projects", async () => {

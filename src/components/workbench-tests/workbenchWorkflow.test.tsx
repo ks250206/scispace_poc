@@ -31,7 +31,9 @@ describe("Workbench reproducible workflow", () => {
       dataTransfer: { files: [file] },
     });
 
-    await waitFor(() => expect(screen.getByText("Import - workflow.csv")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getAllByText("Import - workflow.csv").length).toBeGreaterThan(0),
+    );
     expect(storeState().commandHistory.at(-1)?.command).toContain("upload-open");
 
     await user.click(await screen.findByRole("button", { name: "Import" }));
@@ -43,7 +45,9 @@ describe("Workbench reproducible workflow", () => {
       await storeState().runScispace("table workflow.csv", { source: "gui" });
       await storeState().runScispace("plot workflow.csv x=time y=signal", { source: "gui" });
     });
-    await waitFor(() => expect(screen.getByText("Table - workflow.csv")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getAllByText("Table - workflow.csv").length).toBeGreaterThan(0),
+    );
     await waitFor(() =>
       expect(screen.getAllByText("workflow.csv: signal vs time").length).toBeGreaterThan(0),
     );

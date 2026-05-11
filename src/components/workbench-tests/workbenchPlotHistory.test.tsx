@@ -19,7 +19,7 @@ describe("Workbench plot and history UI", () => {
     expect(screen.queryByText("Plot Config")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Config" })).not.toBeInTheDocument();
     await clickToolbarItem(user, "Plot", "Plot Config");
-    await waitFor(() => expect(screen.getByText("Plot Config")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Plot Config").length).toBeGreaterThan(0));
     expect(storeState().currentPlotId).toBe("seed-plot");
   });
 

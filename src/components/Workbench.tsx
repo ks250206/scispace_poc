@@ -12,6 +12,7 @@ import { CanvasWindow } from "./CanvasWindow";
 import { uploadOpenCommand } from "./DataBrowser";
 import { useDialog } from "./dialog/DialogProvider";
 import { buildPlotSvg, safePlotFileName, svgDataUrl } from "./plotExport";
+import type { WorkspaceWindow } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
 
 const centerViewport = { x: -1920, y: -1080, scale: 1 };
@@ -72,6 +73,53 @@ function ToolbarMenu({ label, openMenu, setOpenMenu, items }: ToolbarMenuProps) 
   );
 }
 
+const isTabClosable = (window: WorkspaceWindow): boolean =>
+  window.kind === "table" || window.kind === "plot" || window.kind === "plot-config";
+
+interface WindowTabsProps {
+  windows: WorkspaceWindow[];
+  activeWindowId?: string;
+  onFocusWindow: (id: string) => void;
+  onCloseWindow: (id: string) => void;
+}
+
+function WindowTabs({ windows, activeWindowId, onFocusWindow, onCloseWindow }: WindowTabsProps) {
+  return (
+    <nav className="window-tabs" aria-label="Open windows">
+      {windows.map((window) => {
+        const active = window.id === activeWindowId;
+        return (
+          <div key={window.id} className={`window-tab ${active ? "active" : ""}`}>
+            <button
+              type="button"
+              className="window-tab-main"
+              aria-label={`Window ${window.title}`}
+              aria-current={active ? "page" : undefined}
+              onClick={() => onFocusWindow(window.id)}
+            >
+              <span className={`window-tab-dot ${window.kind}`} />
+              <span className="window-tab-title">{window.title}</span>
+            </button>
+            {isTabClosable(window) ? (
+              <button
+                type="button"
+                aria-label={`Close tab ${window.title}`}
+                className="window-tab-close"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onCloseWindow(window.id);
+                }}
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
+
 export function Workbench() {
   const dialog = useDialog();
   const viewport = useScispaceStore((state) => state.viewport);
@@ -99,6 +147,8 @@ export function Workbench() {
   const redoStackLength = useScispaceStore((state) => state.redoStack.length);
   const undo = useScispaceStore((state) => state.undo);
   const redo = useScispaceStore((state) => state.redo);
+  const focusWindow = useScispaceStore((state) => state.focusWindow);
+  const closeWindow = useScispaceStore((state) => state.closeWindow);
   const tableMenuState = useScispaceStore((state) => state.tableMenuState);
   const [isPanning, setIsPanning] = useState(false);
   const [openToolbarMenu, setOpenToolbarMenu] = useState<string>();
@@ -514,6 +564,12 @@ export function Workbench() {
           </select>
           {projectDirty ? <span className="project-dirty">Unsaved</span> : null}
         </div>
+        <WindowTabs
+          windows={windows}
+          activeWindowId={activeWindowId}
+          onFocusWindow={focusWindow}
+          onCloseWindow={closeWindow}
+        />
         <nav className="toolbar-menus" aria-label="SciSpace tools">
           {toolbarMenus.map((menu) => (
             <ToolbarMenu key={menu.label} {...menu} />

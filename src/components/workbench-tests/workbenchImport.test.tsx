@@ -19,7 +19,9 @@ describe("Workbench import UI", () => {
     const file = new File(["x,y\n1,2\n3,4"], "dropped.csv", { type: "text/csv" });
     fireEvent.drop(shell as Element, { dataTransfer: { files: [file] } });
 
-    await waitFor(() => expect(screen.getByText("Import - dropped.csv")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getAllByText("Import - dropped.csv").length).toBeGreaterThan(0),
+    );
     await waitFor(() => expect(storeState().pendingImports[0]?.preview?.rows).toHaveLength(2));
     await waitFor(() =>
       expect(storeState().commandHistory.at(-1)).toMatchObject({
@@ -191,7 +193,9 @@ describe("Workbench import UI", () => {
       importId = storeState().openImportDialog("undo-import.csv", "x,y\n1,2");
     });
 
-    await waitFor(() => expect(screen.getByText("Import - undo-import.csv")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getAllByText("Import - undo-import.csv").length).toBeGreaterThan(0),
+    );
     await act(async () => {
       await storeState().confirmImport(importId);
     });

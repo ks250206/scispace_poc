@@ -1,4 +1,4 @@
-import { act, fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
@@ -8,17 +8,22 @@ import {
   storeState,
 } from "./workbenchTestUtils";
 
+const getWindowTitle = (title: string): HTMLElement | undefined =>
+  Array.from(document.querySelectorAll<HTMLElement>(".window-titlebar strong")).find(
+    (element) => element.textContent === title,
+  );
+
 describe("Workbench workspace UI", () => {
   setupWorkbenchSuite();
 
   it("renders a filesystem browser, table window, plot window, and draggable terminal window", async () => {
     await renderWorkbench();
     expect(screen.getByText("~/raw")).toBeInTheDocument();
-    expect(screen.getByText("Table - waveform.csv")).toBeInTheDocument();
+    expect(getWindowTitle("Table - waveform.csv")).toBeDefined();
     expect(screen.getByText((text) => text.includes("160 rows · virtualized"))).toBeInTheDocument();
-    expect(screen.getByText("Plot - waveform.csv")).toBeInTheDocument();
-    expect(screen.getByText("Terminal")).toBeInTheDocument();
-    expect(screen.getByText("Command History")).toBeInTheDocument();
+    expect(getWindowTitle("Plot - waveform.csv")).toBeDefined();
+    expect(getWindowTitle("Terminal")).toBeDefined();
+    expect(getWindowTitle("Command History")).toBeDefined();
     expect(screen.getByText("No scispace commands yet.")).toBeInTheDocument();
   });
 
@@ -41,10 +46,60 @@ describe("Workbench workspace UI", () => {
     expect(screen.getByRole("menuitem", { name: "New Folder" })).toBeInTheDocument();
   });
 
+  it("lists open windows in toolbar tabs and focuses the clicked window", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    const tabs = screen.getByRole("navigation", { name: "Open windows" });
+
+    expect(within(tabs).getByRole("button", { name: "Window Data Browser" })).toBeInTheDocument();
+    expect(
+      within(tabs).getByRole("button", { name: "Window Table - waveform.csv" }),
+    ).toBeInTheDocument();
+    expect(
+      within(tabs).getByRole("button", { name: "Window Plot - waveform.csv" }),
+    ).toBeInTheDocument();
+    expect(within(tabs).getByRole("button", { name: "Window Terminal" })).toBeInTheDocument();
+    expect(
+      within(tabs).getByRole("button", { name: "Window Command History" }),
+    ).toBeInTheDocument();
+
+    const beforeZ = storeState().windows.find((window) => window.id === "table-seed")?.zIndex ?? 0;
+    await user.click(within(tabs).getByRole("button", { name: "Window Table - waveform.csv" }));
+
+    expect(storeState().activeWindowId).toBe("table-seed");
+    expect(
+      storeState().windows.find((window) => window.id === "table-seed")?.zIndex,
+    ).toBeGreaterThan(beforeZ);
+  });
+
+  it("updates current plot from plot toolbar tabs and closes closable window tabs", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    const tabs = screen.getByRole("navigation", { name: "Open windows" });
+
+    await user.click(within(tabs).getByRole("button", { name: "Window Plot - waveform.csv" }));
+    expect(storeState().activeWindowId).toBe("plot-seed");
+    expect(storeState().currentPlotId).toBe("seed-plot");
+
+    expect(
+      within(tabs).queryByRole("button", { name: "Close tab Data Browser" }),
+    ).not.toBeInTheDocument();
+    await user.click(within(tabs).getByRole("button", { name: "Close tab Plot - waveform.csv" }));
+
+    await waitFor(() => expect(screen.queryByText("Plot - waveform.csv")).not.toBeInTheDocument());
+    expect(
+      within(screen.getByRole("navigation", { name: "Open windows" })).queryByRole("button", {
+        name: "Window Plot - waveform.csv",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows common window context actions and closes them with escape", async () => {
     const user = userEvent.setup();
     await renderWorkbench();
-    fireEvent.contextMenu(screen.getByText("Plot - waveform.csv"), { clientX: 400, clientY: 160 });
+    const plotTitle = getWindowTitle("Plot - waveform.csv");
+    expect(plotTitle).toBeDefined();
+    fireEvent.contextMenu(plotTitle as HTMLElement, { clientX: 400, clientY: 160 });
 
     expect(screen.getByRole("menu", { name: "Plot - waveform.csv" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Bring to Front" })).toBeInTheDocument();
