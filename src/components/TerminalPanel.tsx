@@ -13,10 +13,15 @@ const toBashPath = (path: string): string => path.replace(/^~\//, "/home/user/")
 const deleteSequence = "\x1b[3~";
 const clearVisibleScreenSequence = "\x1b[2J\x1b[H";
 const clearScrollbackSequence = "\x1b[3J";
+const tabSequence = "\t";
 
 type EditableBashShell = {
+  _buffer?: string;
   _cursor?: number;
+  _history?: string[];
+  _historyPos?: number;
   _line?: string;
+  _tabComplete?: () => Promise<void>;
   _write?: (data: string) => void;
 };
 
@@ -75,6 +80,13 @@ const scispaceReplCommands = [
   "elt",
 ] as const;
 
+const scispaceReplLocalCommands = ["help", "clear", "repl", "unsafe", "shell"] as const;
+const scispaceReplCompletionCommands = [
+  ...scispaceReplLocalCommands,
+  ...scispaceReplCommands.filter((command) => command !== "help"),
+].sort();
+const shellOnlyCommands = new Set(["cat", "cd", "ls", "pwd", "rm"]);
+
 const workspaceScaleOrDefault = (scale: number): number => Math.max(0.1, scale || 1);
 
 const buildInitialFiles = (files: VirtualFile[]): Record<string, string> =>
@@ -127,8 +139,10 @@ export const terminalPrompt = (mode: TerminalMode, cwd: string): string => {
   return mode === "repl" ? `scispace-repl:${path}> ` : `unsafe-shell:${path}$ `;
 };
 
+const terminalCrlf = (output: string): string => output.replace(/\r?\n/g, "\r\n");
+
 export const terminalPromptOutput = (output: string, mode: TerminalMode, cwd: string): string =>
-  `\r\n${output}\r\n${terminalPrompt(mode, cwd)}`;
+  `\r\n${terminalCrlf(output)}\r\n${terminalPrompt(mode, cwd)}`;
 
 export const terminalControlResult = (
   command: string,
@@ -203,9 +217,57 @@ export const terminalReplScispaceCommandFromInput = (
   mode: TerminalMode,
 ): string | undefined => {
   if (mode !== "repl" || !/[\r\n]/.test(data)) return undefined;
-  const commandLine = stripScispacePrefix(line?.trim() ?? "");
-  const [command] = commandLine.split(/\s+/);
-  return command === "help" ? commandLine : undefined;
+  return stripScispacePrefix(line?.trim() ?? "");
+};
+
+export const terminalReplShellCommandMessage = (command: string): string | undefined =>
+  shellOnlyCommands.has(command)
+    ? `\`${command}\` is only available in unsafe just-bash shell. Use scispace commands such as \`file-list [path]\` in the REPL.`
+    : undefined;
+
+export const replTabCompletion = (line: string): { insert?: string; choices?: string[] } => {
+  const trimmedLeft = line.trimStart();
+  if (trimmedLeft.includes(" ")) return {};
+  const matches = scispaceReplCompletionCommands.filter((command) =>
+    command.startsWith(trimmedLeft),
+  );
+  if (matches.length === 1) {
+    const insert = matches[0].slice(trimmedLeft.length);
+    return { insert: `${insert} ` };
+  }
+  return matches.length > 1 ? { choices: matches } : {};
+};
+
+export const applyReplTabCompletion = (shell: BashShell | null, cwd: string): boolean => {
+  const editableShell = shell as unknown as EditableBashShell | null;
+  if (!editableShell?._write || typeof editableShell._line !== "string") return false;
+  if (editableShell._cursor !== editableShell._line.length) return false;
+  const completion = replTabCompletion(editableShell._line);
+  if (completion.insert) {
+    editableShell._line += completion.insert;
+    editableShell._cursor = editableShell._line.length;
+    editableShell._write(completion.insert);
+    return true;
+  }
+  if (completion.choices?.length) {
+    editableShell._write(
+      `\r\n${completion.choices.join("  ")}\r\n${terminalPrompt("repl", cwd)}${editableShell._line}`,
+    );
+    return true;
+  }
+  return false;
+};
+
+const resetEditableLine = (shell: BashShell | null, commandLine: string): void => {
+  const editableShell = shell as unknown as EditableBashShell | null;
+  if (!editableShell) return;
+  if (commandLine) {
+    editableShell._history?.push(commandLine);
+    editableShell._historyPos = -1;
+  }
+  editableShell._line = "";
+  editableShell._cursor = 0;
+  editableShell._buffer = "";
 };
 
 export const executeTerminalFsCommand = (
@@ -560,8 +622,12 @@ export function TerminalPanel() {
       const shell = new BashShell({
         files: initialFiles,
         cwd: "/home/user",
-        greeting: ["SciSpace REPL", "Run `help` or inspect ~/raw with `ls raw`."],
-        prompt: () => terminalPrompt(terminalModeRef.current.mode, terminalFsStateRef.current.cwd),
+        greeting: ["SciSpace REPL", "Run `help` or inspect ~/raw with `file-list ~/raw`."],
+        prompt: (cwd) =>
+          terminalPrompt(
+            terminalModeRef.current.mode,
+            terminalModeRef.current.mode === "bash" ? cwd : terminalFsStateRef.current.cwd,
+          ),
       });
       shellRef.current = shell;
       await shell.attach(writeOutput);
@@ -573,56 +639,10 @@ export function TerminalPanel() {
           exitCode: result.exitCode,
         };
       };
-      const registerFsCommand = (command: "pwd" | "cd" | "ls" | "cat" | "clear") => {
-        shell.bash?.registerCommand(
-          defineCommand(command, async (args) => {
-            const result = executeTerminalFsCommand(
-              [command, ...args].join(" "),
-              terminalFsStateRef.current,
-              filesRef.current,
-              datasetsRef.current,
-            );
-            terminalFsStateRef.current = { cwd: result.cwd };
-            scrollToBottom();
-            return {
-              stdout: result.output ? `${result.output}\n` : "",
-              stderr: result.exitCode === 0 ? "" : `${result.output}\n`,
-              exitCode: result.exitCode,
-            };
-          }),
-        );
-      };
-      (["pwd", "cd", "ls", "cat", "clear"] as const).forEach(registerFsCommand);
-      const registerReplCommand = (command: (typeof scispaceReplCommands)[number]) => {
-        shell.bash?.registerCommand(
-          defineCommand(command, async (args) => {
-            const result = await runScispace(scispaceReplCommandLine(command, args), {
-              source: "terminal",
-            });
-            scrollToBottom();
-            return {
-              stdout: `${result.output}\n`,
-              stderr: result.kind === "error" ? `${result.output}\n` : "",
-              exitCode: result.kind === "error" ? 1 : 0,
-            };
-          }),
-        );
-      };
-      scispaceReplCommands.forEach(registerReplCommand);
-      const registerControlCommand = (command: "repl" | "unsafe" | "shell" | "exit") => {
-        shell.bash?.registerCommand(
-          defineCommand(command, async (args) => {
-            scrollToBottom();
-            return applyControlResult(
-              terminalControlResult(command, args, terminalModeRef.current),
-            );
-          }),
-        );
-      };
-      (["repl", "unsafe", "shell", "exit"] as const).forEach(registerControlCommand);
       shell.bash?.registerCommand(
         defineCommand("scispace", async (args) => {
           if (args[0] === "repl") {
+            terminalFsStateRef.current = { cwd: shell.cwd };
             return applyControlResult(terminalControlResult("repl", [], terminalModeRef.current));
           }
           const result = await runScispace(stripScispacePrefix(["scispace", ...args].join(" ")), {
@@ -651,6 +671,12 @@ export function TerminalPanel() {
     (data: string) => {
       const shell = shellRef.current;
       const editableShell = shell as unknown as EditableBashShell | null;
+      if (terminalModeRef.current.mode === "repl" && data === tabSequence) {
+        if (applyReplTabCompletion(shell, terminalFsStateRef.current.cwd)) {
+          scrollToBottom();
+          return;
+        }
+      }
       const controlCommand = terminalControlCommandFromInput(
         data,
         editableShell?._line,
@@ -662,11 +688,9 @@ export function TerminalPanel() {
           controlCommand.args,
           terminalModeRef.current,
         );
+        if (result.mode === "repl" && shell) terminalFsStateRef.current = { cwd: shell.cwd };
         applyTerminalControlState({ mode: result.mode, unsafe: result.unsafe });
-        if (editableShell) {
-          editableShell._line = "";
-          editableShell._cursor = 0;
-        }
+        resetEditableLine(shell, editableShell?._line?.trim() ?? "");
         writeOutput(
           terminalPromptOutput(result.output, result.mode, terminalFsStateRef.current.cwd),
         );
@@ -678,10 +702,40 @@ export function TerminalPanel() {
         editableShell?._line,
         terminalModeRef.current.mode,
       );
-      if (replCommand) {
-        if (editableShell) {
-          editableShell._line = "";
-          editableShell._cursor = 0;
+      if (replCommand !== undefined) {
+        resetEditableLine(shell, editableShell?._line?.trim() ?? "");
+        if (!replCommand) {
+          writeOutput(`\r\n${terminalPrompt("repl", terminalFsStateRef.current.cwd)}`);
+          scrollToBottom();
+          return;
+        }
+        const [command = "", ...args] = replCommand.split(/\s+/);
+        const controlResult = terminalControlResult(command, args, terminalModeRef.current);
+        if (controlResult.handled) {
+          applyTerminalControlState({ mode: controlResult.mode, unsafe: controlResult.unsafe });
+          writeOutput(
+            terminalPromptOutput(
+              controlResult.output,
+              controlResult.mode,
+              terminalFsStateRef.current.cwd,
+            ),
+          );
+          scrollToBottom();
+          return;
+        }
+        if (command === "clear") {
+          writeOutput(clearVisibleScreenSequence);
+          writeOutput(terminalPrompt("repl", terminalFsStateRef.current.cwd));
+          scrollToBottom();
+          return;
+        }
+        const shellCommandMessage = terminalReplShellCommandMessage(command);
+        if (shellCommandMessage) {
+          writeOutput(
+            terminalPromptOutput(shellCommandMessage, "repl", terminalFsStateRef.current.cwd),
+          );
+          scrollToBottom();
+          return;
         }
         void runScispace(replCommand, { source: "terminal" }).then((result) => {
           writeOutput(

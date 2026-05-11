@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  applyReplTabCompletion,
   calculateTerminalGrid,
   clearTerminalScrollbackRows,
   executeTerminalFsCommand,
   handleTerminalInput,
   normalizeTerminalOutput,
+  replTabCompletion,
   scrollTerminalToBottom,
   scispaceReplCommandLine,
   stripScispacePrefix,
@@ -14,6 +16,7 @@ import {
   terminalPrompt,
   terminalPromptOutput,
   terminalReplScispaceCommandFromInput,
+  terminalReplShellCommandMessage,
   writeTerminalOutput,
 } from "./TerminalPanel";
 import type { BashShell } from "@wterm/just-bash";
@@ -226,6 +229,9 @@ describe("terminal input handling", () => {
     expect(terminalPromptOutput("Entered scispace REPL", "repl", "/home/user")).toBe(
       "\r\nEntered scispace REPL\r\nscispace-repl:~> ",
     );
+    expect(terminalPromptOutput("a\nb", "repl", "/home/user")).toBe(
+      "\r\na\r\nb\r\nscispace-repl:~> ",
+    );
 
     const denied = terminalControlResult("shell", [], { mode: "repl", unsafe: false });
     expect(denied).toMatchObject({ handled: true, mode: "repl", unsafe: false, exitCode: 1 });
@@ -266,12 +272,43 @@ describe("terminal input handling", () => {
     expect(terminalControlCommandFromInput("x", "exit", "bash")).toBeUndefined();
   });
 
-  it("intercepts repl help before the just-bash builtin handles it", () => {
+  it("intercepts repl commands before just-bash handles overlapping names", () => {
     expect(terminalReplScispaceCommandFromInput("\r", "help", "repl")).toBe("help");
     expect(terminalReplScispaceCommandFromInput("\r", "scispace help", "repl")).toBe("help");
-    expect(terminalReplScispaceCommandFromInput("\r", "plot waveform.csv", "repl")).toBeUndefined();
+    expect(terminalReplScispaceCommandFromInput("\r", "plot waveform.csv", "repl")).toBe(
+      "plot waveform.csv",
+    );
+    expect(terminalReplScispaceCommandFromInput("\r", "ls raw", "repl")).toBe("ls raw");
     expect(terminalReplScispaceCommandFromInput("\r", "help", "bash")).toBeUndefined();
     expect(terminalReplScispaceCommandFromInput("x", "help", "repl")).toBeUndefined();
-    expect(terminalReplScispaceCommandFromInput("\r", "unknown", "repl")).toBeUndefined();
+    expect(terminalReplShellCommandMessage("ls")).toContain("unsafe just-bash shell");
+    expect(terminalReplShellCommandMessage("plot")).toBeUndefined();
+  });
+
+  it("supports basic scispace repl tab completion without taking over bash completion", () => {
+    expect(replTabCompletion("plo")).toEqual({
+      choices: [
+        "plot",
+        "plot-annotation",
+        "plot-axis",
+        "plot-grid",
+        "plot-schema",
+        "plot-series",
+        "plot-set",
+      ],
+    });
+    expect(replTabCompletion("plot-sche")).toEqual({ insert: "ma " });
+    expect(replTabCompletion("plot waveform")).toEqual({});
+
+    const writes: string[] = [];
+    const shell = {
+      _line: "plot-sche",
+      _cursor: 9,
+      _write: (data: string) => writes.push(data),
+    } as unknown as BashShell;
+
+    expect(applyReplTabCompletion(shell, "/home/user")).toBe(true);
+    expect(shell).toMatchObject({ _line: "plot-schema ", _cursor: 12 });
+    expect(writes).toEqual(["ma "]);
   });
 });
