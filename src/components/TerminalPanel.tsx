@@ -181,6 +181,19 @@ export const terminalControlResult = (
   return { handled: false, ...next, output: "", exitCode: 0 };
 };
 
+export const terminalControlCommandFromInput = (
+  data: string,
+  line: string | undefined,
+  mode: TerminalMode,
+): { command: string; args: string[] } | undefined => {
+  if (mode !== "bash" || !/[\r\n]/.test(data)) return undefined;
+  const commandLine = line?.trim() ?? "";
+  if (commandLine === "exit") return { command: "exit", args: [] };
+  if (commandLine === "scispace repl") return { command: "repl", args: [] };
+  if (commandLine === "unsafe off") return { command: "unsafe", args: ["off"] };
+  return undefined;
+};
+
 export const executeTerminalFsCommand = (
   commandLine: string,
   state: TerminalFsState,
@@ -534,7 +547,7 @@ export function TerminalPanel() {
         files: initialFiles,
         cwd: "/home/user",
         greeting: ["SciSpace REPL", "Run `help` or inspect ~/raw with `ls raw`."],
-        prompt: (cwd) => terminalPrompt(terminalModeRef.current.mode, cwd),
+        prompt: () => terminalPrompt(terminalModeRef.current.mode, terminalFsStateRef.current.cwd),
       });
       shellRef.current = shell;
       await shell.attach(writeOutput);
@@ -622,9 +635,33 @@ export function TerminalPanel() {
 
   const handleData = useCallback(
     (data: string) => {
+      const shell = shellRef.current;
+      const editableShell = shell as unknown as EditableBashShell | null;
+      const controlCommand = terminalControlCommandFromInput(
+        data,
+        editableShell?._line,
+        terminalModeRef.current.mode,
+      );
+      if (controlCommand) {
+        const result = terminalControlResult(
+          controlCommand.command,
+          controlCommand.args,
+          terminalModeRef.current,
+        );
+        applyTerminalControlState({ mode: result.mode, unsafe: result.unsafe });
+        if (editableShell) {
+          editableShell._line = "";
+          editableShell._cursor = 0;
+        }
+        writeOutput(
+          `\r\n${result.output}\n${terminalPrompt(result.mode, terminalFsStateRef.current.cwd)}`,
+        );
+        scrollToBottom();
+        return;
+      }
       void handleTerminalInput(shellRef.current, data).then(scrollToBottom);
     },
-    [scrollToBottom],
+    [applyTerminalControlState, scrollToBottom, writeOutput],
   );
 
   useEffect(() => {

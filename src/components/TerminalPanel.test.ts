@@ -8,6 +8,7 @@ import {
   scrollTerminalToBottom,
   scispaceReplCommandLine,
   stripScispacePrefix,
+  terminalControlCommandFromInput,
   terminalControlResult,
   terminalCommandLineText,
   terminalPrompt,
@@ -241,5 +242,22 @@ describe("terminal input handling", () => {
       unsafe: false,
       exitCode: 0,
     });
+  });
+
+  it("intercepts unsafe shell exit commands before just-bash handles them", () => {
+    expect(terminalControlCommandFromInput("\r", "exit", "bash")).toEqual({
+      command: "exit",
+      args: [],
+    });
+    expect(terminalControlCommandFromInput("\r", "scispace repl", "bash")).toEqual({
+      command: "repl",
+      args: [],
+    });
+    expect(terminalControlCommandFromInput("\r", "unsafe off", "bash")).toEqual({
+      command: "unsafe",
+      args: ["off"],
+    });
+    expect(terminalControlCommandFromInput("\r", "exit", "repl")).toBeUndefined();
+    expect(terminalControlCommandFromInput("x", "exit", "bash")).toBeUndefined();
   });
 });
