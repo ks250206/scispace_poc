@@ -27,7 +27,7 @@ export const createImportDialogState = (
   };
   const { allPreview, preview, error } = createPreviews(id, fileName, text, options);
   const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
-  const position = newWindowPosition(state, 72, 84);
+  const position = newWindowPosition(state, 88, 72);
   const pendingImport: PendingImport = {
     id,
     fileName,
@@ -46,8 +46,8 @@ export const createImportDialogState = (
     title: `Import - ${fileName}`,
     x: position.x,
     y: position.y,
-    width: 820,
-    height: 540,
+    width: 1120,
+    height: 720,
     zIndex,
     importId: id,
   };

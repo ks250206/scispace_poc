@@ -136,84 +136,106 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
 
   return (
     <div className="import-window">
-      <ImportControls
-        pendingImport={pendingImport}
-        onImportSet={runImportSet}
-        onCancel={() => void runScispace(`import-cancel ${importId}`, { source: "gui" })}
-        onImport={() => void confirmImport(importId)}
-      />
       <div className="import-summary">
-        <span className="import-file-name">{pendingImport.fileName}</span>
+        <div>
+          <span className="import-summary-kicker">Import source</span>
+          <span className="import-file-name">{pendingImport.fileName}</span>
+        </div>
         <span className="import-file-meta">{importStatus}</span>
       </div>
-      {pendingImport.detectedPreset ? (
-        <div className="import-preset-banner">
-          <strong>{`Detected: ${pendingImport.detectedPreset.label}`}</strong>
-          <span>{`Data starts at line ${pendingImport.detectedPreset.dataStartLine}`}</span>
-          {pendingImport.presetOverridden ? <span>Manual override</span> : null}
-          <button
-            type="button"
-            onClick={reapplyPreset}
-            aria-label={`Reapply ${pendingImport.detectedPreset.label} preset`}
-          >
-            Reapply preset
-          </button>
-          {presetMetadataEntries.length > 0 ? (
-            <dl className="import-preset-metadata">
-              {presetMetadataEntries.map(([key, value]) => (
-                <div key={key}>
-                  <dt>{key}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="import-setup-grid">
+        <ImportControls
+          pendingImport={pendingImport}
+          onImportSet={runImportSet}
+          onCancel={() => void runScispace(`import-cancel ${importId}`, { source: "gui" })}
+          onImport={() => void confirmImport(importId)}
+        />
+        {pendingImport.detectedPreset ? (
+          <section className="import-preset-card">
+            <div className="import-preset-card-header">
+              <div>
+                <span className="import-summary-kicker">Detected preset</span>
+                <strong>{`Detected: ${pendingImport.detectedPreset.label}`}</strong>
+              </div>
+              {pendingImport.presetOverridden ? (
+                <span className="import-manual-badge">Manual override</span>
+              ) : null}
+            </div>
+            <div className="import-preset-details">
+              <span>{`Data starts at line ${pendingImport.detectedPreset.dataStartLine}`}</span>
+              <button
+                type="button"
+                onClick={reapplyPreset}
+                aria-label={`Reapply ${pendingImport.detectedPreset.label} preset`}
+              >
+                Reapply preset
+              </button>
+            </div>
+            {presetMetadataEntries.length > 0 ? (
+              <dl className="import-preset-metadata">
+                {presetMetadataEntries.map(([key, value]) => (
+                  <div key={key}>
+                    <dt>{key}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+          </section>
+        ) : null}
+      </div>
       {pendingImport.error && !preview ? (
         <div className="import-error">{pendingImport.error}</div>
       ) : null}
       {allPreview ? (
-        <div className="column-name-editor">
-          {allPreview.columns.map((column, index) => (
-            <label key={`${column.id}-${index}`}>
-              <span>{`Column ${index + 1}`}</span>
-              <input
-                aria-label={`Column name ${column.id}`}
-                value={pendingImport.options.columnNames[index] ?? column.name}
-                onChange={(event) => {
-                  const columnNames = [...pendingImport.options.columnNames];
-                  columnNames[index] = event.currentTarget.value;
-                  runImportSet(`columnNames=${quoteImportCommandArg(columnNames.join(","))}`);
-                }}
-              />
-            </label>
-          ))}
-        </div>
-      ) : null}
-      {pendingImport.mode === "tabular" && allPreview ? (
-        <div className="column-import-editor">
-          <div className="column-import-title">Columns</div>
-          <div className="column-import-list">
-            {allPreview.columns.map((column) => {
-              const isExcluded = pendingImport.options.excludedColumnIds.includes(column.id);
-              return (
-                <label key={column.id} className={isExcluded ? "excluded" : undefined}>
-                  <input
-                    type="checkbox"
-                    checked={isExcluded}
-                    onChange={(event) =>
-                      toggleExcludedColumn(column.id, event.currentTarget.checked)
-                    }
-                  />
-                  <span>{column.name}</span>
-                  <small>{column.dataType}</small>
-                  <small>{isExcluded ? "delete" : "import"}</small>
-                </label>
-              );
-            })}
+        <section className="import-column-panel">
+          <div className="import-panel-heading">
+            <div>
+              <strong>Columns</strong>
+              <span>Rename columns and exclude fields before creating the dataset.</span>
+            </div>
+            <span>{`${allPreview.columns.length} columns`}</span>
           </div>
-        </div>
+          <div className="column-name-editor">
+            {allPreview.columns.map((column, index) => (
+              <label key={`${column.id}-${index}`}>
+                <span>{`Column ${index + 1}`}</span>
+                <input
+                  aria-label={`Column name ${column.id}`}
+                  value={pendingImport.options.columnNames[index] ?? column.name}
+                  onChange={(event) => {
+                    const columnNames = [...pendingImport.options.columnNames];
+                    columnNames[index] = event.currentTarget.value;
+                    runImportSet(`columnNames=${quoteImportCommandArg(columnNames.join(","))}`);
+                  }}
+                />
+              </label>
+            ))}
+          </div>
+          {pendingImport.mode === "tabular" ? (
+            <div className="column-import-editor">
+              <div className="column-import-list">
+                {allPreview.columns.map((column) => {
+                  const isExcluded = pendingImport.options.excludedColumnIds.includes(column.id);
+                  return (
+                    <label key={column.id} className={isExcluded ? "excluded" : undefined}>
+                      <input
+                        type="checkbox"
+                        checked={isExcluded}
+                        onChange={(event) =>
+                          toggleExcludedColumn(column.id, event.currentTarget.checked)
+                        }
+                      />
+                      <span>{column.name}</span>
+                      <small>{column.dataType}</small>
+                      <small>{isExcluded ? "delete" : "import"}</small>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </section>
       ) : null}
       <div className={`import-editor-grid stacked ${isRawMode ? "raw-only" : ""}`}>
         <RawTextTable

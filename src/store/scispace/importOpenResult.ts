@@ -47,15 +47,15 @@ export const applyImportOpenResult = async (
     set((state) => {
       const existingWindow = state.windows.find((window) => window.importId === importId);
       const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
-      const position = newWindowPosition(state, 72, 84);
+      const position = newWindowPosition(state, 88, 72);
       const window: WorkspaceWindow = {
         id: `import-${importId}`,
         kind: "import",
         title: `Import - ${pendingImport.fileName}`,
         x: position.x,
         y: position.y,
-        width: 820,
-        height: 540,
+        width: 1120,
+        height: 720,
         zIndex,
         importId,
       };
