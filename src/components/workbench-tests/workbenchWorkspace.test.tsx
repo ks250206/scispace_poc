@@ -46,6 +46,27 @@ describe("Workbench workspace UI", () => {
     expect(screen.getByRole("menuitem", { name: "New Folder" })).toBeInTheDocument();
   });
 
+  it("opens toolbar actions from the empty workspace context menu", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    const shell = document.querySelector(".canvas-shell") as HTMLElement;
+
+    act(() => storeState().setViewport({ x: -1400, y: -900, scale: 1.5 }));
+    fireEvent.contextMenu(shell, { clientX: 160, clientY: 120 });
+
+    const menu = screen.getByRole("menu", { name: "SciSpace" });
+    expect(within(menu).getByRole("menuitem", { name: "Project" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Windows" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Data" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Table" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Plot" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Edit" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "View" })).toBeInTheDocument();
+
+    await user.click(within(menu).getByRole("menuitem", { name: "Reset View" }));
+    expect(storeState().viewport).toMatchObject({ x: -1920, y: -1080, scale: 1 });
+  });
+
   it("lists open windows in the Windows menu and focuses the clicked window", async () => {
     const user = userEvent.setup();
     await renderWorkbench();

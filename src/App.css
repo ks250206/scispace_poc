@@ -268,7 +268,7 @@
   position: fixed;
   z-index: 6000;
   display: grid;
-  min-width: 170px;
+  min-width: 190px;
   border: 1px solid rgba(148, 163, 184, 0.55);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.98);
@@ -285,30 +285,131 @@
   white-space: nowrap;
 }
 
-.context-menu button {
-  height: 26px;
-  border: 0;
+.context-menu-row {
+  position: relative;
+  display: flex;
+  min-height: 24px;
+  align-items: center;
   border-radius: 5px;
-  background: transparent;
   color: var(--text);
-  cursor: pointer;
-  padding: 0 9px;
-  text-align: left;
 }
 
-.context-menu button:hover:not(:disabled),
-.context-menu button:focus-visible:not(:disabled) {
-  background: #e8f2ff;
-  outline: none;
+.context-menu-row:hover,
+.context-menu-row:focus-within,
+.context-menu-row.active {
+  background: #4b8ff5;
+  color: #ffffff;
 }
 
-.context-menu button.danger {
+.context-menu-row.disabled {
+  color: #94a3b8;
+}
+
+.context-menu-row.danger {
   color: #b91c1c;
 }
 
-.context-menu button:disabled {
+.context-menu-row.danger:hover,
+.context-menu-row.danger:focus-within {
+  color: #ffffff;
+}
+
+.context-menu-item-main,
+.context-menu-item-right {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font:
+    13px/1.2 system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+.context-menu-item-main {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: 18px minmax(0, 1fr) 16px;
+  align-items: center;
+  padding: 4px 8px 4px 0;
+  text-align: left;
+}
+
+.context-menu-item-main:focus-visible,
+.context-menu-item-right:focus-visible {
+  outline: none;
+}
+
+.context-menu-item-main:disabled,
+.context-menu-item-right:disabled {
   color: #94a3b8;
   cursor: default;
+}
+
+.context-menu-check {
+  display: inline-flex;
+  justify-content: center;
+  color: inherit;
+  font-size: 11px;
+}
+
+.context-menu-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-menu-arrow {
+  justify-self: end;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.context-menu-item-right {
+  display: grid;
+  width: 22px;
+  height: 20px;
+  flex: 0 0 22px;
+  place-items: center;
+  border-radius: 4px;
+  margin-right: 3px;
+  padding: 0;
+}
+
+.context-menu-item-right:hover:not(:disabled),
+.context-menu-item-right:focus-visible:not(:disabled) {
+  background: rgba(15, 23, 42, 0.1);
+}
+
+.context-menu-separator {
+  height: 1px;
+  margin: 6px 0;
+  background: rgba(148, 163, 184, 0.32);
+}
+
+.context-submenu {
+  position: absolute;
+  z-index: 6001;
+  top: -6px;
+  left: calc(100% - 2px);
+  display: grid;
+  min-width: 220px;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
+  opacity: 0;
+  padding: 6px;
+  pointer-events: none;
+}
+
+.context-menu-submenu-root:hover > .context-submenu,
+.context-menu-submenu-root:focus-within > .context-submenu {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .toolbar-hidden-inputs {

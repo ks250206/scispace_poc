@@ -8,13 +8,30 @@ import {
   type ReactNode,
 } from "react";
 
-export interface ContextMenuItem {
+interface ContextMenuActionItem {
   label: string;
   ariaLabel?: string;
   disabled?: boolean;
   danger?: boolean;
+  active?: boolean;
+  rightLabel?: string;
+  rightAriaLabel?: string;
   onSelect: () => void;
+  onRightSelect?: () => void;
 }
+
+export type ContextMenuItem =
+  | ContextMenuActionItem
+  | {
+      kind: "separator";
+      label?: string;
+    }
+  | {
+      kind: "submenu";
+      label: string;
+      items: ContextMenuItem[];
+      disabled?: boolean;
+    };
 
 interface ContextMenuRequest {
   x: number;
@@ -33,6 +50,89 @@ interface ContextMenuContextValue {
 }
 
 const ContextMenuContext = createContext<ContextMenuContextValue | undefined>(undefined);
+
+function ContextMenuItems({
+  items,
+  closeContextMenu,
+}: {
+  items: ContextMenuItem[];
+  closeContextMenu: () => void;
+}) {
+  return (
+    <>
+      {items.map((item, index) => {
+        if ("kind" in item && item.kind === "separator") {
+          return (
+            <div key={`separator-${item.label ?? index}`} className="context-menu-separator" />
+          );
+        }
+        if ("kind" in item && item.kind === "submenu") {
+          return (
+            <div
+              key={`submenu-${item.label}-${index}`}
+              className={`context-menu-row context-menu-submenu-root ${
+                item.disabled ? "disabled" : ""
+              }`}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                aria-label={item.label}
+                disabled={item.disabled}
+                className="context-menu-item-main"
+              >
+                <span className="context-menu-check" />
+                <span className="context-menu-label">{item.label}</span>
+                <span className="context-menu-arrow">›</span>
+              </button>
+              <div className="context-submenu" role="menu" aria-label={`${item.label} submenu`}>
+                <ContextMenuItems items={item.items} closeContextMenu={closeContextMenu} />
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div
+            key={`item-${item.ariaLabel ?? item.label}-${index}`}
+            className={`context-menu-row ${item.active ? "active" : ""} ${
+              item.danger ? "danger" : ""
+            }`}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              aria-label={item.ariaLabel}
+              disabled={item.disabled}
+              className="context-menu-item-main"
+              onClick={() => {
+                closeContextMenu();
+                item.onSelect();
+              }}
+            >
+              <span className="context-menu-check">{item.active ? "✓" : ""}</span>
+              <span className="context-menu-label">{item.label}</span>
+            </button>
+            {item.rightLabel ? (
+              <button
+                type="button"
+                className="context-menu-item-right"
+                aria-label={item.rightAriaLabel ?? item.rightLabel}
+                disabled={item.disabled}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  closeContextMenu();
+                  item.onRightSelect?.();
+                }}
+              >
+                {item.rightLabel}
+              </button>
+            ) : null}
+          </div>
+        );
+      })}
+    </>
+  );
+}
 
 export function ContextMenuProvider({ children }: { children: ReactNode }) {
   const [menu, setMenu] = useState<ContextMenuState>();
@@ -78,22 +178,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
           onContextMenu={(event) => event.preventDefault()}
         >
           {menu.title ? <div className="context-menu-title">{menu.title}</div> : null}
-          {menu.items.map((item) => (
-            <button
-              key={`${menu.id}-${item.ariaLabel ?? item.label}`}
-              type="button"
-              role="menuitem"
-              aria-label={item.ariaLabel}
-              disabled={item.disabled}
-              className={item.danger ? "danger" : undefined}
-              onClick={() => {
-                closeContextMenu();
-                item.onSelect();
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
+          <ContextMenuItems items={menu.items} closeContextMenu={closeContextMenu} />
         </div>
       ) : null}
     </ContextMenuContext.Provider>

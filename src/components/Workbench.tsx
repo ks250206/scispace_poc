@@ -10,6 +10,7 @@ import {
 } from "react";
 import { CanvasWindow } from "./CanvasWindow";
 import { uploadOpenCommand } from "./DataBrowser";
+import { useContextMenu, type ContextMenuItem } from "./context-menu/ContextMenuProvider";
 import { useDialog } from "./dialog/DialogProvider";
 import { buildPlotSvg, safePlotFileName, svgDataUrl } from "./plotExport";
 import type { WorkspaceWindow } from "../domain/types";
@@ -185,8 +186,32 @@ const emptyWindowMenuItem = (label = "(none)"): ToolbarMenuItem => ({
   disabled: true,
 });
 
+const toContextMenuItem = (item: ToolbarMenuItem): ContextMenuItem => {
+  if ("kind" in item && item.kind === "separator") {
+    return { kind: "separator", label: item.label };
+  }
+  if ("kind" in item && item.kind === "submenu") {
+    return {
+      kind: "submenu",
+      label: item.label,
+      disabled: item.disabled,
+      items: item.items.map(toContextMenuItem),
+    };
+  }
+  return {
+    label: item.label,
+    disabled: item.disabled,
+    active: item.active,
+    rightLabel: item.rightLabel,
+    rightAriaLabel: item.rightAriaLabel,
+    onSelect: () => item.onSelect?.(),
+    onRightSelect: item.onRightSelect,
+  };
+};
+
 export function Workbench() {
   const dialog = useDialog();
+  const { openContextMenu } = useContextMenu();
   const viewport = useScispaceStore((state) => state.viewport);
   const setViewport = useScispaceStore((state) => state.setViewport);
   const windows = useScispaceStore((state) => state.windows);
@@ -657,6 +682,31 @@ export function Workbench() {
     },
   ];
 
+  const backgroundContextItems: ContextMenuItem[] = toolbarMenus.map((menu) => ({
+    kind: "submenu",
+    label: menu.label,
+    items: menu.items.map(toContextMenuItem),
+  }));
+
+  const handleBackgroundContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (
+      target.closest(
+        ".canvas-window, .context-menu, .toolbar-menu, .dialog-modal, button, input, select, textarea",
+      )
+    ) {
+      return;
+    }
+    event.preventDefault();
+    setOpenToolbarMenu(undefined);
+    openContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      title: "SciSpace",
+      items: backgroundContextItems,
+    });
+  };
+
   return (
     <main className="workbench" onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}>
       <div className="topbar">
@@ -710,6 +760,7 @@ export function Workbench() {
         style={canvasShellStyle}
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
+        onContextMenu={handleBackgroundContextMenu}
         onDragOver={(event) => event.preventDefault()}
         onDrop={handleDrop}
       >
