@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
+  clickToolbarItem,
   initializeStore,
   renderWorkbench,
   setupWorkbenchSuite,
@@ -126,13 +127,13 @@ describe("Workbench data browser UI", () => {
       source: "gui",
     });
 
-    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await clickToolbarItem(user, "Edit", "Undo");
     await waitFor(() =>
       expect(storeState().files.some((file) => file.path === "~/raw/waveform.csv")).toBe(true),
     );
     expect(storeState().datasets[0]?.id).toBe("seed-waveform");
 
-    await user.click(screen.getByRole("button", { name: "Redo" }));
+    await clickToolbarItem(user, "Edit", "Redo");
     await waitFor(() =>
       expect(storeState().files.some((file) => file.path === "~/raw/waveform.csv")).toBe(false),
     );

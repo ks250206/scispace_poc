@@ -1,7 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { ImportSettingsWindow } from "../ImportSettingsWindow";
 import {
+  clickToolbarItem,
   renderWorkbench,
   setupWorkbenchSuite,
   storeState,
@@ -182,6 +184,7 @@ describe("Workbench import UI", () => {
   });
 
   it("undoes and redoes confirmed imports from the topbar", async () => {
+    const user = userEvent.setup();
     await renderWorkbench();
     let importId = "";
     act(() => {
@@ -197,13 +200,13 @@ describe("Workbench import UI", () => {
     );
     expect(storeState().commandHistory.at(-1)?.command).toContain(`import-confirm ${importId}`);
 
-    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    await clickToolbarItem(user, "Edit", "Undo");
     await waitFor(() =>
       expect(storeState().files.some((file) => file.path === "~/raw/undo-import.csv")).toBe(false),
     );
     expect(storeState().redoStack).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Redo" }));
+    await clickToolbarItem(user, "Edit", "Redo");
     await waitFor(() =>
       expect(storeState().files.some((file) => file.path === "~/raw/undo-import.csv")).toBe(true),
     );

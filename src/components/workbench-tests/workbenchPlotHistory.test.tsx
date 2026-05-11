@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
+  clickToolbarItem,
   initializeStore,
   renderWorkbench,
   setupWorkbenchSuite,
@@ -130,8 +131,10 @@ describe("Workbench plot and history UI", () => {
   it("undoes and redoes destructive commands from the topbar", async () => {
     const user = userEvent.setup();
     await renderWorkbench();
-    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Redo" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("menuitem", { name: "Undo" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Redo" })).toBeDisabled();
+    await user.keyboard("{Escape}");
 
     await act(async () => {
       await useScispaceStore
@@ -140,18 +143,23 @@ describe("Workbench plot and history UI", () => {
           source: "gui",
         });
     });
-    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Redo" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("menuitem", { name: "Undo" })).toBeEnabled();
+    expect(screen.getByRole("menuitem", { name: "Redo" })).toBeDisabled();
+    await user.keyboard("{Escape}");
     expect(storeState().datasets[0]?.rows[0]?.signal).toBe(42.5);
 
-    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await clickToolbarItem(user, "Edit", "Undo");
     await waitFor(() => expect(storeState().datasets[0]?.rows[0]?.signal).toBe(3));
-    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Redo" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("menuitem", { name: "Undo" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Redo" })).toBeEnabled();
+    await user.keyboard("{Escape}");
 
-    await user.click(screen.getByRole("button", { name: "Redo" }));
+    await clickToolbarItem(user, "Edit", "Redo");
     await waitFor(() => expect(storeState().datasets[0]?.rows[0]?.signal).toBe(42.5));
-    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Redo" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("menuitem", { name: "Undo" })).toBeEnabled();
+    expect(screen.getByRole("menuitem", { name: "Redo" })).toBeDisabled();
   });
 });

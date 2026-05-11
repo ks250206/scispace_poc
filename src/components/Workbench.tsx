@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -19,12 +20,64 @@ const wheelPanSensitivity = 0.75;
 const baseDotSpacing = 24;
 const baseMajorGridSpacing = 240;
 
+const quoteCommandArg = (value: string): string =>
+  /\s|["']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
+
+interface ToolbarMenuItem {
+  label: string;
+  onSelect?: () => void;
+  disabled?: boolean;
+}
+
+interface ToolbarMenuProps {
+  label: string;
+  openMenu: string | undefined;
+  setOpenMenu: (label: string | undefined) => void;
+  items: ToolbarMenuItem[];
+}
+
+function ToolbarMenu({ label, openMenu, setOpenMenu, items }: ToolbarMenuProps) {
+  const isOpen = openMenu === label;
+  return (
+    <div className="toolbar-menu-root">
+      <button
+        type="button"
+        className="toolbar-menu-trigger"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        onClick={() => setOpenMenu(isOpen ? undefined : label)}
+      >
+        {label}
+      </button>
+      {isOpen ? (
+        <div className="toolbar-menu" role="menu" aria-label={`${label} menu`}>
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              disabled={item.disabled}
+              onClick={() => {
+                setOpenMenu(undefined);
+                item.onSelect?.();
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function Workbench() {
   const dialog = useDialog();
   const viewport = useScispaceStore((state) => state.viewport);
   const setViewport = useScispaceStore((state) => state.setViewport);
   const windows = useScispaceStore((state) => state.windows);
   const projectImportInputRef = useRef<HTMLInputElement>(null);
+  const dataLoadInputRef = useRef<HTMLInputElement>(null);
   const projects = useScispaceStore((state) => state.projects);
   const currentProjectId = useScispaceStore((state) => state.currentProjectId);
   const projectDirty = useScispaceStore((state) => state.projectDirty);
@@ -41,9 +94,27 @@ export function Workbench() {
   const undo = useScispaceStore((state) => state.undo);
   const redo = useScispaceStore((state) => state.redo);
   const [isPanning, setIsPanning] = useState(false);
+  const [openToolbarMenu, setOpenToolbarMenu] = useState<string>();
   const canvasDrag = useRef<{ x: number; y: number; originX: number; originY: number } | null>(
     null,
   );
+
+  useEffect(() => {
+    if (!openToolbarMenu) return;
+    const closeOnPointerDown = (event: globalThis.PointerEvent) => {
+      if ((event.target as HTMLElement).closest(".toolbar-menu-root")) return;
+      setOpenToolbarMenu(undefined);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenToolbarMenu(undefined);
+    };
+    window.addEventListener("pointerdown", closeOnPointerDown);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", closeOnPointerDown);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [openToolbarMenu]);
 
   const canvasStyle = useMemo(
     () => ({
@@ -141,6 +212,25 @@ export function Workbench() {
     }
   };
 
+  const handleLoadDataFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = "";
+    for (const file of files) {
+      const text = await file.text();
+      const uploadId = stageUploadPayload(file.name, text);
+      void runScispace(uploadOpenCommand(uploadId, file.name), { source: "gui" });
+    }
+  };
+
+  const handleNewFolder = async () => {
+    const name = await dialog.prompt({
+      title: "Folder name",
+      defaultValue: "New Folder",
+      confirmLabel: "Create",
+    });
+    if (name) void runScispace(`file-mkdir ~/raw/${quoteCommandArg(name)}`, { source: "gui" });
+  };
+
   const handleNewProject = async () => {
     const confirmed = await dialog.confirm({
       title: "Create new project",
@@ -212,12 +302,79 @@ export function Workbench() {
     void switchProject(projectId);
   };
 
+  const toolbarMenus: ToolbarMenuProps[] = [
+    {
+      label: "Project",
+      openMenu: openToolbarMenu,
+      setOpenMenu: setOpenToolbarMenu,
+      items: [
+        { label: "New Project", onSelect: () => void handleNewProject() },
+        { label: "Save Project", onSelect: () => void handleSaveProject() },
+        {
+          label: "Delete Project",
+          onSelect: () => void handleDeleteProject(),
+          disabled: !currentProjectId,
+        },
+        { label: "Import Project", onSelect: () => projectImportInputRef.current?.click() },
+        { label: "Export Project", onSelect: () => void handleExportProject() },
+      ],
+    },
+    {
+      label: "Data",
+      openMenu: openToolbarMenu,
+      setOpenMenu: setOpenToolbarMenu,
+      items: [
+        { label: "Load Data", onSelect: () => dataLoadInputRef.current?.click() },
+        { label: "New Folder", onSelect: () => void handleNewFolder() },
+      ],
+    },
+    {
+      label: "Table",
+      openMenu: openToolbarMenu,
+      setOpenMenu: setOpenToolbarMenu,
+      items: [
+        { label: "Open Table", disabled: true },
+        { label: "Delete Row", disabled: true },
+        { label: "Delete Column", disabled: true },
+      ],
+    },
+    {
+      label: "Plot",
+      openMenu: openToolbarMenu,
+      setOpenMenu: setOpenToolbarMenu,
+      items: [
+        { label: "New Plot", disabled: true },
+        { label: "Plot Config", disabled: true },
+        { label: "Export Plot", disabled: true },
+      ],
+    },
+    {
+      label: "Edit",
+      openMenu: openToolbarMenu,
+      setOpenMenu: setOpenToolbarMenu,
+      items: [
+        { label: "Undo", onSelect: () => void undo(), disabled: undoStackLength === 0 },
+        { label: "Redo", onSelect: () => void redo(), disabled: redoStackLength === 0 },
+      ],
+    },
+    {
+      label: "View",
+      openMenu: openToolbarMenu,
+      setOpenMenu: setOpenToolbarMenu,
+      items: [
+        { label: "Reset View", onSelect: () => setViewport(centerViewport) },
+        { label: `Zoom ${Math.round(viewport.scale * 100)}%`, disabled: true },
+      ],
+    },
+  ];
+
   return (
     <main className="workbench" onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}>
       <div className="topbar">
-        <div className="brand">SciSpace</div>
-        <div className="toolbar-group">
+        <div className="topbar-left">
+          <div className="brand">SciSpace</div>
           <select
+            className="project-select"
             aria-label="Project"
             value={currentProjectId ?? ""}
             onChange={(event) => void handleSwitchProject(event.target.value)}
@@ -228,23 +385,17 @@ export function Workbench() {
               </option>
             ))}
           </select>
-          <button type="button" onClick={() => void handleSaveProject()}>
-            Save Project
-          </button>
           {projectDirty ? <span className="project-dirty">Unsaved</span> : null}
-          <button
-            type="button"
-            disabled={!currentProjectId}
-            onClick={() => void handleDeleteProject()}
-          >
-            Delete Project
-          </button>
-          <button type="button" onClick={() => void handleExportProject()}>
-            Export Project
-          </button>
-          <button type="button" onClick={() => projectImportInputRef.current?.click()}>
-            Import Project
-          </button>
+        </div>
+        <nav className="toolbar-menus" aria-label="SciSpace tools">
+          {toolbarMenus.map((menu) => (
+            <ToolbarMenu key={menu.label} {...menu} />
+          ))}
+        </nav>
+        <div className="topbar-right">
+          <span className="zoom-control">Zoom {Math.round(viewport.scale * 100)}%</span>
+        </div>
+        <div className="toolbar-hidden-inputs">
           <input
             ref={projectImportInputRef}
             aria-label="Import project file"
@@ -253,19 +404,14 @@ export function Workbench() {
             accept="application/json,.json,.scispace.json"
             onChange={(event) => void handleImportProjectFile(event)}
           />
-          <button type="button" disabled={undoStackLength === 0} onClick={() => void undo()}>
-            Undo
-          </button>
-          <button type="button" disabled={redoStackLength === 0} onClick={() => void redo()}>
-            Redo
-          </button>
-          <button type="button" onClick={() => void handleNewProject()}>
-            New Project
-          </button>
-          <button type="button" onClick={() => setViewport(centerViewport)}>
-            Reset View
-          </button>
-          <span>{Math.round(viewport.scale * 100)}%</span>
+          <input
+            ref={dataLoadInputRef}
+            aria-label="Load toolbar data files"
+            className="visually-hidden"
+            type="file"
+            multiple
+            onChange={(event) => void handleLoadDataFiles(event)}
+          />
         </div>
       </div>
       <section

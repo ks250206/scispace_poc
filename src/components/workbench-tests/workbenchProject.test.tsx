@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
+  clickToolbarItem,
   renderWorkbench,
   setupWorkbenchSuite,
   storeState,
@@ -17,7 +18,7 @@ describe("Workbench project UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close Table - waveform.csv" }));
     await waitFor(() => expect(screen.queryByText("Table - waveform.csv")).not.toBeInTheDocument());
 
-    await user.click(screen.getByRole("button", { name: "New Project" }));
+    await clickToolbarItem(user, "Project", "New Project");
     await user.click(screen.getByRole("button", { name: "Create" }));
     const projectName = screen.getByRole("textbox", { name: "Project name" });
     fireEvent.change(projectName, { target: { value: "Scratch Project" } });
@@ -43,7 +44,7 @@ describe("Workbench project UI", () => {
         source: "gui",
       });
     });
-    await user.click(screen.getByRole("button", { name: "New Project" }));
+    await clickToolbarItem(user, "Project", "New Project");
     await user.click(screen.getByRole("button", { name: "Create" }));
     const projectName = screen.getByRole("textbox", { name: "Project name" });
     fireEvent.change(projectName, { target: { value: "Second Project" } });
@@ -77,7 +78,7 @@ describe("Workbench project UI", () => {
       });
     });
 
-    await user.click(screen.getByRole("button", { name: "Export Project" }));
+    await clickToolbarItem(user, "Project", "Export Project");
     const exportLink = createElement.mock.results
       .map((result) => result.value as HTMLAnchorElement)
       .find((element) => element.download?.endsWith(".scispace.json"));
@@ -118,12 +119,12 @@ describe("Workbench project UI", () => {
     await waitFor(() => expect(storeState().projectDirty).toBe(true));
     expect(await screen.findByText("Unsaved")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Save Project" }));
+    await clickToolbarItem(user, "Project", "Save Project");
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByText("Unsaved")).not.toBeInTheDocument());
 
     const firstProjectId = storeState().currentProjectId ?? "";
-    await user.click(screen.getByRole("button", { name: "New Project" }));
+    await clickToolbarItem(user, "Project", "New Project");
     await user.click(screen.getByRole("button", { name: "Create" }));
     await user.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(storeState().currentProjectId).not.toBe(firstProjectId));

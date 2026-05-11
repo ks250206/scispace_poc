@@ -26,6 +26,15 @@ export const waitForTableBodyCells = async (minimumCellCount: number) => {
   return tableBodyCells();
 };
 
+export const clickToolbarItem = async (
+  user: { click: (target: Element) => Promise<void> },
+  menuName: string,
+  itemName: string,
+) => {
+  await user.click(screen.getByRole("button", { name: menuName }));
+  await user.click(screen.getByRole("menuitem", { name: itemName }));
+};
+
 export const setupWorkbenchSuite = () => {
   beforeEach(async () => {
     cleanup();
