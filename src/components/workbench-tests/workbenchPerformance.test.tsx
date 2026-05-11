@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { DataTableWindow } from "../DataTableWindow";
 import { ContextMenuProvider } from "../context-menu/ContextMenuProvider";
@@ -25,10 +25,11 @@ describe("Workbench performance regressions", () => {
     });
     render(<ImportSettingsWindow importId={importId} />);
 
-    await waitFor(() => expect(screen.getByText("601 lines")).toBeInTheDocument());
     expect(screen.getByText("500 rows")).toBeInTheDocument();
-    expect(document.querySelectorAll(".raw-text-table tbody tr").length).toBeLessThan(50);
     expect(document.querySelectorAll(".import-preview tbody tr").length).toBeLessThan(50);
+    fireEvent.click(screen.getByRole("tab", { name: "Raw text" }));
+    await waitFor(() => expect(screen.getByText("601 lines")).toBeInTheDocument());
+    expect(document.querySelectorAll(".raw-text-table tbody tr").length).toBeLessThan(50);
   });
 
   it("keeps large dataset table body virtualized", async () => {

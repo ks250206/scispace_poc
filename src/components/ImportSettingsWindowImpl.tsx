@@ -1,4 +1,12 @@
-import { useCallback, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useScispaceStore } from "../store/scispaceStore";
@@ -25,6 +33,8 @@ interface ImportSettingsWindowProps {
   importId: string;
 }
 
+type ImportTab = "preview" | "raw" | "columns" | "metadata";
+
 export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   const pendingImport = useScispaceStore((state) =>
     state.pendingImports.find((item) => item.id === importId),
@@ -35,6 +45,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   const previewParentRef = useRef<HTMLDivElement>(null);
   const [previewColumnWidths, setPreviewColumnWidths] = useState<Record<string, number>>({});
   const [rawColumnWidths, setRawColumnWidths] = useState<Record<string, number>>({});
+  const [activeTab, setActiveTab] = useState<ImportTab>("preview");
   const preview = pendingImport?.preview;
   const allPreview = pendingImport?.allPreview;
   const rawLines = useMemo(() => pendingImport?.text.split(/\r?\n/) ?? [], [pendingImport?.text]);
@@ -96,6 +107,10 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
         }));
   const isRawMode = pendingImport?.mode === "raw";
   const importStatus = pendingImport && importStatusText(pendingImport, preview, rawLines.length);
+
+  useEffect(() => {
+    setActiveTab(isRawMode ? "raw" : "preview");
+  }, [isRawMode]);
 
   const startColumnResize = (
     setter: Dispatch<SetStateAction<Record<string, number>>>,
@@ -187,85 +202,150 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
       {pendingImport.error && !preview ? (
         <div className="import-error">{pendingImport.error}</div>
       ) : null}
-      {allPreview ? (
-        <section className="import-column-panel">
-          <div className="import-panel-heading">
-            <div>
-              <strong>Columns</strong>
-              <span>Rename columns and exclude fields before creating the dataset.</span>
-            </div>
-            <span>{`${allPreview.columns.length} columns`}</span>
-          </div>
-          <div className="column-name-editor">
-            {allPreview.columns.map((column, index) => (
-              <label key={`${column.id}-${index}`}>
-                <span>{`Column ${index + 1}`}</span>
-                <input
-                  aria-label={`Column name ${column.id}`}
-                  value={pendingImport.options.columnNames[index] ?? column.name}
-                  onChange={(event) => {
-                    const columnNames = [...pendingImport.options.columnNames];
-                    columnNames[index] = event.currentTarget.value;
-                    runImportSet(`columnNames=${quoteImportCommandArg(columnNames.join(","))}`);
-                  }}
-                />
-              </label>
-            ))}
-          </div>
-          {pendingImport.mode === "tabular" ? (
-            <div className="column-import-editor">
-              <div className="column-import-list">
-                {allPreview.columns.map((column) => {
-                  const isExcluded = pendingImport.options.excludedColumnIds.includes(column.id);
-                  return (
-                    <label key={column.id} className={isExcluded ? "excluded" : undefined}>
-                      <input
-                        type="checkbox"
-                        checked={isExcluded}
-                        onChange={(event) =>
-                          toggleExcludedColumn(column.id, event.currentTarget.checked)
-                        }
-                      />
-                      <span>{column.name}</span>
-                      <small>{column.dataType}</small>
-                      <small>{isExcluded ? "delete" : "import"}</small>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
+      <div className="import-tab-area">
+        <div className="import-tabs" role="tablist" aria-label="Import workspace">
+          {[
+            ["preview", "Preview"],
+            ["raw", "Raw text"],
+            ["columns", "Columns"],
+            ["metadata", "Metadata"],
+          ].map(([tab, label]) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab}
+              className={activeTab === tab ? "active" : undefined}
+              onClick={() => setActiveTab(tab as ImportTab)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="import-tab-panel">
+          {activeTab === "preview" ? (
+            !isRawMode ? (
+              <ParsedPreviewTable
+                preview={preview}
+                parentRef={previewParentRef}
+                table={table}
+                rows={rows}
+                visibleRows={visiblePreviewRows}
+                totalSize={rowVirtualizer.getTotalSize()}
+                tableWidth={previewTableWidth}
+                getColumnWidth={getPreviewColumnWidth}
+                onStartColumnResize={(columnId, startX, startWidth) =>
+                  startColumnResize(setPreviewColumnWidths, columnId, startX, startWidth)
+                }
+              />
+            ) : (
+              <div className="import-tab-empty">Raw mode does not create a parsed preview.</div>
+            )
           ) : null}
-        </section>
-      ) : null}
-      <div className={`import-editor-grid stacked ${isRawMode ? "raw-only" : ""}`}>
-        <RawTextTable
-          pendingImport={pendingImport}
-          rawLines={rawLines}
-          parentRef={rawParentRef}
-          visibleRows={visibleRawRows}
-          totalSize={rawVirtualizer.getTotalSize()}
-          tableWidth={rawTableWidth}
-          getColumnWidth={getRawColumnWidth}
-          onStartColumnResize={(columnId, startX, startWidth) =>
-            startColumnResize(setRawColumnWidths, columnId, startX, startWidth)
-          }
-          onUpdateRawLine={updateRawLine}
-        />
-        {!isRawMode ? (
-          <ParsedPreviewTable
-            preview={preview}
-            parentRef={previewParentRef}
-            table={table}
-            rows={rows}
-            visibleRows={visiblePreviewRows}
-            totalSize={rowVirtualizer.getTotalSize()}
-            tableWidth={previewTableWidth}
-            getColumnWidth={getPreviewColumnWidth}
-            onStartColumnResize={(columnId, startX, startWidth) =>
-              startColumnResize(setPreviewColumnWidths, columnId, startX, startWidth)
-            }
-          />
-        ) : null}
+          {activeTab === "raw" ? (
+            <RawTextTable
+              pendingImport={pendingImport}
+              rawLines={rawLines}
+              parentRef={rawParentRef}
+              visibleRows={visibleRawRows}
+              totalSize={rawVirtualizer.getTotalSize()}
+              tableWidth={rawTableWidth}
+              getColumnWidth={getRawColumnWidth}
+              onStartColumnResize={(columnId, startX, startWidth) =>
+                startColumnResize(setRawColumnWidths, columnId, startX, startWidth)
+              }
+              onUpdateRawLine={updateRawLine}
+            />
+          ) : null}
+          {activeTab === "columns" ? (
+            allPreview ? (
+              <section className="import-column-panel">
+                <div className="import-panel-heading">
+                  <div>
+                    <strong>Columns</strong>
+                    <span>Rename columns and exclude fields before creating the dataset.</span>
+                  </div>
+                  <span>{`${allPreview.columns.length} columns`}</span>
+                </div>
+                <div className="column-name-editor">
+                  {allPreview.columns.map((column, index) => (
+                    <label key={`${column.id}-${index}`}>
+                      <span>{`Column ${index + 1}`}</span>
+                      <input
+                        aria-label={`Column name ${column.id}`}
+                        value={pendingImport.options.columnNames[index] ?? column.name}
+                        onChange={(event) => {
+                          const columnNames = [...pendingImport.options.columnNames];
+                          columnNames[index] = event.currentTarget.value;
+                          runImportSet(
+                            `columnNames=${quoteImportCommandArg(columnNames.join(","))}`,
+                          );
+                        }}
+                      />
+                    </label>
+                  ))}
+                </div>
+                {pendingImport.mode === "tabular" ? (
+                  <div className="column-import-editor">
+                    <div className="column-import-list">
+                      {allPreview.columns.map((column) => {
+                        const isExcluded = pendingImport.options.excludedColumnIds.includes(
+                          column.id,
+                        );
+                        return (
+                          <label key={column.id} className={isExcluded ? "excluded" : undefined}>
+                            <input
+                              type="checkbox"
+                              checked={isExcluded}
+                              onChange={(event) =>
+                                toggleExcludedColumn(column.id, event.currentTarget.checked)
+                              }
+                            />
+                            <span>{column.name}</span>
+                            <small>{column.dataType}</small>
+                            <small>{isExcluded ? "delete" : "import"}</small>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+            ) : (
+              <div className="import-tab-empty">No columns are available for this import.</div>
+            )
+          ) : null}
+          {activeTab === "metadata" ? (
+            <section className="import-metadata-panel">
+              {pendingImport.detectedPreset ? (
+                <>
+                  <div className="import-panel-heading">
+                    <div>
+                      <strong>{pendingImport.detectedPreset.label}</strong>
+                      <span>{`Data starts at line ${pendingImport.detectedPreset.dataStartLine}`}</span>
+                    </div>
+                  </div>
+                  {presetMetadataEntries.length > 0 ? (
+                    <dl className="import-metadata-list">
+                      {Object.entries(pendingImport.detectedPreset.metadata ?? {}).map(
+                        ([key, value]) => (
+                          <div key={key}>
+                            <dt>{key}</dt>
+                            <dd>{value}</dd>
+                          </div>
+                        ),
+                      )}
+                    </dl>
+                  ) : (
+                    <div className="import-tab-empty">No metadata was extracted.</div>
+                  )}
+                </>
+              ) : (
+                <div className="import-tab-empty">No experimental preset was detected.</div>
+              )}
+            </section>
+          ) : null}
+        </div>
       </div>
     </div>
   );

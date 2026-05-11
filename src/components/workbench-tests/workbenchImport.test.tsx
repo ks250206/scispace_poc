@@ -33,28 +33,32 @@ describe("Workbench import UI", () => {
     expect(storeState().commandHistory.at(-1)?.command).not.toContain("x%2Cy");
   });
 
-  it("stacks raw text and import preview virtual tables with resizable columns", async () => {
+  it("shows tabbed raw text, column editing, and import preview virtual tables", async () => {
     let importId = "";
     act(() => {
       importId = storeState().openImportDialog("imported.csv", "x,y\n1,2\n3,4\n5,6");
     });
     render(<ImportSettingsWindow importId={importId} />);
 
+    expect(screen.getByRole("tab", { name: "Preview" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Raw text" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Columns" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Metadata" })).toBeInTheDocument();
     const preview = await waitFor(() => {
       const element = document.querySelector(".import-preview") as HTMLElement | null;
       expect(element).toBeInTheDocument();
       return element as HTMLElement;
     });
-    const editorGrid = preview.closest(".import-editor-grid") as HTMLElement;
     const previewXHeader = preview.querySelectorAll("th")[0] as HTMLElement;
-    expect(editorGrid).toHaveClass("stacked");
     expect(preview.style.getPropertyValue("--table-width")).toBe("280px");
     expect(previewXHeader).toHaveStyle({ width: "140px", minWidth: "96px" });
     expect(screen.queryByRole("textbox", { name: "Raw text" })).not.toBeInTheDocument();
-
     expect(preview.querySelector('[aria-label="Resize import column x"]')).toBeInTheDocument();
-    expect(screen.getByDisplayValue("x")).toBeInTheDocument();
-    expect(screen.getAllByText("number").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Raw text" }));
+    expect(screen.getByText("4 lines")).toBeInTheDocument();
+    expect(document.querySelector(".raw-text-table")).toBeInTheDocument();
+    expect(document.querySelector(".import-preview")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Raw line 2"), { target: { value: "10,20" } });
     await waitFor(() => expect(storeState().pendingImports[0]?.text).toBe("x,y\n10,20\n3,4\n5,6"));
     expect(storeState().commandHistory.at(-1)).toMatchObject({
@@ -63,6 +67,9 @@ describe("Workbench import UI", () => {
       status: "success",
     });
 
+    fireEvent.click(screen.getByRole("tab", { name: "Columns" }));
+    expect(screen.getByDisplayValue("x")).toBeInTheDocument();
+    expect(screen.getAllByText("number").length).toBeGreaterThan(0);
     fireEvent.change(screen.getByLabelText("Column name x"), { target: { value: "time" } });
     await waitFor(() =>
       expect(storeState().pendingImports[0]?.preview?.columns[0]).toMatchObject({
@@ -82,6 +89,7 @@ describe("Workbench import UI", () => {
     render(<ImportSettingsWindow importId={importId} />);
 
     await waitFor(() => expect(screen.getByText("drop-cols.csv")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: "Columns" }));
     expect(document.querySelector(".column-import-list label.excluded span")?.textContent).toBe(
       "empty",
     );
@@ -95,6 +103,7 @@ describe("Workbench import UI", () => {
       expect(storeState().pendingImports[0]?.options.excludedColumnIds).toEqual(["empty", "y"]),
     );
 
+    fireEvent.click(screen.getByRole("tab", { name: "Raw text" }));
     fireEvent.change(screen.getByDisplayValue("0"), { target: { value: "1" } });
     await waitFor(() =>
       expect(document.querySelector(".raw-text-table tbody tr")).toHaveClass("skipped-row"),
@@ -128,8 +137,10 @@ describe("Workbench import UI", () => {
 
     await waitFor(() => expect(screen.getByText("Detected: Rigaku RAS")).toBeInTheDocument());
     expect(screen.getByText("Data starts at line 5")).toBeInTheDocument();
-    expect(screen.getByText("MEAS_SCAN_UNIT_X")).toBeInTheDocument();
-    expect(screen.getByText("deg")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Metadata" }));
+    expect(screen.getAllByText("MEAS_SCAN_UNIT_X").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("deg").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("tab", { name: "Raw text" }));
     expect(screen.getByLabelText("Raw line 5")).toHaveValue("10.0000 3.9658 1.0000");
     expect(document.querySelector(".raw-text-table tbody tr.data-start-row")).toBeInTheDocument();
 
@@ -159,8 +170,13 @@ describe("Workbench import UI", () => {
     render(<ImportSettingsWindow importId={importId} />);
 
     await waitFor(() => expect(screen.getByText("notes.mpt")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "Raw text" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      ),
+    );
     expect(screen.getByText("4 raw lines")).toBeInTheDocument();
-    expect(document.querySelector(".import-editor-grid")).toHaveClass("raw-only");
     expect(document.querySelector(".raw-text-table")).toBeInTheDocument();
     expect(document.querySelector(".import-preview")).not.toBeInTheDocument();
   });
