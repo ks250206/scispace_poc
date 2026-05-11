@@ -44,10 +44,12 @@ type TerminalMetrics = {
   verticalPadding: number;
 };
 
+const terminalLogicalRowHeight = 17;
+
 const defaultTerminalMetrics: TerminalMetrics = {
   charWidth: 8.4,
   horizontalPadding: 24,
-  rowHeight: 17,
+  rowHeight: terminalLogicalRowHeight,
   verticalPadding: 16,
 };
 
@@ -369,6 +371,12 @@ const measureTerminalMetrics = (
   };
 };
 
+export const applyTerminalLogicalMetrics = (terminal: WTerm | null | undefined): void => {
+  if (!terminal) return;
+  terminal.element.style.setProperty("--term-row-height", `${terminalLogicalRowHeight}px`);
+  (terminal as unknown as Record<string, number>)._rowHeight = terminalLogicalRowHeight;
+};
+
 const syncBashFiles = async (
   bash: BashShell["bash"] | null | undefined,
   files: VirtualFile[],
@@ -530,6 +538,7 @@ export function TerminalPanel() {
     if (!viewport) return;
 
     const terminal = terminalInstance?.element;
+    applyTerminalLogicalMetrics(terminalInstance);
     const metrics = measureTerminalMetrics(viewport, terminal, workspaceScale);
     const { width, height } = viewport.getBoundingClientRect();
     const { cols, rows } = calculateTerminalGrid({
@@ -545,6 +554,7 @@ export function TerminalPanel() {
       current && current.cols === cols && current.rows === rows ? current : { cols, rows },
     );
     terminalInstance?.resize(cols, rows);
+    applyTerminalLogicalMetrics(terminalInstance);
     resize(cols, rows);
     scrollTerminalToBottom(terminal, viewport);
   }, [ref, resize, workspaceScale]);
@@ -618,6 +628,7 @@ export function TerminalPanel() {
     async (terminal: WTerm) => {
       terminalRef.current = terminal;
       if (shellRef.current) return;
+      applyTerminalLogicalMetrics(terminal);
       syncTerminalSize();
       const shell = new BashShell({
         files: initialFiles,

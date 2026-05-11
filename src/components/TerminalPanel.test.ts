@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  applyTerminalLogicalMetrics,
   applyReplTabCompletion,
   calculateTerminalGrid,
   clearTerminalScrollbackRows,
@@ -54,6 +55,18 @@ describe("terminal input handling", () => {
         workspaceScale: 0.5,
       }),
     ).toEqual({ cols: 97, rows: 24 });
+  });
+
+  it("keeps wterm logical row height independent from workspace scale measurements", () => {
+    const element = document.createElement("div");
+    const terminal = { element, _rowHeight: 9 } as unknown as Parameters<
+      typeof applyTerminalLogicalMetrics
+    >[0];
+
+    applyTerminalLogicalMetrics(terminal);
+
+    expect(element.style.getPropertyValue("--term-row-height")).toBe("17px");
+    expect(terminal).toMatchObject({ _rowHeight: 17 });
   });
 
   it("handles delete escape sequence as forward delete instead of printing [3~", async () => {
