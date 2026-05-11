@@ -1,13 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type PointerEvent,
-  type WheelEvent,
-} from "react";
+import { useEffect, useRef, useState } from "react";
 import { CanvasWindow } from "./CanvasWindow";
 import { uploadOpenCommand } from "./DataBrowser";
 import { useContextMenu, type ContextMenuItem } from "./context-menu/ContextMenuProvider";
@@ -15,206 +6,16 @@ import { useDialog } from "./dialog/DialogProvider";
 import { buildPlotSvg, safePlotFileName, svgDataUrl } from "./plotExport";
 import type { WorkspaceWindow } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
-
-const centerViewport = { x: -1920, y: -1080, scale: 1 };
-const minScale = 0.1;
-const maxScale = 3;
-const wheelPanSensitivity = 0.75;
-const baseDotSpacing = 24;
-const baseMajorGridSpacing = 240;
-
-const quoteCommandArg = (value: string): string =>
-  /\s|["']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
-
-interface ToolbarActionItem {
-  label: string;
-  onSelect?: () => void;
-  disabled?: boolean;
-  active?: boolean;
-  rightLabel?: string;
-  onRightSelect?: () => void;
-  rightAriaLabel?: string;
-}
-
-type ToolbarMenuItem =
-  | ToolbarActionItem
-  | {
-      kind: "separator";
-      label?: string;
-    }
-  | {
-      kind: "submenu";
-      label: string;
-      items: ToolbarMenuItem[];
-      disabled?: boolean;
-    };
-
-interface ToolbarActionItemProps {
-  item: ToolbarActionItem;
-  setOpenMenu: (label: string | undefined) => void;
-}
-
-function ToolbarActionItem({ item, setOpenMenu }: ToolbarActionItemProps) {
-  const { label, onSelect, disabled, active, rightLabel, onRightSelect, rightAriaLabel } = item;
-  return (
-    <div className={`toolbar-menu-row ${active ? "active" : ""}`}>
-      <button
-        type="button"
-        role="menuitem"
-        aria-label={label}
-        disabled={disabled}
-        className="toolbar-menu-item-main"
-        onClick={() => {
-          setOpenMenu(undefined);
-          onSelect?.();
-        }}
-      >
-        <span className="toolbar-menu-check">{active ? "✓" : ""}</span>
-        <span className="toolbar-menu-label">{label}</span>
-      </button>
-      {rightLabel ? (
-        <button
-          type="button"
-          className="toolbar-menu-item-right"
-          aria-label={rightAriaLabel ?? rightLabel}
-          disabled={disabled}
-          onClick={(event) => {
-            event.stopPropagation();
-            setOpenMenu(undefined);
-            onRightSelect?.();
-          }}
-        >
-          {rightLabel}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function ToolbarMenuContent({
-  items,
-  setOpenMenu,
-}: {
-  items: ToolbarMenuItem[];
-  setOpenMenu: (label: string | undefined) => void;
-}) {
-  return (
-    <>
-      {items.map((item, index) => {
-        if ("kind" in item && item.kind === "separator") {
-          return (
-            <div key={`separator-${item.label ?? index}`} className="toolbar-menu-separator" />
-          );
-        }
-        if ("kind" in item && item.kind === "submenu") {
-          return (
-            <div
-              key={item.label}
-              className={`toolbar-menu-row toolbar-menu-submenu-root ${
-                item.disabled ? "disabled" : ""
-              }`}
-            >
-              <button
-                type="button"
-                role="menuitem"
-                aria-label={item.label}
-                disabled={item.disabled}
-                className="toolbar-menu-item-main"
-              >
-                <span className="toolbar-menu-check" />
-                <span className="toolbar-menu-label">{item.label}</span>
-                <span className="toolbar-menu-arrow">›</span>
-              </button>
-              <div className="toolbar-submenu" role="menu" aria-label={`${item.label} submenu`}>
-                <ToolbarMenuContent items={item.items} setOpenMenu={setOpenMenu} />
-              </div>
-            </div>
-          );
-        }
-        return <ToolbarActionItem key={item.label} item={item} setOpenMenu={setOpenMenu} />;
-      })}
-    </>
-  );
-}
-
-interface ToolbarMenuProps {
-  label: string;
-  openMenu: string | undefined;
-  setOpenMenu: (label: string | undefined) => void;
-  items: ToolbarMenuItem[];
-}
-
-function ToolbarMenu({ label, openMenu, setOpenMenu, items }: ToolbarMenuProps) {
-  const isOpen = openMenu === label;
-  return (
-    <div
-      className="toolbar-menu-root"
-      onPointerEnter={() => {
-        if (openMenu && !isOpen) setOpenMenu(label);
-      }}
-    >
-      <button
-        type="button"
-        className="toolbar-menu-trigger"
-        aria-haspopup="menu"
-        aria-expanded={isOpen}
-        onClick={() => setOpenMenu(isOpen ? undefined : label)}
-      >
-        {label}
-      </button>
-      {isOpen ? (
-        <div className="toolbar-menu" role="menu" aria-label={`${label} menu`}>
-          <ToolbarMenuContent items={items} setOpenMenu={setOpenMenu} />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-const isWindowClosable = (window: WorkspaceWindow): boolean =>
-  window.kind === "table" || window.kind === "plot" || window.kind === "plot-config";
-
-const windowMenuItem = (
-  window: WorkspaceWindow,
-  activeWindowId: string | undefined,
-  focusWindow: (id: string) => void,
-  closeWindow: (id: string) => void,
-): ToolbarMenuItem => ({
-  label: window.title,
-  active: window.id === activeWindowId,
-  onSelect: () => focusWindow(window.id),
-  rightLabel: isWindowClosable(window) ? "×" : undefined,
-  rightAriaLabel: `Close window ${window.title}`,
-  onRightSelect: isWindowClosable(window) ? () => closeWindow(window.id) : undefined,
-});
-
-const emptyWindowMenuItem = (label = "(none)"): ToolbarMenuItem => ({
-  label,
-  disabled: true,
-});
-
-const toContextMenuItem = (item: ToolbarMenuItem): ContextMenuItem => {
-  if ("kind" in item && item.kind === "separator") {
-    return { kind: "separator", label: item.label };
-  }
-  if ("kind" in item && item.kind === "submenu") {
-    return {
-      kind: "submenu",
-      label: item.label,
-      disabled: item.disabled,
-      items: item.items.map(toContextMenuItem),
-    };
-  }
-  return {
-    label: item.label,
-    disabled: item.disabled,
-    active: item.active,
-    rightLabel: item.rightLabel,
-    rightAriaLabel: item.rightAriaLabel,
-    onSelect: () => item.onSelect?.(),
-    onRightSelect: item.onRightSelect,
-  };
-};
+import { ProjectPicker } from "./workbench/ProjectPicker";
+import {
+  ToolbarMenu,
+  toContextMenuItem,
+  type ToolbarMenuItem,
+  type ToolbarMenuProps,
+} from "./workbench/ToolbarMenu";
+import { emptyWindowMenuItem, windowMenuItem } from "./workbench/windowMenuItems";
+import { useWorkspacePanZoom } from "./workbench/useWorkspacePanZoom";
+import { centerViewport, quoteCommandArg } from "./workbench/workbenchView";
 
 export function Workbench() {
   const dialog = useDialog();
@@ -250,12 +51,8 @@ export function Workbench() {
   const closeWindow = useScispaceStore((state) => state.closeWindow);
   const toggleUtilityWindow = useScispaceStore((state) => state.toggleUtilityWindow);
   const tableMenuState = useScispaceStore((state) => state.tableMenuState);
-  const [isPanning, setIsPanning] = useState(false);
   const [openToolbarMenu, setOpenToolbarMenu] = useState<string>();
   const [projectSelectorOpen, setProjectSelectorOpen] = useState(false);
-  const canvasDrag = useRef<{ x: number; y: number; originX: number; originY: number } | null>(
-    null,
-  );
   const projectSelectorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -292,92 +89,15 @@ export function Workbench() {
     };
   }, [projectSelectorOpen]);
 
-  const canvasStyle = useMemo(
-    () => ({
-      transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`,
-    }),
-    [viewport],
-  );
-
-  const canvasShellStyle = useMemo(
-    () =>
-      ({
-        "--canvas-dot-step": `${Number((baseDotSpacing * viewport.scale).toFixed(2))}px`,
-        "--canvas-major-step": `${Number((baseMajorGridSpacing * viewport.scale).toFixed(2))}px`,
-        "--canvas-dot-x": `${Number(viewport.x.toFixed(2))}px`,
-        "--canvas-dot-y": `${Number(viewport.y.toFixed(2))}px`,
-      }) as CSSProperties,
-    [viewport],
-  );
-
-  const handleWheel = useCallback(
-    (event: WheelEvent<HTMLDivElement>) => {
-      const target = event.target as HTMLElement;
-      if (!event.metaKey && !event.ctrlKey && target.closest(".canvas-window")) return;
-      event.preventDefault();
-      if (event.metaKey || event.ctrlKey) {
-        const nextScale = Math.min(
-          maxScale,
-          Math.max(minScale, viewport.scale - event.deltaY * 0.001),
-        );
-        const scale = Number(nextScale.toFixed(2));
-        const centerX = event.clientX;
-        const centerY = event.clientY;
-        const worldCenterX = (centerX - viewport.x) / viewport.scale;
-        const worldCenterY = (centerY - viewport.y) / viewport.scale;
-        setViewport({
-          ...viewport,
-          x: centerX - worldCenterX * scale,
-          y: centerY - worldCenterY * scale,
-          scale,
-        });
-        return;
-      }
-      const horizontalDelta = event.shiftKey ? event.deltaY || event.deltaX : event.deltaX;
-      const panStep = wheelPanSensitivity * viewport.scale;
-      setViewport({
-        ...viewport,
-        x: viewport.x - horizontalDelta * panStep,
-        y: viewport.y - (event.shiftKey ? 0 : event.deltaY * panStep),
-      });
-    },
-    [setViewport, viewport],
-  );
-
-  const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLElement;
-    const isBackground =
-      target.classList.contains("canvas-shell") || target.classList.contains("workspace-plane");
-    if (event.button === 0 && isBackground) blurActiveWindow();
-    if (event.button !== 1 && !event.altKey && !(event.button === 0 && isBackground)) return;
-    canvasDrag.current = {
-      x: event.clientX,
-      y: event.clientY,
-      originX: viewport.x,
-      originY: viewport.y,
-    };
-    setIsPanning(true);
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  };
-
-  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    if (canvasDrag.current) {
-      const drag = canvasDrag.current;
-      setViewport({
-        ...viewport,
-        x: drag.originX + event.clientX - drag.x,
-        y: drag.originY + event.clientY - drag.y,
-      });
-    }
-  };
-
-  const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
-    canvasDrag.current = null;
-    setIsPanning(false);
-    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  };
+  const {
+    canvasShellStyle,
+    canvasStyle,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp,
+    handleWheel,
+    isPanning,
+  } = useWorkspacePanZoom({ blurActiveWindow, setViewport, viewport });
 
   const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -803,61 +523,17 @@ export function Workbench() {
           ))}
         </nav>
         <div className="topbar-right">
-          <div ref={projectSelectorRef} className="project-picker">
-            <button
-              type="button"
-              className="project-select"
-              aria-label="Project selector"
-              aria-expanded={projectSelectorOpen}
-              aria-haspopup="menu"
-              onClick={() => {
-                setOpenToolbarMenu(undefined);
-                setProjectSelectorOpen((open) => !open);
-              }}
-            >
-              <span>{currentProjectName}</span>
-              <span aria-hidden="true">⌄</span>
-            </button>
-            {projectSelectorOpen ? (
-              <div className="project-picker-menu" role="menu" aria-label="Project menu">
-                {projects.map((project) => (
-                  <div
-                    key={project.id}
-                    className={`project-picker-row ${
-                      project.id === currentProjectId ? "active" : ""
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="project-picker-main"
-                      onClick={() => {
-                        setProjectSelectorOpen(false);
-                        void handleSwitchProject(project.id);
-                      }}
-                    >
-                      <span className="project-picker-check">
-                        {project.id === currentProjectId ? "✓" : ""}
-                      </span>
-                      <span>{project.name}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="project-picker-delete"
-                      aria-label={`Delete project ${project.name}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setProjectSelectorOpen(false);
-                        void handleDeleteProject(project.id);
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
+          <ProjectPicker
+            currentProjectId={currentProjectId}
+            currentProjectName={currentProjectName}
+            onDeleteProject={(projectId) => void handleDeleteProject(projectId)}
+            onSwitchProject={(projectId) => void handleSwitchProject(projectId)}
+            open={projectSelectorOpen}
+            projects={projects}
+            projectSelectorRef={projectSelectorRef}
+            setOpen={setProjectSelectorOpen}
+            setOpenToolbarMenu={setOpenToolbarMenu}
+          />
           {projectDirty ? <span className="project-dirty">Unsaved</span> : null}
           <span className="zoom-control">Zoom {Math.round(viewport.scale * 100)}%</span>
         </div>
