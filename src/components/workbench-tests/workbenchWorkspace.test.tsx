@@ -46,6 +46,22 @@ describe("Workbench workspace UI", () => {
     expect(screen.getByRole("menuitem", { name: "New Folder" })).toBeInTheDocument();
   });
 
+  it("switches open toolbar menus on hover", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+
+    await user.click(screen.getByRole("button", { name: "Project" }));
+    expect(screen.getByRole("menu", { name: "Project menu" })).toBeInTheDocument();
+
+    await user.hover(screen.getByRole("button", { name: "Windows" }));
+    expect(screen.queryByRole("menu", { name: "Project menu" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menu", { name: "Windows menu" })).toBeInTheDocument();
+
+    await user.hover(screen.getByRole("button", { name: "Data" }));
+    expect(screen.queryByRole("menu", { name: "Windows menu" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menu", { name: "Data menu" })).toBeInTheDocument();
+  });
+
   it("opens toolbar actions from the empty workspace context menu", async () => {
     const user = userEvent.setup();
     await renderWorkbench();

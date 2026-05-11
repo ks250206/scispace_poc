@@ -150,8 +150,7 @@
 }
 
 .toolbar-menu-row:hover,
-.toolbar-menu-row:focus-within,
-.toolbar-menu-row.active {
+.toolbar-menu-row:focus-within {
   background: #4b8ff5;
   color: #ffffff;
 }

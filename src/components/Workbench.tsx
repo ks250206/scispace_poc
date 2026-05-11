@@ -146,7 +146,12 @@ interface ToolbarMenuProps {
 function ToolbarMenu({ label, openMenu, setOpenMenu, items }: ToolbarMenuProps) {
   const isOpen = openMenu === label;
   return (
-    <div className="toolbar-menu-root">
+    <div
+      className="toolbar-menu-root"
+      onPointerEnter={() => {
+        if (openMenu && !isOpen) setOpenMenu(label);
+      }}
+    >
       <button
         type="button"
         className="toolbar-menu-trigger"
