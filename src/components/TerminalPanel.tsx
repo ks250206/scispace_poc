@@ -124,7 +124,7 @@ export const stripScispacePrefix = (commandLine: string): string =>
 
 export const terminalPrompt = (mode: TerminalMode, cwd: string): string => {
   const path = cwd.replace("/home/user", "~");
-  return mode === "repl" ? `scispace:${path}$ ` : `unsafe:${path}$ `;
+  return mode === "repl" ? `scispace-repl:${path}> ` : `unsafe-shell:${path}$ `;
 };
 
 export const terminalControlResult = (

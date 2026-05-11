@@ -218,8 +218,8 @@ describe("terminal input handling", () => {
   });
 
   it("controls unsafe shell transitions from the scispace repl", () => {
-    expect(terminalPrompt("repl", "/home/user/raw")).toBe("scispace:~/raw$ ");
-    expect(terminalPrompt("bash", "/home/user/raw")).toBe("unsafe:~/raw$ ");
+    expect(terminalPrompt("repl", "/home/user/raw")).toBe("scispace-repl:~/raw> ");
+    expect(terminalPrompt("bash", "/home/user/raw")).toBe("unsafe-shell:~/raw$ ");
 
     const denied = terminalControlResult("shell", [], { mode: "repl", unsafe: false });
     expect(denied).toMatchObject({ handled: true, mode: "repl", unsafe: false, exitCode: 1 });
