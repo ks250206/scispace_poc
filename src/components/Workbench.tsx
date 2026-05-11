@@ -25,10 +25,113 @@ const baseMajorGridSpacing = 240;
 const quoteCommandArg = (value: string): string =>
   /\s|["']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
 
-interface ToolbarMenuItem {
+interface ToolbarActionItem {
   label: string;
   onSelect?: () => void;
   disabled?: boolean;
+  active?: boolean;
+  rightLabel?: string;
+  onRightSelect?: () => void;
+  rightAriaLabel?: string;
+}
+
+type ToolbarMenuItem =
+  | ToolbarActionItem
+  | {
+      kind: "separator";
+      label?: string;
+    }
+  | {
+      kind: "submenu";
+      label: string;
+      items: ToolbarMenuItem[];
+      disabled?: boolean;
+    };
+
+interface ToolbarActionItemProps {
+  item: ToolbarActionItem;
+  setOpenMenu: (label: string | undefined) => void;
+}
+
+function ToolbarActionItem({ item, setOpenMenu }: ToolbarActionItemProps) {
+  const { label, onSelect, disabled, active, rightLabel, onRightSelect, rightAriaLabel } = item;
+  return (
+    <div className={`toolbar-menu-row ${active ? "active" : ""}`}>
+      <button
+        type="button"
+        role="menuitem"
+        disabled={disabled}
+        className="toolbar-menu-item-main"
+        onClick={() => {
+          setOpenMenu(undefined);
+          onSelect?.();
+        }}
+      >
+        <span className="toolbar-menu-check">{active ? "✓" : ""}</span>
+        <span className="toolbar-menu-label">{label}</span>
+      </button>
+      {rightLabel ? (
+        <button
+          type="button"
+          className="toolbar-menu-item-right"
+          aria-label={rightAriaLabel ?? rightLabel}
+          disabled={disabled}
+          onClick={(event) => {
+            event.stopPropagation();
+            setOpenMenu(undefined);
+            onRightSelect?.();
+          }}
+        >
+          {rightLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function ToolbarMenuContent({
+  items,
+  setOpenMenu,
+}: {
+  items: ToolbarMenuItem[];
+  setOpenMenu: (label: string | undefined) => void;
+}) {
+  return (
+    <>
+      {items.map((item, index) => {
+        if ("kind" in item && item.kind === "separator") {
+          return (
+            <div key={`separator-${item.label ?? index}`} className="toolbar-menu-separator" />
+          );
+        }
+        if ("kind" in item && item.kind === "submenu") {
+          return (
+            <div
+              key={item.label}
+              className={`toolbar-menu-row toolbar-menu-submenu-root ${
+                item.disabled ? "disabled" : ""
+              }`}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                disabled={item.disabled}
+                className="toolbar-menu-item-main"
+              >
+                <span className="toolbar-menu-check" />
+                <span className="toolbar-menu-label">{item.label}</span>
+                <span className="toolbar-menu-arrow">›</span>
+              </button>
+              <div className="toolbar-submenu" role="menu" aria-label={`${item.label} submenu`}>
+                <ToolbarMenuContent items={item.items} setOpenMenu={setOpenMenu} />
+              </div>
+            </div>
+          );
+        }
+        return <ToolbarActionItem key={item.label} item={item} setOpenMenu={setOpenMenu} />;
+      })}
+    </>
+  );
 }
 
 interface ToolbarMenuProps {
@@ -53,72 +156,34 @@ function ToolbarMenu({ label, openMenu, setOpenMenu, items }: ToolbarMenuProps) 
       </button>
       {isOpen ? (
         <div className="toolbar-menu" role="menu" aria-label={`${label} menu`}>
-          {items.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              role="menuitem"
-              disabled={item.disabled}
-              onClick={() => {
-                setOpenMenu(undefined);
-                item.onSelect?.();
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
+          <ToolbarMenuContent items={items} setOpenMenu={setOpenMenu} />
         </div>
       ) : null}
     </div>
   );
 }
 
-const isTabClosable = (window: WorkspaceWindow): boolean =>
+const isWindowClosable = (window: WorkspaceWindow): boolean =>
   window.kind === "table" || window.kind === "plot" || window.kind === "plot-config";
 
-interface WindowTabsProps {
-  windows: WorkspaceWindow[];
-  activeWindowId?: string;
-  onFocusWindow: (id: string) => void;
-  onCloseWindow: (id: string) => void;
-}
+const windowMenuItem = (
+  window: WorkspaceWindow,
+  activeWindowId: string | undefined,
+  focusWindow: (id: string) => void,
+  closeWindow: (id: string) => void,
+): ToolbarMenuItem => ({
+  label: window.title,
+  active: window.id === activeWindowId,
+  onSelect: () => focusWindow(window.id),
+  rightLabel: isWindowClosable(window) ? "×" : undefined,
+  rightAriaLabel: `Close window ${window.title}`,
+  onRightSelect: isWindowClosable(window) ? () => closeWindow(window.id) : undefined,
+});
 
-function WindowTabs({ windows, activeWindowId, onFocusWindow, onCloseWindow }: WindowTabsProps) {
-  return (
-    <nav className="window-tabs" aria-label="Open windows">
-      {windows.map((window) => {
-        const active = window.id === activeWindowId;
-        return (
-          <div key={window.id} className={`window-tab ${active ? "active" : ""}`}>
-            <button
-              type="button"
-              className="window-tab-main"
-              aria-label={`Window ${window.title}`}
-              aria-current={active ? "page" : undefined}
-              onClick={() => onFocusWindow(window.id)}
-            >
-              <span className={`window-tab-dot ${window.kind}`} />
-              <span className="window-tab-title">{window.title}</span>
-            </button>
-            {isTabClosable(window) ? (
-              <button
-                type="button"
-                aria-label={`Close tab ${window.title}`}
-                className="window-tab-close"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onCloseWindow(window.id);
-                }}
-              >
-                ×
-              </button>
-            ) : null}
-          </div>
-        );
-      })}
-    </nav>
-  );
-}
+const emptyWindowMenuItem = (label = "(none)"): ToolbarMenuItem => ({
+  label,
+  disabled: true,
+});
 
 export function Workbench() {
   const dialog = useDialog();
@@ -422,6 +487,31 @@ export function Workbench() {
     if (!spec || !dataset) return;
     clickDownload(svgDataUrl(buildPlotSvg(spec, dataset)), safePlotFileName(spec.title, "svg"));
   };
+  const windowsByKind = {
+    browser: windows.filter((window) => window.kind === "browser"),
+    terminal: windows.filter((window) => window.kind === "terminal"),
+    history: windows.filter((window) => window.kind === "history"),
+    plotConfig: windows.filter((window) => window.kind === "plot-config"),
+    tables: windows.filter((window) => window.kind === "table"),
+    graphs: windows.filter((window) => window.kind === "plot"),
+    imports: windows.filter((window) => window.kind === "import"),
+    other: windows.filter(
+      (window) =>
+        !["browser", "terminal", "history", "plot-config", "table", "plot", "import"].includes(
+          window.kind,
+        ),
+    ),
+  };
+  const windowItems = (items: WorkspaceWindow[]): ToolbarMenuItem[] =>
+    items.length
+      ? items.map((window) => windowMenuItem(window, activeWindowId, focusWindow, closeWindow))
+      : [emptyWindowMenuItem()];
+  const directWindowItems = [
+    ...windowsByKind.browser,
+    ...windowsByKind.terminal,
+    ...windowsByKind.history,
+    ...windowsByKind.plotConfig,
+  ].map((window) => windowMenuItem(window, activeWindowId, focusWindow, closeWindow));
 
   const toolbarMenus: ToolbarMenuProps[] = [
     {
@@ -438,6 +528,28 @@ export function Workbench() {
         },
         { label: "Import Project", onSelect: () => projectImportInputRef.current?.click() },
         { label: "Export Project", onSelect: () => void handleExportProject() },
+      ],
+    },
+    {
+      label: "Windows",
+      openMenu: openToolbarMenu,
+      setOpenMenu: setOpenToolbarMenu,
+      items: [
+        {
+          label: "Bring to Front",
+          onSelect: () => {
+            if (activeWindowId) focusWindow(activeWindowId);
+          },
+          disabled: !activeWindowId,
+        },
+        { label: "Send to Back", disabled: true },
+        { kind: "separator" },
+        ...directWindowItems,
+        { kind: "separator" },
+        { kind: "submenu", label: "Tables", items: windowItems(windowsByKind.tables) },
+        { kind: "submenu", label: "Graphs", items: windowItems(windowsByKind.graphs) },
+        { kind: "submenu", label: "Imports", items: windowItems(windowsByKind.imports) },
+        { kind: "submenu", label: "Other Windows", items: windowItems(windowsByKind.other) },
       ],
     },
     {
@@ -550,6 +662,13 @@ export function Workbench() {
       <div className="topbar">
         <div className="topbar-left">
           <div className="brand">SciSpace</div>
+        </div>
+        <nav className="toolbar-menus" aria-label="SciSpace tools">
+          {toolbarMenus.map((menu) => (
+            <ToolbarMenu key={menu.label} {...menu} />
+          ))}
+        </nav>
+        <div className="topbar-right">
           <select
             className="project-select"
             aria-label="Project"
@@ -563,19 +682,6 @@ export function Workbench() {
             ))}
           </select>
           {projectDirty ? <span className="project-dirty">Unsaved</span> : null}
-        </div>
-        <WindowTabs
-          windows={windows}
-          activeWindowId={activeWindowId}
-          onFocusWindow={focusWindow}
-          onCloseWindow={closeWindow}
-        />
-        <nav className="toolbar-menus" aria-label="SciSpace tools">
-          {toolbarMenus.map((menu) => (
-            <ToolbarMenu key={menu.label} {...menu} />
-          ))}
-        </nav>
-        <div className="topbar-right">
           <span className="zoom-control">Zoom {Math.round(viewport.scale * 100)}%</span>
         </div>
         <div className="toolbar-hidden-inputs">

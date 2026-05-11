@@ -46,25 +46,25 @@ describe("Workbench workspace UI", () => {
     expect(screen.getByRole("menuitem", { name: "New Folder" })).toBeInTheDocument();
   });
 
-  it("lists open windows in toolbar tabs and focuses the clicked window", async () => {
+  it("lists open windows in the Windows menu and focuses the clicked window", async () => {
     const user = userEvent.setup();
     await renderWorkbench();
-    const tabs = screen.getByRole("navigation", { name: "Open windows" });
+    expect(screen.queryByRole("navigation", { name: "Open windows" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Windows" }));
+    const menu = screen.getByRole("menu", { name: "Windows menu" });
 
-    expect(within(tabs).getByRole("button", { name: "Window Data Browser" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: /Data Browser/ })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: /Terminal/ })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: /Command History/ })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: /Tables/ })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: /Graphs/ })).toBeInTheDocument();
     expect(
-      within(tabs).getByRole("button", { name: "Window Table - waveform.csv" }),
+      within(menu).getByRole("menuitem", { name: "Table - waveform.csv" }),
     ).toBeInTheDocument();
-    expect(
-      within(tabs).getByRole("button", { name: "Window Plot - waveform.csv" }),
-    ).toBeInTheDocument();
-    expect(within(tabs).getByRole("button", { name: "Window Terminal" })).toBeInTheDocument();
-    expect(
-      within(tabs).getByRole("button", { name: "Window Command History" }),
-    ).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Plot - waveform.csv" })).toBeInTheDocument();
 
     const beforeZ = storeState().windows.find((window) => window.id === "table-seed")?.zIndex ?? 0;
-    await user.click(within(tabs).getByRole("button", { name: "Window Table - waveform.csv" }));
+    await user.click(within(menu).getByRole("menuitem", { name: "Table - waveform.csv" }));
 
     expect(storeState().activeWindowId).toBe("table-seed");
     expect(
@@ -72,24 +72,30 @@ describe("Workbench workspace UI", () => {
     ).toBeGreaterThan(beforeZ);
   });
 
-  it("updates current plot from plot toolbar tabs and closes closable window tabs", async () => {
+  it("updates current plot and closes closable windows from the Windows menu", async () => {
     const user = userEvent.setup();
     await renderWorkbench();
-    const tabs = screen.getByRole("navigation", { name: "Open windows" });
+    await user.click(screen.getByRole("button", { name: "Windows" }));
+    const menu = screen.getByRole("menu", { name: "Windows menu" });
 
-    await user.click(within(tabs).getByRole("button", { name: "Window Plot - waveform.csv" }));
+    await user.click(within(menu).getByRole("menuitem", { name: "Plot - waveform.csv" }));
     expect(storeState().activeWindowId).toBe("plot-seed");
     expect(storeState().currentPlotId).toBe("seed-plot");
 
     expect(
-      within(tabs).queryByRole("button", { name: "Close tab Data Browser" }),
+      within(menu).queryByRole("button", { name: "Close window Data Browser" }),
     ).not.toBeInTheDocument();
-    await user.click(within(tabs).getByRole("button", { name: "Close tab Plot - waveform.csv" }));
+    await user.click(screen.getByRole("button", { name: "Windows" }));
+    const reopenedMenu = screen.getByRole("menu", { name: "Windows menu" });
+    await user.click(
+      within(reopenedMenu).getByRole("button", { name: "Close window Plot - waveform.csv" }),
+    );
 
     await waitFor(() => expect(screen.queryByText("Plot - waveform.csv")).not.toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Windows" }));
     expect(
-      within(screen.getByRole("navigation", { name: "Open windows" })).queryByRole("button", {
-        name: "Window Plot - waveform.csv",
+      within(screen.getByRole("menu", { name: "Windows menu" })).queryByRole("menuitem", {
+        name: "Plot - waveform.csv",
       }),
     ).not.toBeInTheDocument();
   });
