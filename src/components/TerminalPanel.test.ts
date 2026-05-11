@@ -12,6 +12,7 @@ import {
   terminalControlResult,
   terminalCommandLineText,
   terminalPrompt,
+  terminalReplScispaceCommandFromInput,
   writeTerminalOutput,
 } from "./TerminalPanel";
 import type { BashShell } from "@wterm/just-bash";
@@ -259,5 +260,16 @@ describe("terminal input handling", () => {
     });
     expect(terminalControlCommandFromInput("\r", "exit", "repl")).toBeUndefined();
     expect(terminalControlCommandFromInput("x", "exit", "bash")).toBeUndefined();
+  });
+
+  it("intercepts repl scispace commands before just-bash builtins handle them", () => {
+    expect(terminalReplScispaceCommandFromInput("\r", "help", "repl")).toBe("help");
+    expect(terminalReplScispaceCommandFromInput("\r", "scispace help", "repl")).toBe("help");
+    expect(terminalReplScispaceCommandFromInput("\r", "file-list ~/raw", "repl")).toBe(
+      "file-list ~/raw",
+    );
+    expect(terminalReplScispaceCommandFromInput("\r", "help", "bash")).toBeUndefined();
+    expect(terminalReplScispaceCommandFromInput("x", "help", "repl")).toBeUndefined();
+    expect(terminalReplScispaceCommandFromInput("\r", "unknown", "repl")).toBeUndefined();
   });
 });

@@ -194,6 +194,20 @@ export const terminalControlCommandFromInput = (
   return undefined;
 };
 
+export const terminalReplScispaceCommandFromInput = (
+  data: string,
+  line: string | undefined,
+  mode: TerminalMode,
+): string | undefined => {
+  if (mode !== "repl" || !/[\r\n]/.test(data)) return undefined;
+  const commandLine = stripScispacePrefix(line?.trim() ?? "");
+  const [command] = commandLine.split(/\s+/);
+  if (!command) return undefined;
+  return scispaceReplCommands.includes(command as (typeof scispaceReplCommands)[number])
+    ? commandLine
+    : undefined;
+};
+
 export const executeTerminalFsCommand = (
   commandLine: string,
   state: TerminalFsState,
@@ -659,9 +673,27 @@ export function TerminalPanel() {
         scrollToBottom();
         return;
       }
+      const replCommand = terminalReplScispaceCommandFromInput(
+        data,
+        editableShell?._line,
+        terminalModeRef.current.mode,
+      );
+      if (replCommand) {
+        if (editableShell) {
+          editableShell._line = "";
+          editableShell._cursor = 0;
+        }
+        void runScispace(replCommand, { source: "terminal" }).then((result) => {
+          writeOutput(
+            `\r\n${result.output}\n${terminalPrompt(terminalModeRef.current.mode, terminalFsStateRef.current.cwd)}`,
+          );
+          scrollToBottom();
+        });
+        return;
+      }
       void handleTerminalInput(shellRef.current, data).then(scrollToBottom);
     },
-    [applyTerminalControlState, scrollToBottom, writeOutput],
+    [applyTerminalControlState, runScispace, scrollToBottom, writeOutput],
   );
 
   useEffect(() => {
