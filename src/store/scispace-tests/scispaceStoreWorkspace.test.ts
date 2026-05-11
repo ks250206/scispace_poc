@@ -38,13 +38,18 @@ describe("scispace store workspace behavior", () => {
     expect(state.windows.find((window) => window.kind === "terminal")).toMatchObject({
       x: 1984,
       y: 1836,
+      width: 1232,
       height: 300,
     });
     expect(state.windows.find((window) => window.kind === "history")).toMatchObject({
       title: "Command History",
       x: 3248,
-      y: 1612,
+      y: 1836,
+      height: 300,
     });
+    const terminal = state.windows.find((window) => window.kind === "terminal");
+    const history = state.windows.find((window) => window.kind === "history");
+    expect((terminal?.x ?? 0) + (terminal?.width ?? 0)).toBeLessThan(history?.x ?? 0);
     expect(state.currentPlotId).toBe("seed-plot");
     expect(state.viewport).toEqual({ x: -1920, y: -1080, scale: 1 });
   });

@@ -47,7 +47,7 @@ export const defaultTerminalWindow = (zIndex = 4): WorkspaceWindow => ({
   title: "Terminal",
   x: centerTileX + 64,
   y: centerTileY + 756,
-  width: 1664,
+  width: 1232,
   height: 300,
   zIndex,
 });
@@ -57,9 +57,9 @@ export const defaultHistoryWindow = (zIndex = 5): WorkspaceWindow => ({
   kind: "history",
   title: "Command History",
   x: centerTileX + 1328,
-  y: centerTileY + 532,
+  y: centerTileY + 756,
   width: 420,
-  height: 520,
+  height: 300,
   zIndex,
 });
 
