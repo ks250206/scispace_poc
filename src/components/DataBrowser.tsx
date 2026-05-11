@@ -1,60 +1,20 @@
-import { useMemo, useRef, useState, type CSSProperties } from "react";
-import { datasetColumnIds } from "../domain/csv";
+import { useMemo, useRef, useState } from "react";
 import type { Dataset, VirtualFile } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
 import { useContextMenu, type ContextMenuItem } from "./context-menu/ContextMenuProvider";
+import { DataBrowserDropZone } from "./data-browser/DataBrowserDropZone";
+import { DataBrowserTree } from "./data-browser/DataBrowserTree";
+import {
+  columnsSelectedForDataset,
+  plotCommand,
+  quoteCommandArg,
+  sortRawItems,
+  tableCommand,
+  uploadOpenCommand,
+} from "./data-browser/dataBrowserCommands";
 import { useDialog } from "./dialog/DialogProvider";
 
-const depthOf = (path: string): number =>
-  Math.max(
-    0,
-    path
-      .replace(/^~\/raw\/?/, "")
-      .split("/")
-      .filter(Boolean).length - 1,
-  );
-
-const sortRawItems = (items: VirtualFile[]): VirtualFile[] =>
-  [...items].sort((left, right) => {
-    const pathCompare = left.path.localeCompare(right.path);
-    if (left.kind === right.kind) return pathCompare;
-    return left.kind === "directory" && right.path.startsWith(`${left.path}/`) ? -1 : pathCompare;
-  });
-
-const quoteCommandArg = (value: string): string =>
-  /\s|["']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
-
-export const uploadOpenCommand = (
-  uploadId: string,
-  fileName: string,
-  mode: "tabular" | "raw" = "tabular",
-): string =>
-  `upload-open ${uploadId} name=${quoteCommandArg(fileName)} ref=${uploadId} mode=${mode}`;
-
-const tableCommand = (dataset: Dataset, columnIds: string[]): string =>
-  `table ${quoteCommandArg(dataset.name)} columns=${columnIds.map(quoteCommandArg).join(",")}`;
-
-const plotCommand = (dataset: Dataset, selectedColumnIds: string[]): string | undefined => {
-  const allColumnIds = datasetColumnIds(dataset);
-  const columns = selectedColumnIds.filter((columnId) => allColumnIds.includes(columnId));
-  const plotColumns = columns.length > 0 ? columns : allColumnIds;
-  const [firstColumn, ...remainingColumns] = plotColumns;
-  const x =
-    plotColumns.length > 1
-      ? firstColumn
-      : allColumnIds.find((columnId) => columnId !== firstColumn);
-  const yColumns = plotColumns.length > 1 ? remainingColumns : firstColumn ? [firstColumn] : [];
-  const validYColumns = yColumns.filter((columnId) => columnId !== x);
-  if (!x || validYColumns.length === 0) return undefined;
-  return `plot ${quoteCommandArg(dataset.name)} x=${quoteCommandArg(x)} y=${validYColumns
-    .map(quoteCommandArg)
-    .join(",")}`;
-};
-
-const columnsSelectedForDataset = (
-  dataset: Dataset,
-  selections: Record<string, string[]>,
-): string[] => selections[dataset.id] ?? datasetColumnIds(dataset);
+export { uploadOpenCommand } from "./data-browser/dataBrowserCommands";
 
 export function DataBrowser() {
   const dialog = useDialog();
@@ -141,7 +101,10 @@ export function DataBrowser() {
     const dataset = datasets.find((item) => item.id === datasetId);
     if (!dataset) return;
     const selectedColumns = useScispaceStore.getState().columnSelections[datasetId] ?? [];
-    const columns = selectedColumns.length > 0 ? selectedColumns : datasetColumnIds(dataset);
+    const columns =
+      selectedColumns.length > 0
+        ? selectedColumns
+        : columnsSelectedForDataset(dataset, useScispaceStore.getState().columnSelections);
     void runScispace(tableCommand(dataset, columns), { source: "gui" });
   };
 
@@ -239,115 +202,20 @@ export function DataBrowser() {
           +
         </button>
       </div>
-      <div className="tree-scroll">
-        {rawFiles.map((file) => {
-          const dataset = datasets.find((item) => item.id === file.datasetId);
-          const selected = dataset?.id === activeDatasetId;
-          const isDirectory = file.kind === "directory";
-          const selectedColumns = dataset
-            ? columnsSelectedForDataset(dataset, columnSelections)
-            : [];
-          const isCollapsed = dataset ? collapsedDatasetIds.has(dataset.id) : true;
-          return (
-            <div key={file.id} className="tree-node">
-              <div
-                className={`tree-row file ${selected ? "selected" : ""} ${dataset ? "parsed" : "raw-only"} ${isDirectory ? "directory" : ""}`}
-                style={{ "--tree-depth": depthOf(file.path) } as CSSProperties}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  openFileContextMenu(file, dataset, { x: event.clientX, y: event.clientY });
-                }}
-              >
-                <span className="tree-indent" />
-                <button
-                  type="button"
-                  className="tree-fold"
-                  disabled={!dataset}
-                  aria-label={
-                    dataset ? `${isCollapsed ? "Expand" : "Collapse"} ${file.name}` : undefined
-                  }
-                  onClick={() => {
-                    if (dataset) toggleDatasetCollapse(dataset.id);
-                  }}
-                >
-                  {dataset ? (isCollapsed ? "▸" : "▾") : isDirectory ? "▸" : "◇"}
-                </button>
-                <button
-                  type="button"
-                  className="tree-item-main"
-                  disabled={!dataset}
-                  title={file.parseError}
-                  onClick={() => {
-                    if (dataset) handleOpenTable(dataset.id);
-                  }}
-                >
-                  <span className="file-icon">{dataset ? "▦" : isDirectory ? "▸" : "◇"}</span>
-                  <span className="file-name">{file.name}</span>
-                </button>
-                <span className="file-meta">
-                  {dataset ? `${dataset.rows.length}r · ${dataset.columns.length}c` : "raw"}
-                </span>
-                <div className="tree-actions">
-                  <button
-                    type="button"
-                    aria-label={`Actions ${file.name}`}
-                    aria-haspopup="menu"
-                    className="tree-action tree-menu-trigger"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      openFileContextMenu(file, dataset, { x: rect.left, y: rect.bottom + 4 });
-                    }}
-                  >
-                    ⋯
-                  </button>
-                </div>
-              </div>
-              {dataset && !isCollapsed
-                ? dataset.columns.map((column) => (
-                    <label
-                      key={column.id}
-                      className="tree-row column"
-                      style={{ "--tree-depth": depthOf(file.path) + 1 } as CSSProperties}
-                    >
-                      <span className="tree-indent" />
-                      <input
-                        type="checkbox"
-                        checked={selectedColumns.includes(column.id)}
-                        disabled={
-                          selectedColumns.includes(column.id) && selectedColumns.length === 1
-                        }
-                        onChange={() => toggleDatasetColumn(dataset.id, column.id)}
-                      />
-                      <span className="file-name">{column.name}</span>
-                      <span className="file-meta">{column.dataType}</span>
-                    </label>
-                  ))
-                : null}
-            </div>
-          );
-        })}
-      </div>
-      <button
-        type="button"
-        className="drop-hint"
-        onClick={() => fileInputRef.current?.click()}
-        onKeyDown={(event) => event.stopPropagation()}
-      >
-        <strong>Drop files here</strong>
-        <span>Click to load, or drop files. Raw text can be parsed in the preview window.</span>
-      </button>
-      <input
-        ref={fileInputRef}
-        aria-label="Load data files"
-        className="visually-hidden"
-        multiple
-        type="file"
-        onChange={(event) => {
-          void openFiles(Array.from(event.currentTarget.files ?? []));
-          event.currentTarget.value = "";
-        }}
+      <DataBrowserTree
+        activeDatasetId={activeDatasetId}
+        collapsedDatasetIds={collapsedDatasetIds}
+        columnSelections={columnSelections}
+        datasets={datasets}
+        files={rawFiles}
+        onOpenContextMenu={openFileContextMenu}
+        onOpenTable={handleOpenTable}
+        onToggleColumn={toggleDatasetColumn}
+        onToggleDataset={toggleDatasetCollapse}
+      />
+      <DataBrowserDropZone
+        fileInputRef={fileInputRef}
+        onOpenFiles={(files) => void openFiles(files)}
       />
     </div>
   );
