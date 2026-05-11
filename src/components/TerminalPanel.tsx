@@ -737,6 +737,7 @@ export function TerminalPanel() {
             className="terminal-host"
             cols={terminalSize.cols}
             rows={terminalSize.rows}
+            style={{ height: "100%" }}
             theme="light"
             onReady={(terminal) => void handleReady(terminal)}
             onData={handleData}
