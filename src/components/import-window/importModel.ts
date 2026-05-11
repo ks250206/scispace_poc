@@ -1,5 +1,7 @@
 import type { Dataset, PendingImport } from "../../domain/types";
 
+export type ImportTab = "preview" | "raw" | "columns" | "metadata";
+
 export const rowHeight = 32;
 export const defaultColumnWidth = 140;
 export const minColumnWidth = 96;
