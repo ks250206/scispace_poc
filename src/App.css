@@ -1879,11 +1879,35 @@
   height: 30px;
   flex: 0 0 30px;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   border-bottom: 1px solid var(--border);
   padding: 0 12px;
   color: var(--text-muted);
   font-size: 12px;
+}
+
+.terminal-header > span:last-child {
+  margin-left: auto;
+}
+
+.terminal-mode-badge {
+  display: inline-flex;
+  height: 18px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.terminal-mode-badge.safe {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.terminal-mode-badge.unsafe {
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 .terminal-viewport {

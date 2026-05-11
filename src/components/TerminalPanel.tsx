@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Terminal, useTerminal } from "@wterm/react";
 import "@wterm/react/css";
 import type { WTerm } from "@wterm/dom";
 import { BashShell } from "@wterm/just-bash";
 import { defineCommand } from "just-bash";
+import { useContextMenu } from "./context-menu/ContextMenuProvider";
 import { formatVirtualFileList } from "../domain/scispace/fileCommands";
 import type { Dataset, VirtualFile } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
@@ -413,6 +414,13 @@ export function TerminalPanel() {
     mode: "repl",
     unsafe: false,
   });
+  const [terminalControlState, setTerminalControlState] = useState<{
+    mode: TerminalMode;
+    unsafe: boolean;
+  }>({
+    mode: "repl",
+    unsafe: false,
+  });
   const viewportRef = useRef<HTMLDivElement>(null);
   const commandLineRequestIdRef = useRef<string | undefined>(undefined);
   const [terminalSize, setTerminalSize] = useState<TerminalSize>();
@@ -421,6 +429,7 @@ export function TerminalPanel() {
   const workspaceScale = useScispaceStore((state) => state.viewport.scale);
   const runScispace = useScispaceStore((state) => state.runScispace);
   const terminalCommandLineRequest = useScispaceStore((state) => state.terminalCommandLineRequest);
+  const { openContextMenu } = useContextMenu();
   const filesRef = useRef(files);
   const datasetsRef = useRef(datasets);
 
@@ -464,6 +473,58 @@ export function TerminalPanel() {
     [ref, write],
   );
 
+  const applyTerminalControlState = useCallback(
+    (nextState: { mode: TerminalMode; unsafe: boolean }) => {
+      terminalModeRef.current = nextState;
+      setTerminalControlState(nextState);
+    },
+    [],
+  );
+
+  const toggleUnsafeMode = useCallback(() => {
+    const nextState = {
+      mode: "repl" as const,
+      unsafe: !terminalModeRef.current.unsafe,
+    };
+    applyTerminalControlState(nextState);
+    writeOutput(nextState.unsafe ? "Unsafe mode enabled\n" : "Unsafe mode disabled\n");
+  }, [applyTerminalControlState, writeOutput]);
+
+  const openTerminalContextMenu = useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openContextMenu({
+        x: event.clientX,
+        y: event.clientY,
+        title: "Terminal",
+        items: [
+          {
+            label: "Unsafe mode",
+            active: terminalControlState.unsafe,
+            onSelect: toggleUnsafeMode,
+          },
+          {
+            label: "Enter scispace REPL",
+            active: terminalControlState.mode === "repl",
+            onSelect: () => {
+              applyTerminalControlState({ ...terminalModeRef.current, mode: "repl" });
+              writeOutput("Entered scispace REPL\n");
+            },
+          },
+        ],
+      });
+    },
+    [
+      applyTerminalControlState,
+      openContextMenu,
+      terminalControlState.mode,
+      terminalControlState.unsafe,
+      toggleUnsafeMode,
+      writeOutput,
+    ],
+  );
+
   const handleReady = useCallback(
     async (terminal: WTerm) => {
       terminalRef.current = terminal;
@@ -478,7 +539,7 @@ export function TerminalPanel() {
       shellRef.current = shell;
       await shell.attach(writeOutput);
       const applyControlResult = (result: ReturnType<typeof terminalControlResult>) => {
-        terminalModeRef.current = { mode: result.mode, unsafe: result.unsafe };
+        applyTerminalControlState({ mode: result.mode, unsafe: result.unsafe });
         return {
           stdout: result.exitCode === 0 && result.output ? `${result.output}\n` : "",
           stderr: result.exitCode === 0 || !result.output ? "" : `${result.output}\n`,
@@ -549,7 +610,14 @@ export function TerminalPanel() {
         }),
       );
     },
-    [initialFiles, runScispace, scrollToBottom, syncTerminalSize, writeOutput],
+    [
+      applyTerminalControlState,
+      initialFiles,
+      runScispace,
+      scrollToBottom,
+      syncTerminalSize,
+      writeOutput,
+    ],
   );
 
   const handleData = useCallback(
@@ -588,9 +656,12 @@ export function TerminalPanel() {
   }, [syncTerminalSize]);
 
   return (
-    <section className="terminal-panel">
+    <section className="terminal-panel" onContextMenu={openTerminalContextMenu}>
       <header className="terminal-header">
-        <span>scispace repl</span>
+        <span>scispace REPL</span>
+        <span className={`terminal-mode-badge ${terminalControlState.unsafe ? "unsafe" : "safe"}`}>
+          {terminalControlState.unsafe ? "unsafe" : "safe"}
+        </span>
         <span>wterm + just-bash</span>
       </header>
       <div ref={viewportRef} className="terminal-viewport">

@@ -176,6 +176,28 @@ describe("Workbench workspace UI", () => {
     expect(screen.queryByRole("menu", { name: "Plot - waveform.csv" })).not.toBeInTheDocument();
   });
 
+  it("starts terminal in scispace repl and toggles unsafe from terminal context menu", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    await screen.findByText("scispace REPL");
+    const terminalPanel = document.querySelector(".terminal-panel") as HTMLElement;
+    expect(screen.getByText("safe")).toBeInTheDocument();
+
+    fireEvent.contextMenu(terminalPanel, { clientX: 120, clientY: 760 });
+    const menu = screen.getByRole("menu", { name: "Terminal" });
+    expect(within(menu).getByRole("menuitem", { name: "Unsafe mode" })).toBeInTheDocument();
+    expect(
+      within(menu).queryByRole("menuitem", { name: "Bring to Front" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(within(menu).getByRole("menuitem", { name: "Unsafe mode" }));
+    expect(screen.getByText("unsafe")).toBeInTheDocument();
+
+    fireEvent.contextMenu(terminalPanel, { clientX: 120, clientY: 760 });
+    await user.click(screen.getByRole("menuitem", { name: "Unsafe mode" }));
+    expect(screen.getByText("safe")).toBeInTheDocument();
+  });
+
   it("clears active window highlight when clicking empty background", async () => {
     await renderWorkbench();
     const plane = document.querySelector(".workspace-plane") as HTMLElement;
