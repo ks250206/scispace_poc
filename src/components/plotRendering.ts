@@ -10,7 +10,7 @@ const scaleNumber = (value: number, scale: number): number => Number((value * sc
 const font = (size: number, family: string): string => `${size}px ${family}`;
 
 export const plotRenderScale = (workspaceScale: number): number =>
-  Math.min(maxRenderScale, Math.max(minRenderScale, workspaceScale || 1));
+  Math.min(maxRenderScale, Math.max(1, workspaceScale || 1));
 
 export const plotPositionFromClient = (
   client: { x: number; y: number },

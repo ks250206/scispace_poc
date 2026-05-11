@@ -122,6 +122,7 @@ describe("plot rendering options", () => {
     expect(scaled.axes.x.size).toBe(created.spec.axes.x.size * 2);
     expect(scaled.axes.x.valueStyle.size).toBe(created.spec.axes.x.valueStyle.size * 2);
     expect(scaled.series[0]?.lineWidth).toBe(created.spec.series[0]!.lineWidth * 2);
+    expect(plotRenderScale(0.31)).toBe(1);
     expect(plotRenderScale(10)).toBe(4);
   });
 
