@@ -231,6 +231,7 @@ export function Workbench() {
   const projectDirty = useScispaceStore((state) => state.projectDirty);
   const currentPlotId = useScispaceStore((state) => state.currentPlotId);
   const runScispace = useScispaceStore((state) => state.runScispace);
+  const openNewPlotWindow = useScispaceStore((state) => state.openNewPlotWindow);
   const openPlotConfig = useScispaceStore((state) => state.openPlotConfig);
   const stageUploadPayload = useScispaceStore((state) => state.stageUploadPayload);
   const createNewProject = useScispaceStore((state) => state.createNewProject);
@@ -650,6 +651,11 @@ export function Workbench() {
       openMenu: openToolbarMenu,
       setOpenMenu: setOpenToolbarMenu,
       items: [
+        {
+          label: "New Plot",
+          onSelect: openNewPlotWindow,
+          disabled: datasets.length === 0,
+        },
         {
           label: "Plot Config",
           onSelect: openActivePlotConfig,

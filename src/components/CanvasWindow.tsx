@@ -15,6 +15,9 @@ const ImportSettingsWindow = lazy(() =>
 const PlotConfigWindow = lazy(() =>
   import("./PlotConfigWindow").then((module) => ({ default: module.PlotConfigWindow })),
 );
+const NewPlotWindow = lazy(() =>
+  import("./NewPlotWindow").then((module) => ({ default: module.NewPlotWindow })),
+);
 const PlotWindow = lazy(() =>
   import("./PlotWindow").then((module) => ({ default: module.PlotWindow })),
 );
@@ -36,7 +39,10 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
   const plotMenuState = useScispaceStore((state) => state.plotMenuState);
   const { openContextMenu } = useContextMenu();
   const canClose =
-    window.kind === "table" || window.kind === "plot" || window.kind === "plot-config";
+    window.kind === "table" ||
+    window.kind === "plot" ||
+    window.kind === "plot-new" ||
+    window.kind === "plot-config";
   const handleClose = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     closeWindow(window.id);
@@ -186,6 +192,7 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
             {window.kind === "plot" && window.plotId ? (
               <PlotWindow plotId={window.plotId} windowId={window.id} />
             ) : null}
+            {window.kind === "plot-new" ? <NewPlotWindow windowId={window.id} /> : null}
             {window.kind === "plot-config" ? <PlotConfigWindow /> : null}
             {window.kind === "terminal" ? <TerminalPanel /> : null}
             {window.kind === "import" && window.importId ? (

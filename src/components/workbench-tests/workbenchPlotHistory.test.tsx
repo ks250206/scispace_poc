@@ -13,6 +13,45 @@ import {
 describe("Workbench plot and history UI", () => {
   setupWorkbenchSuite();
 
+  it("opens a new plot chooser from the plot menu and creates a plot via scispace", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+
+    await clickToolbarItem(user, "Plot", "New Plot");
+
+    await waitFor(() => expect(screen.getByLabelText("Plot dataset")).toBeInTheDocument());
+    expect(screen.getByText("Display signal vs time")).toBeInTheDocument();
+    expect(screen.getByText("plot waveform.csv x=time y=signal type=line")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Do It" }));
+
+    await waitFor(() =>
+      expect(storeState().commandHistory.at(-1)).toMatchObject({
+        command: "plot waveform.csv x=time y=signal type=line",
+        source: "gui",
+        status: "success",
+      }),
+    );
+    expect(storeState().windows.some((window) => window.kind === "plot-new")).toBe(false);
+    expect(
+      storeState().windows.some(
+        (window) => window.kind === "plot" && window.title === "waveform.csv: signal vs time",
+      ),
+    ).toBe(true);
+  });
+
+  it("sends a new plot command to the terminal line", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+
+    await clickToolbarItem(user, "Plot", "New Plot");
+    await user.click(await screen.findByRole("button", { name: "To Cmd Line" }));
+
+    expect(storeState().terminalCommandLineRequest).toMatchObject({
+      command: "plot waveform.csv x=time y=signal type=line",
+    });
+  });
+
   it("opens shared plot config and edits the current plot", async () => {
     const user = userEvent.setup();
     await renderWorkbench();

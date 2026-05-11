@@ -28,6 +28,7 @@ export const createWorkspaceActions = ({
   | "selectDataset"
   | "openTable"
   | "openPlot"
+  | "openNewPlotWindow"
   | "openPlotConfig"
 > => ({
   setDatasetColumnSelection: (datasetId, columnIds) => {
@@ -130,6 +131,33 @@ export const createWorkspaceActions = ({
         activeWindowId: `plot-${normalizedSpec.id}`,
         currentPlotId: normalizedSpec.id,
         projectDirty: true,
+      };
+    });
+    persistLayout(db, get());
+  },
+
+  openNewPlotWindow: () => {
+    set((state) => {
+      const existing = state.windows.find((window) => window.kind === "plot-new");
+      const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
+      const windowId = "plot-new-main";
+      const nextWindow: WorkspaceWindow = {
+        id: windowId,
+        kind: "plot-new",
+        title: "New Plot",
+        ...newWindowPosition(state, 640, 128),
+        width: 760,
+        height: 560,
+        zIndex,
+      };
+      return {
+        activeWindowId: existing?.id ?? windowId,
+        projectDirty: true,
+        windows: existing
+          ? state.windows.map((window) =>
+              window.id === existing.id ? { ...window, zIndex } : window,
+            )
+          : [...state.windows, nextWindow],
       };
     });
     persistLayout(db, get());

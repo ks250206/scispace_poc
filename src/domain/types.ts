@@ -2,6 +2,7 @@ export type WindowKind =
   | "browser"
   | "table"
   | "plot"
+  | "plot-new"
   | "plot-config"
   | "terminal"
   | "import"
