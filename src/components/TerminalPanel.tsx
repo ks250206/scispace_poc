@@ -19,6 +19,8 @@ type EditableBashShell = {
   _write?: (data: string) => void;
 };
 
+type TerminalMode = "repl" | "bash";
+
 type TerminalSize = { cols: number; rows: number };
 export type TerminalFsState = { cwd: string };
 
@@ -43,11 +45,40 @@ const defaultTerminalMetrics: TerminalMetrics = {
   verticalPadding: 16,
 };
 
+const scispaceReplCommands = [
+  "help",
+  "lsdata",
+  "table",
+  "table-edit",
+  "table-range",
+  "plot",
+  "plot-set",
+  "plot-axis",
+  "plot-grid",
+  "plot-series",
+  "plot-annotation",
+  "plot-schema",
+  "file-list",
+  "file-mkdir",
+  "file-rename",
+  "file-move",
+  "file-delete",
+  "upload-open",
+  "import-open",
+  "import-preview",
+  "import-set",
+  "import-column",
+  "import-line",
+  "import-cancel",
+  "import-confirm",
+  "elt",
+] as const;
+
 const workspaceScaleOrDefault = (scale: number): number => Math.max(0.1, scale || 1);
 
 const buildInitialFiles = (files: VirtualFile[]): Record<string, string> =>
   Object.fromEntries([
-    ["/home/user/README.txt", "SciSpace terminal. Try: scispace lsdata\n"],
+    ["/home/user/README.txt", "SciSpace REPL. Try: help or file-list ~/raw\n"],
     ...files.filter((file) => file.text).map((file) => [toBashPath(file.path), file.text ?? ""]),
   ]);
 
@@ -82,7 +113,72 @@ const isKnownDirectory = (path: string, files: VirtualFile[]): boolean => {
   return files.some((file) => file.kind === "directory" && file.path === virtualPath);
 };
 
-export const terminalCommandLineText = (command: string): string => `scispace ${command}`;
+export const terminalCommandLineText = (command: string): string => command;
+
+export const scispaceReplCommandLine = (command: string, args: string[]): string =>
+  [command, ...args].join(" ").trim();
+
+export const stripScispacePrefix = (commandLine: string): string =>
+  commandLine.trim().replace(/^scispace\s+/, "");
+
+export const terminalPrompt = (mode: TerminalMode, cwd: string): string => {
+  const path = cwd.replace("/home/user", "~");
+  return mode === "repl" ? `scispace:${path}$ ` : `unsafe:${path}$ `;
+};
+
+export const terminalControlResult = (
+  command: string,
+  args: string[],
+  state: { mode: TerminalMode; unsafe: boolean },
+): { handled: boolean; mode: TerminalMode; unsafe: boolean; output: string; exitCode: number } => {
+  const next = { ...state };
+  if (command === "repl") {
+    next.mode = "repl";
+    return { handled: true, ...next, output: "Entered scispace REPL", exitCode: 0 };
+  }
+
+  if (command === "unsafe") {
+    const setting = args[0];
+    if (setting === "on") {
+      next.unsafe = true;
+      return { handled: true, ...next, output: "Unsafe mode enabled", exitCode: 0 };
+    }
+    if (setting === "off") {
+      next.unsafe = false;
+      next.mode = "repl";
+      return {
+        handled: true,
+        ...next,
+        output: "Unsafe mode disabled; returned to scispace REPL",
+        exitCode: 0,
+      };
+    }
+    return { handled: true, ...next, output: "Usage: unsafe on|off", exitCode: 1 };
+  }
+
+  if (command === "shell") {
+    if (!state.unsafe) {
+      return {
+        handled: true,
+        ...next,
+        output: "shell is disabled. Run `unsafe on` before entering just-bash shell.",
+        exitCode: 1,
+      };
+    }
+    next.mode = "bash";
+    return { handled: true, ...next, output: "Entered unsafe just-bash shell", exitCode: 0 };
+  }
+
+  if (command === "exit") {
+    if (state.mode === "bash") {
+      next.mode = "repl";
+      return { handled: true, ...next, output: "Returned to scispace REPL", exitCode: 0 };
+    }
+    return { handled: true, ...next, output: "Already in scispace REPL", exitCode: 0 };
+  }
+
+  return { handled: false, ...next, output: "", exitCode: 0 };
+};
 
 export const executeTerminalFsCommand = (
   commandLine: string,
@@ -313,6 +409,10 @@ export function TerminalPanel() {
   const shellRef = useRef<BashShell | null>(null);
   const terminalRef = useRef<WTerm | null>(null);
   const terminalFsStateRef = useRef<TerminalFsState>({ cwd: "/home/user" });
+  const terminalModeRef = useRef<{ mode: TerminalMode; unsafe: boolean }>({
+    mode: "repl",
+    unsafe: false,
+  });
   const viewportRef = useRef<HTMLDivElement>(null);
   const commandLineRequestIdRef = useRef<string | undefined>(undefined);
   const [terminalSize, setTerminalSize] = useState<TerminalSize>();
@@ -372,11 +472,19 @@ export function TerminalPanel() {
       const shell = new BashShell({
         files: initialFiles,
         cwd: "/home/user",
-        greeting: ["SciSpace shell", "Run `scispace help` or inspect ~/raw with `ls raw`."],
-        prompt: (cwd) => `scispace:${cwd.replace("/home/user", "~")}$ `,
+        greeting: ["SciSpace REPL", "Run `help` or inspect ~/raw with `ls raw`."],
+        prompt: (cwd) => terminalPrompt(terminalModeRef.current.mode, cwd),
       });
       shellRef.current = shell;
       await shell.attach(writeOutput);
+      const applyControlResult = (result: ReturnType<typeof terminalControlResult>) => {
+        terminalModeRef.current = { mode: result.mode, unsafe: result.unsafe };
+        return {
+          stdout: result.exitCode === 0 && result.output ? `${result.output}\n` : "",
+          stderr: result.exitCode === 0 || !result.output ? "" : `${result.output}\n`,
+          exitCode: result.exitCode,
+        };
+      };
       const registerFsCommand = (command: "pwd" | "cd" | "ls" | "cat" | "clear") => {
         shell.bash?.registerCommand(
           defineCommand(command, async (args) => {
@@ -397,9 +505,41 @@ export function TerminalPanel() {
         );
       };
       (["pwd", "cd", "ls", "cat", "clear"] as const).forEach(registerFsCommand);
+      const registerReplCommand = (command: (typeof scispaceReplCommands)[number]) => {
+        shell.bash?.registerCommand(
+          defineCommand(command, async (args) => {
+            const result = await runScispace(scispaceReplCommandLine(command, args), {
+              source: "terminal",
+            });
+            scrollToBottom();
+            return {
+              stdout: `${result.output}\n`,
+              stderr: result.kind === "error" ? `${result.output}\n` : "",
+              exitCode: result.kind === "error" ? 1 : 0,
+            };
+          }),
+        );
+      };
+      scispaceReplCommands.forEach(registerReplCommand);
+      const registerControlCommand = (command: "repl" | "unsafe" | "shell" | "exit") => {
+        shell.bash?.registerCommand(
+          defineCommand(command, async (args) => {
+            scrollToBottom();
+            return applyControlResult(
+              terminalControlResult(command, args, terminalModeRef.current),
+            );
+          }),
+        );
+      };
+      (["repl", "unsafe", "shell", "exit"] as const).forEach(registerControlCommand);
       shell.bash?.registerCommand(
         defineCommand("scispace", async (args) => {
-          const result = await runScispace(args.join(" "), { source: "terminal" });
+          if (args[0] === "repl") {
+            return applyControlResult(terminalControlResult("repl", [], terminalModeRef.current));
+          }
+          const result = await runScispace(stripScispacePrefix(["scispace", ...args].join(" ")), {
+            source: "terminal",
+          });
           scrollToBottom();
           return {
             stdout: `${result.output}\n`,
@@ -450,7 +590,7 @@ export function TerminalPanel() {
   return (
     <section className="terminal-panel">
       <header className="terminal-header">
-        <span>scispace shell</span>
+        <span>scispace repl</span>
         <span>wterm + just-bash</span>
       </header>
       <div ref={viewportRef} className="terminal-viewport">

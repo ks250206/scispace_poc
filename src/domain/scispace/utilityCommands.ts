@@ -3,6 +3,11 @@ import type { Dataset, ScispaceCommandResult } from "../types";
 import { findDataset, type CommandContext } from "./commandUtils";
 
 export const helpText = [
+  "scispace repl commands:",
+  "  repl",
+  "  unsafe on|off",
+  "  shell",
+  "",
   "scispace commands:",
   "  lsdata",
   "  table <dataset> columns=<column[,column...]>",

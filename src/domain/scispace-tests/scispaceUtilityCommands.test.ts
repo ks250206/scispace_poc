@@ -10,7 +10,10 @@ describe("scispace utility commands", () => {
 
   it("prints help and empty dataset states", () => {
     const help = runEmptyCommand("help").output;
+    expect(help).toContain("scispace repl commands");
     expect(help).toContain("scispace commands");
+    expect(help).toContain("unsafe on|off");
+    expect(help).toContain("shell");
     expect(help).toContain("file-list [path]");
     expect(help).toContain("file-rename <path> name=<newName>");
     expect(runEmptyCommand("lsdata").output).toBe("No datasets loaded");

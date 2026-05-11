@@ -6,7 +6,11 @@ import {
   handleTerminalInput,
   normalizeTerminalOutput,
   scrollTerminalToBottom,
+  scispaceReplCommandLine,
+  stripScispacePrefix,
+  terminalControlResult,
   terminalCommandLineText,
+  terminalPrompt,
   writeTerminalOutput,
 } from "./TerminalPanel";
 import type { BashShell } from "@wterm/just-bash";
@@ -204,6 +208,38 @@ describe("terminal input handling", () => {
   });
 
   it("formats history commands for the terminal command line", () => {
-    expect(terminalCommandLineText("file-list ~/raw")).toBe("scispace file-list ~/raw");
+    expect(terminalCommandLineText("file-list ~/raw")).toBe("file-list ~/raw");
+  });
+
+  it("normalizes scispace repl command lines", () => {
+    expect(scispaceReplCommandLine("file-list", ["~/raw"])).toBe("file-list ~/raw");
+    expect(stripScispacePrefix("scispace file-list ~/raw")).toBe("file-list ~/raw");
+    expect(stripScispacePrefix("file-list ~/raw")).toBe("file-list ~/raw");
+  });
+
+  it("controls unsafe shell transitions from the scispace repl", () => {
+    expect(terminalPrompt("repl", "/home/user/raw")).toBe("scispace:~/raw$ ");
+    expect(terminalPrompt("bash", "/home/user/raw")).toBe("unsafe:~/raw$ ");
+
+    const denied = terminalControlResult("shell", [], { mode: "repl", unsafe: false });
+    expect(denied).toMatchObject({ handled: true, mode: "repl", unsafe: false, exitCode: 1 });
+    expect(denied.output).toContain("unsafe on");
+
+    const unsafeOn = terminalControlResult("unsafe", ["on"], { mode: "repl", unsafe: false });
+    expect(unsafeOn).toMatchObject({ handled: true, mode: "repl", unsafe: true, exitCode: 0 });
+
+    const shell = terminalControlResult("shell", [], { mode: "repl", unsafe: true });
+    expect(shell).toMatchObject({ handled: true, mode: "bash", unsafe: true, exitCode: 0 });
+
+    const repl = terminalControlResult("exit", [], { mode: "bash", unsafe: true });
+    expect(repl).toMatchObject({ handled: true, mode: "repl", unsafe: true, exitCode: 0 });
+
+    const unsafeOff = terminalControlResult("unsafe", ["off"], { mode: "bash", unsafe: true });
+    expect(unsafeOff).toMatchObject({
+      handled: true,
+      mode: "repl",
+      unsafe: false,
+      exitCode: 0,
+    });
   });
 });

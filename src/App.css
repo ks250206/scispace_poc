@@ -294,8 +294,7 @@
 }
 
 .context-menu-row:hover,
-.context-menu-row:focus-within,
-.context-menu-row.active {
+.context-menu-row:focus-within {
   background: #4b8ff5;
   color: #ffffff;
 }
