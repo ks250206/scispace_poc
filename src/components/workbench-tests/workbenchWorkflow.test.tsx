@@ -19,8 +19,14 @@ describe("Workbench reproducible workflow", () => {
     fireEvent.change(await screen.findByRole("textbox", { name: "Dataset name" }), {
       target: { value: "scratch" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Dataset columns" }), {
-      target: { value: "x,y" },
+    fireEvent.change(screen.getByRole("textbox", { name: "Dataset column 1 name" }), {
+      target: { value: "x" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Dataset column 2 name" }), {
+      target: { value: "label" },
+    });
+    fireEvent.change(screen.getByLabelText("Dataset column 2 type"), {
+      target: { value: "string" },
     });
     fireEvent.change(screen.getByRole("textbox", { name: "Dataset rows" }), {
       target: { value: "2" },
@@ -31,9 +37,14 @@ describe("Workbench reproducible workflow", () => {
       expect(storeState().datasets.map((dataset) => dataset.name)).toContain("scratch"),
     );
     expect(storeState().commandHistory.at(-1)).toMatchObject({
-      command: "dataset-new scratch columns=x,y rows=2",
+      command: "dataset-new scratch columns=x:number,label:string rows=2",
       source: "gui",
     });
+    expect(
+      storeState()
+        .datasets.find((dataset) => dataset.name === "scratch")
+        ?.columns.map((column) => column.dataType),
+    ).toEqual(["number", "string"]);
 
     await clickToolbarItem(user, "Data", "Calculate Column");
     await screen.findByLabelText("Calculation dataset");

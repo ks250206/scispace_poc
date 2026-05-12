@@ -23,6 +23,23 @@ describe("scispace dataset commands", () => {
     }
   });
 
+  it("creates empty datasets with explicit column types", () => {
+    const result = runCommand("dataset-new calc columns=x:number,label:string,note:mixed rows=2");
+
+    expect(result.kind).toBe("dataset-created");
+    if (result.kind === "dataset-created") {
+      expect(result.dataset.columns.map((column) => [column.id, column.dataType])).toEqual([
+        ["x", "number"],
+        ["label", "string"],
+        ["note", "mixed"],
+      ]);
+      expect(result.dataset.rows).toEqual([
+        { x: "", label: "", note: "" },
+        { x: "", label: "", note: "" },
+      ]);
+    }
+  });
+
   it("calculates new columns with column and scalar expressions", () => {
     const result = runCommand('dataset-calc waveform.csv column=sum expr="signal + background"');
 
@@ -82,6 +99,10 @@ describe("scispace dataset commands", () => {
   it("reports malformed dataset commands without partial updates", () => {
     expect(runCommand("dataset-new calc columns=x,y rows=-1").kind).toBe("error");
     expect(runCommand("dataset-new calc columns= rows=3").kind).toBe("error");
+    expect(runCommand("dataset-new calc columns=x:boolean rows=3")).toMatchObject({
+      kind: "error",
+      output: "Invalid column type: boolean",
+    });
     expect(runCommand('dataset-calc missing.csv column=sum expr="signal + background"').kind).toBe(
       "error",
     );

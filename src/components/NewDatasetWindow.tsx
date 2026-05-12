@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useScispaceStore } from "../store/scispaceStore";
 import { datasetOption, quoteDatasetCommandValue } from "./datasetCommandWindows";
+import type { DatasetColumn } from "../domain/types";
 
 interface NewDatasetWindowProps {
   windowId: string;
@@ -11,20 +12,38 @@ export function NewDatasetWindow({ windowId }: NewDatasetWindowProps) {
   const closeWindow = useScispaceStore((state) => state.closeWindow);
   const sendCommandToTerminalLine = useScispaceStore((state) => state.sendCommandToTerminalLine);
   const [name, setName] = useState("calc");
-  const [columns, setColumns] = useState("x,y");
+  const [columns, setColumns] = useState<
+    Array<{ id: string; name: string; type: DatasetColumn["dataType"] }>
+  >([
+    { id: crypto.randomUUID(), name: "x", type: "number" },
+    { id: crypto.randomUUID(), name: "y", type: "number" },
+  ]);
   const [rows, setRows] = useState("10");
   const [status, setStatus] = useState("");
 
+  const columnSpec = columns
+    .map((column) => `${column.name.trim() || "column"}:${column.type}`)
+    .join(",");
   const command = useMemo(
     () =>
       [
         "dataset-new",
         quoteDatasetCommandValue(name.trim() || "calc"),
-        `columns=${columns.replace(/\s+/g, "")}`,
+        `columns=${columnSpec.replace(/\s+/g, "")}`,
         datasetOption("rows", rows.trim() || "0"),
       ].join(" "),
-    [columns, name, rows],
+    [columnSpec, name, rows],
   );
+
+  const updateColumn = (
+    id: string,
+    patch: Partial<{ name: string; type: DatasetColumn["dataType"] }>,
+  ) => {
+    setColumns((current) =>
+      current.map((column) => (column.id === id ? { ...column, ...patch } : column)),
+    );
+    setStatus("");
+  };
 
   const createDataset = async () => {
     const result = await runScispace(command, { source: "gui" });
@@ -49,12 +68,50 @@ export function NewDatasetWindow({ windowId }: NewDatasetWindowProps) {
         </label>
         <label>
           <span>Columns</span>
-          <input
-            aria-label="Dataset columns"
-            value={columns}
-            placeholder="x,y"
-            onChange={(event) => setColumns(event.target.value)}
-          />
+          <div className="dataset-column-editor">
+            {columns.map((column, index) => (
+              <div key={column.id} className="dataset-column-row">
+                <input
+                  aria-label={`Dataset column ${index + 1} name`}
+                  value={column.name}
+                  onChange={(event) => updateColumn(column.id, { name: event.target.value })}
+                />
+                <select
+                  aria-label={`Dataset column ${index + 1} type`}
+                  value={column.type}
+                  onChange={(event) =>
+                    updateColumn(column.id, {
+                      type: event.target.value as DatasetColumn["dataType"],
+                    })
+                  }
+                >
+                  <option value="number">number</option>
+                  <option value="string">string</option>
+                  <option value="mixed">mixed</option>
+                </select>
+                <button
+                  type="button"
+                  disabled={columns.length === 1}
+                  onClick={() =>
+                    setColumns((current) => current.filter((item) => item.id !== column.id))
+                  }
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() =>
+                setColumns((current) => [
+                  ...current,
+                  { id: crypto.randomUUID(), name: `column_${current.length + 1}`, type: "number" },
+                ])
+              }
+            >
+              Add column
+            </button>
+          </div>
         </label>
         <label>
           <span>Rows</span>

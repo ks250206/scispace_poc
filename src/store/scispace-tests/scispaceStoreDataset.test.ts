@@ -14,6 +14,7 @@ describe("scispace store dataset commands", () => {
     expect(created).toBeDefined();
     expect(created?.rows).toHaveLength(3);
     expect(created?.columns.map((column) => column.id)).toEqual(["x", "y"]);
+    expect(created?.columns.map((column) => column.dataType)).toEqual(["string", "string"]);
     expect(stateOf(store).files.find((file) => file.path === "~/raw/calc.csv")).toMatchObject({
       datasetId: created?.id,
       text: "x,y\n,\n,\n,",
@@ -26,6 +27,22 @@ describe("scispace store dataset commands", () => {
       source: "gui",
       status: "success",
     });
+  });
+
+  it("persists explicit dataset-new column types", async () => {
+    const { db, store } = await makeStore();
+
+    await runCommand(store, "dataset-new typed columns=x:number,label:string rows=2");
+
+    const created = stateOf(store).datasets.find((dataset) => dataset.name === "typed");
+    expect(created?.columns.map((column) => [column.id, column.dataType])).toEqual([
+      ["x", "number"],
+      ["label", "string"],
+    ]);
+    expect((await db.datasets.get(created!.id))?.columns.map((column) => column.dataType)).toEqual([
+      "number",
+      "string",
+    ]);
   });
 
   it("calculates dataset columns and rewrites backing files", async () => {
