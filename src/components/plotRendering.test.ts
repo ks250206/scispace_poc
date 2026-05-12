@@ -3,6 +3,7 @@ import { createSeedDataset } from "../domain/csv";
 import { executeScispaceCommand } from "../domain/scispace";
 import {
   buildPlotOptions,
+  buildSortedAlignedPlotData,
   createScaledPlotMouseEvent,
   inferPlotDragZoomMode,
   normalizePlotClientPoint,
@@ -110,6 +111,30 @@ describe("plot rendering options", () => {
     ]);
 
     expect(series.map((item) => item.y)).toEqual(["background", "signal"]);
+  });
+
+  it("sorts finite plot data by x before passing it to uPlot", () => {
+    const dataset = createSeedDataset();
+    const created = executeScispaceCommand("plot waveform.csv x=time y=signal", {
+      datasets: [dataset],
+    });
+    expect(created.kind).toBe("plot-created");
+    if (created.kind !== "plot-created") return;
+
+    const unsortedDataset = {
+      ...dataset,
+      rows: [
+        { time: 3, signal: 30 },
+        { time: 1, signal: 10 },
+        { time: "not-number", signal: 99 },
+        { time: 2, signal: 20 },
+      ],
+    };
+
+    expect(buildSortedAlignedPlotData(unsortedDataset, created.spec)).toEqual([
+      [1, 2, 3],
+      [10, 20, 30],
+    ]);
   });
 
   it("scales plot render specs for sharp workspace zoom rendering", () => {

@@ -4,6 +4,7 @@ import "uplot/dist/uPlot.min.css";
 import { useScispaceStore } from "../store/scispaceStore";
 import {
   buildPlotOptions,
+  buildSortedAlignedPlotData,
   inferPlotDragZoomMode,
   normalizePlotClientPoint,
   plotRenderScale,
@@ -12,7 +13,6 @@ import {
   plotScaleRange,
   scalePlotSpecForRender,
   scaledPlotCursorBind,
-  sortedPlotSeries,
   xAxisLabelHeight,
 } from "./plotRendering";
 import { buildPlotSvg, safePlotFileName, svgDataUrl } from "./plotExport";
@@ -41,11 +41,7 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
 
   const plotData = useMemo(() => {
     if (!dataset || !spec) return undefined;
-    const x = dataset.rows.map((row, index) => Number(row[spec.x] ?? index));
-    const seriesData = sortedPlotSeries(spec.series).map((series) =>
-      dataset.rows.map((row) => Number(row[series.y] ?? 0)),
-    );
-    return [x, ...seriesData] as uPlot.AlignedData;
+    return buildSortedAlignedPlotData(dataset, spec);
   }, [dataset, spec]);
 
   useEffect(() => {
