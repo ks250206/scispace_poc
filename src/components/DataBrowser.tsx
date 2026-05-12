@@ -28,6 +28,7 @@ export function DataBrowser() {
   const toggleDatasetColumn = useScispaceStore((state) => state.toggleDatasetColumn);
   const runScispace = useScispaceStore((state) => state.runScispace);
   const stageUploadPayload = useScispaceStore((state) => state.stageUploadPayload);
+  const openDatasetCalcWindow = useScispaceStore((state) => state.openDatasetCalcWindow);
 
   const rawFiles = useMemo(
     () => sortRawItems(files.filter((file) => file.path.startsWith("~/raw/"))),
@@ -142,6 +143,11 @@ export function DataBrowser() {
           label: "Plot",
           ariaLabel: `Plot ${file.name}`,
           onSelect: () => handlePlotDataset(dataset.id),
+        },
+        {
+          label: "Calculate Column",
+          ariaLabel: `Calculate Column ${file.name}`,
+          onSelect: () => openDatasetCalcWindow(dataset.id),
         },
       );
     }

@@ -10,6 +10,8 @@ export const helpText = [
   "",
   "scispace commands:",
   "  lsdata",
+  "  dataset-new <name> columns=<col[,col...]> rows=<n>",
+  "  dataset-calc <dataset> column=<newOrExistingCol> expr=<expression>",
   "  table <dataset> columns=<column[,column...]>",
   "  table-edit <dataset> action=<delete-row|delete-column|set-cell> index=<n> row=<n> column=<col> value=<value>",
   "  table-range <dataset> action=<clear|fill-down> r1=<n> c1=<col> r2=<n> c2=<col>",

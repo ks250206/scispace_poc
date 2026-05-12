@@ -29,6 +29,8 @@ export const createWorkspaceActions = ({
   | "openTable"
   | "openPlot"
   | "openNewPlotWindow"
+  | "openNewDatasetWindow"
+  | "openDatasetCalcWindow"
   | "openPlotConfig"
 > => ({
   setDatasetColumnSelection: (datasetId, columnIds) => {
@@ -156,6 +158,65 @@ export const createWorkspaceActions = ({
         windows: existing
           ? state.windows.map((window) =>
               window.id === existing.id ? { ...window, zIndex } : window,
+            )
+          : [...state.windows, nextWindow],
+      };
+    });
+    persistLayout(db, get());
+  },
+
+  openNewDatasetWindow: () => {
+    set((state) => {
+      const existing = state.windows.find((window) => window.kind === "dataset-new");
+      const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
+      const windowId = "dataset-new-main";
+      const nextWindow: WorkspaceWindow = {
+        id: windowId,
+        kind: "dataset-new",
+        title: "New Dataset",
+        ...newWindowPosition(state, 600, 160),
+        width: 520,
+        height: 360,
+        zIndex,
+      };
+      return {
+        activeWindowId: existing?.id ?? windowId,
+        projectDirty: true,
+        windows: existing
+          ? state.windows.map((window) =>
+              window.id === existing.id ? { ...window, zIndex } : window,
+            )
+          : [...state.windows, nextWindow],
+      };
+    });
+    persistLayout(db, get());
+  },
+
+  openDatasetCalcWindow: (datasetId) => {
+    const resolvedDatasetId = datasetId ?? get().activeDatasetId ?? get().datasets[0]?.id;
+    set((state) => {
+      const existing = state.windows.find((window) => window.kind === "dataset-calc");
+      const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
+      const windowId = "dataset-calc-main";
+      const nextWindow: WorkspaceWindow = {
+        id: windowId,
+        kind: "dataset-calc",
+        title: "Calculate Column",
+        ...newWindowPosition(state, 640, 200),
+        width: 560,
+        height: 420,
+        zIndex,
+        datasetId: resolvedDatasetId,
+      };
+      return {
+        activeWindowId: existing?.id ?? windowId,
+        activeDatasetId: resolvedDatasetId ?? state.activeDatasetId,
+        projectDirty: true,
+        windows: existing
+          ? state.windows.map((window) =>
+              window.id === existing.id
+                ? { ...window, zIndex, datasetId: resolvedDatasetId }
+                : window,
             )
           : [...state.windows, nextWindow],
       };

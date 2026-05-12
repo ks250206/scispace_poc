@@ -61,6 +61,18 @@ describe("Workbench data browser UI", () => {
     );
   });
 
+  it("opens calculate column for a dataset from the data browser menu", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+
+    await user.click(screen.getByRole("button", { name: "Actions waveform.csv" }));
+    await user.click(screen.getByRole("menuitem", { name: "Calculate Column waveform.csv" }));
+
+    await screen.findByLabelText("Calculation dataset");
+    expect(screen.getAllByText("Calculate Column").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Calculation dataset")).toHaveValue("seed-waveform");
+  });
+
   it("shows close buttons only on table and plot windows and removes the clicked window", async () => {
     await renderWorkbench();
     expect(screen.getByRole("button", { name: "Close Table - waveform.csv" })).toBeInTheDocument();

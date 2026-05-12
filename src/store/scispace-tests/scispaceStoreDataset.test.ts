@@ -1,0 +1,80 @@
+import { describe, expect, it } from "vitest";
+import { lastCommand, makeStore, runCommand, stateOf } from "./scispaceStoreTestUtils";
+
+describe("scispace store dataset commands", () => {
+  it("creates datasets and backing files through scispace", async () => {
+    const { db, store } = await makeStore();
+
+    const result = await runCommand(store, "dataset-new calc columns=x,y rows=3", {
+      source: "gui",
+    });
+
+    expect(result.kind).toBe("dataset-created");
+    const created = stateOf(store).datasets.find((dataset) => dataset.name === "calc");
+    expect(created).toBeDefined();
+    expect(created?.rows).toHaveLength(3);
+    expect(created?.columns.map((column) => column.id)).toEqual(["x", "y"]);
+    expect(stateOf(store).files.find((file) => file.path === "~/raw/calc.csv")).toMatchObject({
+      datasetId: created?.id,
+      text: "x,y\n,\n,\n,",
+    });
+    expect(stateOf(store).columnSelections[created!.id]).toEqual(["x", "y"]);
+    expect((await db.datasets.get(created!.id))?.rows).toHaveLength(3);
+    expect((await db.files.get("~/raw/calc.csv"))?.text).toBe("x,y\n,\n,\n,");
+    expect(lastCommand(store)).toMatchObject({
+      command: "dataset-new calc columns=x,y rows=3",
+      source: "gui",
+      status: "success",
+    });
+  });
+
+  it("calculates dataset columns and rewrites backing files", async () => {
+    const { db, store } = await makeStore();
+
+    const result = await runCommand(
+      store,
+      'dataset-calc waveform.csv column=sum expr="signal + background"',
+      { source: "terminal" },
+    );
+
+    expect(result.kind).toBe("dataset-updated");
+    expect(stateOf(store).datasets[0]?.columns.at(-1)).toMatchObject({
+      id: "sum",
+      dataType: "number",
+    });
+    expect(stateOf(store).datasets[0]?.rows[0]?.sum).toBe(10);
+    expect((await db.datasets.get("seed-waveform"))?.rows[0]?.sum).toBe(10);
+    expect((await db.files.get("~/raw/waveform.csv"))?.text?.split("\n")[0]).toBe(
+      "index,time,signal,background,sum",
+    );
+    expect(lastCommand(store)).toMatchObject({
+      command: 'dataset-calc waveform.csv column=sum expr="signal + background"',
+      source: "terminal",
+      status: "success",
+    });
+  });
+
+  it("undoes and redoes dataset creation and calculation snapshots", async () => {
+    const { store } = await makeStore();
+
+    await runCommand(store, "dataset-new calc columns=x,y rows=2");
+    expect(stateOf(store).datasets.some((dataset) => dataset.name === "calc")).toBe(true);
+    expect(stateOf(store).undoStack).toHaveLength(1);
+
+    await stateOf(store).undo();
+    expect(stateOf(store).datasets.some((dataset) => dataset.name === "calc")).toBe(false);
+    expect(stateOf(store).redoStack).toHaveLength(1);
+
+    await stateOf(store).redo();
+    expect(stateOf(store).datasets.some((dataset) => dataset.name === "calc")).toBe(true);
+
+    await runCommand(store, 'dataset-calc waveform.csv column=sum expr="signal + background"');
+    expect(stateOf(store).datasets[0]?.rows[0]?.sum).toBe(10);
+
+    await stateOf(store).undo();
+    expect(stateOf(store).datasets[0]?.rows[0]).not.toHaveProperty("sum");
+
+    await stateOf(store).redo();
+    expect(stateOf(store).datasets[0]?.rows[0]?.sum).toBe(10);
+  });
+});

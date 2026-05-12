@@ -3,6 +3,8 @@ export type WindowKind =
   | "table"
   | "plot"
   | "plot-new"
+  | "dataset-new"
+  | "dataset-calc"
   | "plot-config"
   | "terminal"
   | "import"

@@ -710,7 +710,9 @@
 }
 
 .window-dot.plot-new,
-.window-dot.plot-config {
+.window-dot.plot-config,
+.window-dot.dataset-new,
+.window-dot.dataset-calc {
   background: #4f46e5;
 }
 
@@ -1223,6 +1225,129 @@
 }
 
 .new-plot-status {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+.dataset-tool-window {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+  background: #f8fafc;
+  padding: 12px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.dataset-tool-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  padding: 12px;
+}
+
+.dataset-tool-panel h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.dataset-tool-panel label {
+  display: grid;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.dataset-tool-panel input,
+.dataset-tool-panel select,
+.dataset-tool-panel textarea {
+  min-height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+}
+
+.dataset-tool-panel textarea {
+  min-height: 74px;
+  resize: vertical;
+}
+
+.dataset-tool-columns {
+  display: flex;
+  max-height: 78px;
+  flex-wrap: wrap;
+  gap: 6px;
+  overflow: auto;
+}
+
+.dataset-tool-columns span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  padding: 4px 7px;
+}
+
+.dataset-tool-columns small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.dataset-tool-command {
+  display: grid;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.dataset-tool-command code {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #eef2f7;
+  padding: 8px;
+  color: var(--text);
+  font: 12px/1.35 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dataset-tool-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.dataset-tool-actions button {
+  min-height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dataset-tool-actions button:first-child {
+  border-color: #1d4ed8;
+  background: #2563eb;
+  color: #fff;
+}
+
+.dataset-tool-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.dataset-tool-status {
   margin: 0;
   color: #b91c1c;
   font-size: 12px;

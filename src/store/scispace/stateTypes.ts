@@ -86,6 +86,8 @@ export interface ScispaceState {
   openTable: (datasetId: string, columnIds?: string[]) => Promise<void>;
   openPlot: (spec: PlotSpec) => Promise<void>;
   openNewPlotWindow: () => void;
+  openNewDatasetWindow: () => void;
+  openDatasetCalcWindow: (datasetId?: string) => void;
   openPlotConfig: (plotId: string) => void;
   runScispace: (
     input: string,

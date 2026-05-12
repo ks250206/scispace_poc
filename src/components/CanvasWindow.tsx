@@ -18,6 +18,12 @@ const PlotConfigWindow = lazy(() =>
 const NewPlotWindow = lazy(() =>
   import("./NewPlotWindow").then((module) => ({ default: module.NewPlotWindow })),
 );
+const NewDatasetWindow = lazy(() =>
+  import("./NewDatasetWindow").then((module) => ({ default: module.NewDatasetWindow })),
+);
+const DatasetCalcWindow = lazy(() =>
+  import("./DatasetCalcWindow").then((module) => ({ default: module.DatasetCalcWindow })),
+);
 const PlotWindow = lazy(() =>
   import("./PlotWindow").then((module) => ({ default: module.PlotWindow })),
 );
@@ -42,6 +48,8 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
     window.kind === "table" ||
     window.kind === "plot" ||
     window.kind === "plot-new" ||
+    window.kind === "dataset-new" ||
+    window.kind === "dataset-calc" ||
     window.kind === "plot-config";
   const handleClose = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -204,6 +212,14 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
               <PlotWindow plotId={window.plotId} windowId={window.id} />
             ) : null}
             {window.kind === "plot-new" ? <NewPlotWindow windowId={window.id} /> : null}
+            {window.kind === "dataset-new" ? <NewDatasetWindow windowId={window.id} /> : null}
+            {window.kind === "dataset-calc" ? (
+              <DatasetCalcWindow
+                key={window.datasetId ?? "dataset-calc"}
+                windowId={window.id}
+                datasetId={window.datasetId}
+              />
+            ) : null}
             {window.kind === "plot-config" ? <PlotConfigWindow /> : null}
             {window.kind === "terminal" ? <TerminalPanel /> : null}
             {window.kind === "import" && window.importId ? (

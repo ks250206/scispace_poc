@@ -1,5 +1,6 @@
 import type { ScispaceCommandResult } from "../types";
 import { tokenizeCommand, type CommandContext } from "./commandUtils";
+import { executeDatasetCommand } from "./datasetCommands";
 import { executeVirtualFileCommand } from "./fileCommands";
 import { executeImportCommand } from "./importCommands";
 import { executePlotCommand } from "./plotCommands";
@@ -18,6 +19,9 @@ export const executeScispaceCommand = (
 
   const virtualFileResult = executeVirtualFileCommand(command, args, context);
   if (virtualFileResult) return virtualFileResult;
+
+  const datasetResult = executeDatasetCommand(command, args, context);
+  if (datasetResult) return datasetResult;
 
   const tableResult = executeTableCommand(command, args, context);
   if (tableResult) return tableResult;

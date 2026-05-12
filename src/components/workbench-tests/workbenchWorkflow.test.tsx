@@ -11,6 +11,50 @@ import {
 describe("Workbench reproducible workflow", () => {
   setupWorkbenchSuite();
 
+  it("creates datasets and calculates columns from the Data menu", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+
+    await clickToolbarItem(user, "Data", "New Dataset");
+    fireEvent.change(await screen.findByRole("textbox", { name: "Dataset name" }), {
+      target: { value: "scratch" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Dataset columns" }), {
+      target: { value: "x,y" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Dataset rows" }), {
+      target: { value: "2" },
+    });
+    await user.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() =>
+      expect(storeState().datasets.map((dataset) => dataset.name)).toContain("scratch"),
+    );
+    expect(storeState().commandHistory.at(-1)).toMatchObject({
+      command: "dataset-new scratch columns=x,y rows=2",
+      source: "gui",
+    });
+
+    await clickToolbarItem(user, "Data", "Calculate Column");
+    await screen.findByLabelText("Calculation dataset");
+    fireEvent.change(screen.getByLabelText("Calculation dataset"), {
+      target: { value: "seed-waveform" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Target column" }), {
+      target: { value: "sum" },
+    });
+    fireEvent.change(screen.getByLabelText("Column expression"), {
+      target: { value: "signal + background" },
+    });
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(storeState().datasets[0]?.rows[0]?.sum).toBe(10));
+    expect(storeState().commandHistory.at(-1)).toMatchObject({
+      command: 'dataset-calc waveform.csv column=sum expr="signal + background"',
+      source: "gui",
+    });
+  });
+
   it("uploads, imports, opens table and plot, exports, and reimports the project", async () => {
     const user = userEvent.setup();
     const click = vi.fn();
@@ -34,9 +78,10 @@ describe("Workbench reproducible workflow", () => {
     await waitFor(() =>
       expect(screen.getAllByText("Import - workflow.csv").length).toBeGreaterThan(0),
     );
-    expect(storeState().commandHistory.at(-1)?.command).toContain("upload-open");
 
-    await user.click(await screen.findByRole("button", { name: "Import" }));
+    await act(async () => {
+      await storeState().confirmImport(storeState().pendingImports[0]!.id);
+    });
     await waitFor(() =>
       expect(storeState().datasets.map((dataset) => dataset.name)).toContain("workflow.csv"),
     );

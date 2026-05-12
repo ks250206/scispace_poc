@@ -34,6 +34,8 @@ export function Workbench() {
   const currentPlotId = useScispaceStore((state) => state.currentPlotId);
   const runScispace = useScispaceStore((state) => state.runScispace);
   const openNewPlotWindow = useScispaceStore((state) => state.openNewPlotWindow);
+  const openNewDatasetWindow = useScispaceStore((state) => state.openNewDatasetWindow);
+  const openDatasetCalcWindow = useScispaceStore((state) => state.openDatasetCalcWindow);
   const openPlotConfig = useScispaceStore((state) => state.openPlotConfig);
   const stageUploadPayload = useScispaceStore((state) => state.stageUploadPayload);
   const createNewProject = useScispaceStore((state) => state.createNewProject);
@@ -347,6 +349,12 @@ export function Workbench() {
       setOpenMenu: setOpenToolbarMenu,
       items: [
         { label: "Load Data", onSelect: () => dataLoadInputRef.current?.click() },
+        { label: "New Dataset", onSelect: openNewDatasetWindow },
+        {
+          label: "Calculate Column",
+          onSelect: () => openDatasetCalcWindow(),
+          disabled: datasets.length === 0,
+        },
         { label: "New Folder", onSelect: () => void handleNewFolder() },
       ],
     },
