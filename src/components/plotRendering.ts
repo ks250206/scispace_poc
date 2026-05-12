@@ -149,6 +149,27 @@ export const inferPlotDragZoomMode = (
   return "xy";
 };
 
+export const plotSelectionRectForZoomMode = (
+  start: { left: number; top: number },
+  end: { left: number; top: number },
+  plotSize: { width: number; height: number },
+): { left: number; top: number; width: number; height: number } => {
+  const width = Math.abs(end.left - start.left);
+  const height = Math.abs(end.top - start.top);
+  const mode = inferPlotDragZoomMode(width, height);
+  const horizontal = {
+    left: Math.min(start.left, end.left),
+    width,
+  };
+  const vertical = {
+    top: Math.min(start.top, end.top),
+    height,
+  };
+  if (mode === "x") return { ...horizontal, top: 0, height: plotSize.height };
+  if (mode === "y") return { left: 0, width: plotSize.width, ...vertical };
+  return { ...horizontal, ...vertical };
+};
+
 export const sortedPlotSeries = (series: PlotSeries[]): PlotSeries[] =>
   [...series].sort(
     (left, right) => left.drawOrder - right.drawOrder || left.y.localeCompare(right.y),

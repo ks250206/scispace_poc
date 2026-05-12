@@ -7,6 +7,7 @@ import {
   inferPlotDragZoomMode,
   normalizePlotClientPoint,
   plotRenderScale,
+  plotSelectionRectForZoomMode,
   plotSizeFromRenderedRect,
   scalePlotSpecForRender,
   scaledPlotCursorBind,
@@ -86,15 +87,9 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
       if (!dragStart) return;
       const start = clampPosition(dragStart);
       const end = clampPosition(position);
-      plot.setSelect(
-        {
-          left: Math.min(start.left, end.left),
-          top: Math.min(start.top, end.top),
-          width: Math.abs(end.left - start.left),
-          height: Math.abs(end.top - start.top),
-        },
-        false,
-      );
+      plot.syncRect(false);
+      const size = plotSizeFromRenderedRect(plot.rect, workspaceScale, renderScale);
+      plot.setSelect(plotSelectionRectForZoomMode(start, end, size), false);
     };
     const handleMouseMove = (event: MouseEvent) => {
       if (!dragStart) return;

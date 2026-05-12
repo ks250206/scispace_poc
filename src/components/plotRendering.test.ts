@@ -6,6 +6,7 @@ import {
   createScaledPlotMouseEvent,
   inferPlotDragZoomMode,
   normalizePlotClientPoint,
+  plotSelectionRectForZoomMode,
   plotRenderScale,
   plotSizeFromRenderedRect,
   scalePlotSpecForRender,
@@ -175,5 +176,19 @@ describe("plot rendering options", () => {
     expect(inferPlotDragZoomMode(5, 100)).toBe("y");
     expect(inferPlotDragZoomMode(40, 120)).toBe("y");
     expect(inferPlotDragZoomMode(80, 80)).toBe("xy");
+  });
+
+  it("extends visual selection rectangles for axis-only drag zoom modes", () => {
+    const plotSize = { width: 640, height: 360 };
+
+    expect(
+      plotSelectionRectForZoomMode({ left: 20, top: 100 }, { left: 180, top: 104 }, plotSize),
+    ).toEqual({ left: 20, top: 0, width: 160, height: 360 });
+    expect(
+      plotSelectionRectForZoomMode({ left: 120, top: 40 }, { left: 124, top: 180 }, plotSize),
+    ).toEqual({ left: 0, top: 40, width: 640, height: 140 });
+    expect(
+      plotSelectionRectForZoomMode({ left: 120, top: 40 }, { left: 220, top: 140 }, plotSize),
+    ).toEqual({ left: 120, top: 40, width: 100, height: 100 });
   });
 });

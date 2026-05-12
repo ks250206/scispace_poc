@@ -3,10 +3,10 @@ const helpSections = [
     title: "Dataset",
     commands: [
       {
-        command: "dataset-new <name> columns=<col[,col...]> rows=<n>",
+        command: "dataset-new <name> columns=<col[:type][,col[:type]...]> rows=<n>",
         description:
-          "Create a dataset from scratch with named columns and empty rows. The dataset is also registered as ~/raw/<name>.csv.",
-        example: "dataset-new calc columns=x,y rows=10",
+          "Create a dataset from scratch with typed columns and empty rows. The dataset is also registered as ~/raw/<name>.csv.",
+        example: "dataset-new calc columns=x:number,label:string rows=10",
       },
       {
         command: "dataset-calc <dataset> column=<newOrExistingCol> expr=<expression>",
@@ -64,6 +64,22 @@ const helpSections = [
         example: "plot-axis plot-abc axis=x range=0:10 tick=1",
       },
       {
+        command: "plot-grid <plotId> x=<true|false> y=<true|false>",
+        description: "Show or hide X/Y major grid lines.",
+        example: "plot-grid plot-abc x=true y=false",
+      },
+      {
+        command: "plot-series <plotId> y=<column> action=<add|remove>",
+        description:
+          "Add, remove, or restyle a Y series. Style options include label, color, lineWidth, markerSize, markerShape, and order.",
+        example: "plot-series plot-abc y=background action=add",
+      },
+      {
+        command: "plot-annotation <plotId> action=<add|update|remove>",
+        description: "Manage text-arrow annotations attached to a plot.",
+        example: 'plot-annotation plot-abc action=add type=text-arrow text="Peak" x=1 y=2',
+      },
+      {
         command: "plot-schema [plotId]",
         description: "Print the current plot JSON schema for reproducible graph settings.",
         example: "plot-schema plot-abc",
@@ -85,10 +101,40 @@ const helpSections = [
         example: "file-list ~/raw",
       },
       {
+        command: "file-mkdir <path>",
+        description: "Create a virtual directory under ~/raw.",
+        example: "file-mkdir ~/raw/analysis",
+      },
+      {
+        command: "file-rename <path> name=<newName>",
+        description: "Rename a virtual file, directory, or dataset-backed raw file.",
+        example: "file-rename ~/raw/data.csv name=renamed.csv",
+      },
+      {
+        command: "file-move <path> to=<directory>",
+        description: "Move a virtual file or directory to another virtual directory.",
+        example: "file-move ~/raw/data.csv to=~/raw/analysis",
+      },
+      {
+        command: "file-delete <path>",
+        description: "Delete a virtual file or directory and clean up dependent windows.",
+        example: "file-delete ~/raw/data.csv",
+      },
+      {
         command: "upload-open <uploadId> name=<fileName> ref=<uploadId> mode=<tabular|raw>",
         description:
           "Open an upload payload in the Import window without embedding large text in history.",
         example: "upload-open upload-123 name=data.csv ref=upload-123 mode=tabular",
+      },
+      {
+        command: "import-open <importId> name=<fileName> text=<encodedText>",
+        description: "Open an Import window from encoded raw text.",
+        example: "import-open import-123 name=data.csv text=x%2Cy%0A1%2C2",
+      },
+      {
+        command: "import-preview <importId>",
+        description: "Re-parse a pending import and return the current preview state.",
+        example: "import-preview import-123",
       },
       {
         command: "import-set <importId> skipRows=<n> delimiter=<...> hasHeader=<true|false>",
@@ -96,10 +142,30 @@ const helpSections = [
         example: "import-set import-123 skipRows=1 delimiter=tab hasHeader=true",
       },
       {
+        command: "import-column <importId> column=<col> action=<include|exclude>",
+        description: "Include or exclude a parsed preview column before import confirmation.",
+        example: "import-column import-123 column=blank_1 action=exclude",
+      },
+      {
+        command: "import-line <importId> line=<n> value=<text>",
+        description: "Edit one raw-text preview line before parsing or confirming.",
+        example: "import-line import-123 line=2 value=time,signal",
+      },
+      {
+        command: "import-cancel <importId>",
+        description: "Close a pending Import window without saving a file or dataset.",
+        example: "import-cancel import-123",
+      },
+      {
         command: "import-confirm <importId> mode=<tabular|raw> path=<virtualPath>",
         description:
           "Persist a pending import into ~/raw and create a dataset when parsing succeeds.",
         example: "import-confirm import-123 mode=tabular path=~/raw/data.csv",
+      },
+      {
+        command: "elt <dataset> as <newName>",
+        description: "Create a derived dataset copy under a new name.",
+        example: "elt waveform.csv as waveform_copy.csv",
       },
     ],
   },
@@ -110,6 +176,17 @@ const helpSections = [
         command: "help",
         description: "Print compact command help in the terminal.",
         example: "help",
+      },
+      {
+        command: "clear",
+        description:
+          "Clear the terminal display and scrollback while staying in the SciSpace REPL.",
+        example: "clear",
+      },
+      {
+        command: "repl",
+        description: "Return to the SciSpace REPL prompt from unsafe shell mode.",
+        example: "scispace repl",
       },
       {
         command: "unsafe on|off",
