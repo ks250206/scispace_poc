@@ -3,10 +3,13 @@ import { createSeedDataset } from "../domain/csv";
 import { executeScispaceCommand } from "../domain/scispace";
 import {
   buildPlotOptions,
-  plotPositionFromClient,
+  createScaledPlotMouseEvent,
+  inferPlotDragZoomMode,
+  normalizePlotClientPoint,
   plotRenderScale,
   plotSizeFromRenderedRect,
   scalePlotSpecForRender,
+  scaledPlotClientPoint,
   sortedPlotSeries,
 } from "./plotRendering";
 
@@ -129,11 +132,48 @@ describe("plot rendering options", () => {
   it("normalizes plot pointer coordinates between workspace and render scales", () => {
     const rect = { left: 100, top: 40, width: 640, height: 360 } as DOMRect;
 
-    expect(plotPositionFromClient({ x: 300, y: 140 }, rect, 2, 2)).toEqual({ left: 200, top: 100 });
-    expect(plotPositionFromClient({ x: 300, y: 140 }, rect, 0.5, 1)).toEqual({
+    expect(normalizePlotClientPoint({ x: 300, y: 140 }, rect, 2, 2)).toEqual({
+      left: 200,
+      top: 100,
+    });
+    expect(normalizePlotClientPoint({ x: 300, y: 140 }, rect, 1, 1)).toEqual({
+      left: 200,
+      top: 100,
+    });
+    expect(normalizePlotClientPoint({ x: 300, y: 140 }, rect, 0.5, 1)).toEqual({
       left: 400,
       top: 200,
     });
     expect(plotSizeFromRenderedRect(rect, 0.5, 1)).toEqual({ width: 1280, height: 720 });
+  });
+
+  it("creates scaled cursor events for uPlot internal cursor handling", () => {
+    const target = document.createElement("div");
+    target.getBoundingClientRect = () =>
+      ({ left: 100, top: 40, width: 320, height: 180 }) as DOMRect;
+    const event = new MouseEvent("mousemove", {
+      clientX: 260,
+      clientY: 130,
+      bubbles: true,
+      cancelable: true,
+    });
+
+    expect(
+      scaledPlotClientPoint({ x: 260, y: 130 }, target.getBoundingClientRect(), 0.5, 1),
+    ).toEqual({ x: 420, y: 220 });
+    const scaled = createScaledPlotMouseEvent(event, target, 0.5, 1);
+
+    expect(scaled.clientX).toBe(420);
+    expect(scaled.clientY).toBe(220);
+    expect(scaled.type).toBe("mousemove");
+  });
+
+  it("infers drag zoom mode from selection dimensions", () => {
+    expect(inferPlotDragZoomMode(7, 7)).toBeUndefined();
+    expect(inferPlotDragZoomMode(120, 4)).toBe("x");
+    expect(inferPlotDragZoomMode(120, 40)).toBe("x");
+    expect(inferPlotDragZoomMode(5, 100)).toBe("y");
+    expect(inferPlotDragZoomMode(40, 120)).toBe("y");
+    expect(inferPlotDragZoomMode(80, 80)).toBe("xy");
   });
 });

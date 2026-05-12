@@ -4,10 +4,12 @@ import "uplot/dist/uPlot.min.css";
 import { useScispaceStore } from "../store/scispaceStore";
 import {
   buildPlotOptions,
-  plotPositionFromClient,
+  inferPlotDragZoomMode,
+  normalizePlotClientPoint,
   plotRenderScale,
   plotSizeFromRenderedRect,
   scalePlotSpecForRender,
+  scaledPlotCursorBind,
   sortedPlotSeries,
   xAxisLabelHeight,
 } from "./plotRendering";
@@ -18,13 +20,6 @@ interface PlotWindowProps {
   plotId: string;
   windowId: string;
 }
-
-const zoomAxisFromDrag = (width: number, height: number): "x" | "y" | "xy" | undefined => {
-  const minDrag = 8;
-  if (width < minDrag && height < minDrag) return undefined;
-  if (width >= 24 && height >= 24) return "xy";
-  return width >= height ? "x" : "y";
-};
 
 export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
   const { openContextMenu } = useContextMenu();
@@ -58,7 +53,7 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
     const renderSpec = scalePlotSpecForRender(spec, renderScale);
     const plotHeight = Math.max(160, renderSpec.size.height - xAxisLabelHeight * renderScale);
     plotRef.current = new uPlot(
-      buildPlotOptions(renderSpec, plotHeight),
+      buildPlotOptions(renderSpec, plotHeight, scaledPlotCursorBind(workspaceScale, renderScale)),
       plotData,
       containerRef.current,
     );
@@ -79,7 +74,7 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
     const positionFromEvent = (event: MouseEvent) => {
       plot.syncRect(false);
       const rect = plot.rect;
-      return plotPositionFromClient(
+      return normalizePlotClientPoint(
         { x: event.clientX, y: event.clientY },
         rect,
         workspaceScale,
@@ -113,7 +108,7 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
       updateSelection(end);
       const width = Math.abs(end.left - start.left);
       const height = Math.abs(end.top - start.top);
-      const zoomAxis = zoomAxisFromDrag(width, height);
+      const zoomAxis = inferPlotDragZoomMode(width, height);
       if (zoomAxis) {
         plot.batch(() => {
           if (zoomAxis === "x" || zoomAxis === "xy") {
