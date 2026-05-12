@@ -352,6 +352,7 @@ describe("terminal input handling", () => {
       choices: [
         "plot",
         "plot-annotation",
+        "plot-apply-schema",
         "plot-axis",
         "plot-grid",
         "plot-schema",
