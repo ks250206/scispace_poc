@@ -171,7 +171,7 @@ describe("Workbench project UI", () => {
     expect(screen.queryByText("Unsaved")).not.toBeInTheDocument();
   });
 
-  it("shows unsaved project state, clears it on save, and confirms dirty switches", async () => {
+  it("shows unsaved project state, clears it on direct save, and confirms dirty switches", async () => {
     const user = userEvent.setup();
     await renderWorkbench();
 
@@ -183,8 +183,7 @@ describe("Workbench project UI", () => {
     await waitFor(() => expect(storeState().projectDirty).toBe(true));
     expect(await screen.findByText("Unsaved")).toBeInTheDocument();
 
-    await clickToolbarItem(user, "Project", "Save Project");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await clickToolbarItem(user, "Project", "Save");
     await waitFor(() => expect(screen.queryByText("Unsaved")).not.toBeInTheDocument());
 
     const firstProjectId = storeState().currentProjectId ?? "";
@@ -205,5 +204,21 @@ describe("Workbench project UI", () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Switch" }));
     await waitFor(() => expect(screen.queryByText("Unsaved")).not.toBeInTheDocument());
+  });
+
+  it("renames the current project through Save As", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+
+    await clickToolbarItem(user, "Project", "Save As...");
+    const projectName = screen.getByRole("textbox", { name: "Project name" });
+    fireEvent.change(projectName, { target: { value: "Renamed Project" } });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(
+        storeState().projects.find((project) => project.id === storeState().currentProjectId)?.name,
+      ).toBe("Renamed Project"),
+    );
   });
 });

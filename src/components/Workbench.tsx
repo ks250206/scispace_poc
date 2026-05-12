@@ -146,7 +146,7 @@ export function Workbench() {
     void createNewProject(name ?? undefined);
   };
 
-  const handleSaveProject = async () => {
+  const handleSaveProjectAs = async () => {
     const currentName =
       projects.find((project) => project.id === currentProjectId)?.name ?? "Main Project";
     const name = await dialog.prompt({
@@ -331,7 +331,8 @@ export function Workbench() {
       setOpenMenu: setOpenToolbarMenu,
       items: [
         { label: "New Project", onSelect: () => void handleNewProject() },
-        { label: "Save Project", onSelect: () => void handleSaveProject() },
+        { label: "Save", onSelect: () => void saveCurrentProject() },
+        { label: "Save As...", onSelect: () => void handleSaveProjectAs() },
         {
           label: "Delete Project",
           onSelect: () => void handleDeleteProject(),
