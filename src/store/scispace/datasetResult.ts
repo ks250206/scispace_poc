@@ -52,13 +52,19 @@ export const applyDatasetResult = async (
           }
           return retitledWindow;
         });
+      const previousDataset = state.datasets.find((item) => item.id === dataset.id);
+      const previousColumnIds = previousDataset ? datasetColumnIds(previousDataset) : [];
       const columnSelections = { ...state.columnSelections };
       if (columnSelections[dataset.id]) {
-        const nextColumnIds = columnSelections[dataset.id].filter((columnId) =>
-          validColumnIds.has(columnId),
-        );
-        if (nextColumnIds.length > 0) columnSelections[dataset.id] = nextColumnIds;
-        else columnSelections[dataset.id] = datasetColumnIds(dataset);
+        const previousSelection = columnSelections[dataset.id];
+        const selectedAllPreviousColumns =
+          previousColumnIds.length > 0 &&
+          previousColumnIds.every((columnId) => previousSelection.includes(columnId));
+        const nextColumnIds = selectedAllPreviousColumns
+          ? datasetColumnIds(dataset)
+          : previousSelection.filter((columnId) => validColumnIds.has(columnId));
+        columnSelections[dataset.id] =
+          nextColumnIds.length > 0 ? nextColumnIds : datasetColumnIds(dataset);
       } else {
         columnSelections[dataset.id] = datasetColumnIds(dataset);
       }

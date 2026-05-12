@@ -371,12 +371,12 @@ export function Workbench() {
         {
           label: "Delete selected cells",
           onSelect: () => activeTableMenuState?.actions.clearSelectedRange(),
-          disabled: !activeTableMenuState?.hasSelectedRange,
+          disabled: !activeTableMenuState?.hasSelectedRange || activeTableMenuState?.isLocked,
         },
         {
           label: "Fill down",
           onSelect: () => activeTableMenuState?.actions.fillDownSelectedRange(),
-          disabled: !activeTableMenuState?.canFillDownRange,
+          disabled: !activeTableMenuState?.canFillDownRange || activeTableMenuState?.isLocked,
         },
         {
           label: "Plot selection",
@@ -386,12 +386,22 @@ export function Workbench() {
         {
           label: "Delete row",
           onSelect: () => activeTableMenuState?.actions.deleteSelectedRow(),
-          disabled: !activeTableMenuState?.hasSelectedCell,
+          disabled: !activeTableMenuState?.hasSelectedCell || activeTableMenuState?.isLocked,
         },
         {
           label: "Delete column",
           onSelect: () => activeTableMenuState?.actions.deleteSelectedColumn(),
-          disabled: !activeTableMenuState?.hasSelectedColumn,
+          disabled: !activeTableMenuState?.hasSelectedColumn || activeTableMenuState?.isLocked,
+        },
+        {
+          label: "Insert column",
+          onSelect: () => activeTableMenuState?.actions.insertColumn(),
+          disabled: !activeTableMenuState || activeTableMenuState.isLocked,
+        },
+        {
+          label: activeTableMenuState?.isLocked ? "Unlock table" : "Lock table",
+          onSelect: () => activeTableMenuState?.actions.toggleLock(),
+          disabled: !activeTableMenuState,
         },
         {
           kind: "submenu",

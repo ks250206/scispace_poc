@@ -53,6 +53,7 @@ export interface WorkspaceWindow {
   columnIds?: string[];
   plotId?: string;
   importId?: string;
+  locked?: boolean;
 }
 
 export type CommandHistorySource = "terminal" | "gui" | "history";

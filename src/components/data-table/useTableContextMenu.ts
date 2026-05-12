@@ -24,12 +24,16 @@ type TableContextMenuOptions = {
   deleteRowAt: (rowIndex: number) => void;
   fillDownRange: (bounds: TableRangeBounds) => void;
   focusWindow: (windowId: string) => void;
+  insertColumn: () => void;
+  isLocked: boolean;
   openContextMenu: OpenContextMenu;
   plotSelection: (selection: TablePlotSelection) => void;
   rangeBounds?: TableRangeBounds;
   selectedColumn?: string;
+  selectedColumns: string[];
   title?: string;
   updateVisibleRows: (visibleRows: TableVisibleRows) => void;
+  toggleLock: () => void;
   visibleDatasetColumns: DatasetColumn[];
   visibleRows: TableVisibleRows;
   windowId: string;
@@ -42,12 +46,16 @@ export function useTableContextMenu({
   deleteRowAt,
   fillDownRange,
   focusWindow,
+  insertColumn,
+  isLocked,
   openContextMenu,
   plotSelection,
   rangeBounds,
   selectedColumn,
+  selectedColumns,
   title,
   updateVisibleRows,
+  toggleLock,
   visibleDatasetColumns,
   visibleRows,
   windowId,
@@ -68,7 +76,7 @@ export function useTableContextMenu({
       const column = context?.column ?? context?.cell?.column ?? selectedColumn;
       const plotSelectionSpec = plotSelectionFromTableSelection(
         bounds,
-        context?.column ?? selectedColumn,
+        context?.column ? [context.column] : selectedColumns,
         visibleDatasetColumns,
       );
       openContextMenu({
@@ -85,9 +93,12 @@ export function useTableContextMenu({
           deleteRowAt,
           fillDownRange,
           fillDownDisabled: !bounds || bounds.maxRow <= bounds.minRow,
+          insertColumn,
+          isLocked,
           plotSelection,
           plotSelectionSpec,
           updateVisibleRows,
+          toggleLock,
           visibleRows,
         }),
       });
@@ -99,13 +110,17 @@ export function useTableContextMenu({
       deleteRowAt,
       fillDownRange,
       focusWindow,
+      insertColumn,
+      isLocked,
       openContextMenu,
       plotSelection,
       rangeBounds,
       selectedColumn,
+      selectedColumns,
       singleCellRange,
       title,
       updateVisibleRows,
+      toggleLock,
       visibleDatasetColumns,
       visibleRows,
       windowId,
@@ -123,9 +138,12 @@ const tableContextItems = ({
   deleteRowAt,
   fillDownRange,
   fillDownDisabled,
+  insertColumn,
+  isLocked,
   plotSelection,
   plotSelectionSpec,
   updateVisibleRows,
+  toggleLock,
   visibleRows,
 }: {
   bounds?: TableRangeBounds;
@@ -137,9 +155,12 @@ const tableContextItems = ({
   deleteRowAt: (rowIndex: number) => void;
   fillDownRange: (bounds: TableRangeBounds) => void;
   fillDownDisabled: boolean;
+  insertColumn: () => void;
+  isLocked: boolean;
   plotSelection: (selection: TablePlotSelection) => void;
   plotSelectionSpec?: TablePlotSelection;
   updateVisibleRows: (visibleRows: TableVisibleRows) => void;
+  toggleLock: () => void;
   visibleRows: TableVisibleRows;
 }): ContextMenuItem[] => [
   {
@@ -151,7 +172,7 @@ const tableContextItems = ({
   },
   {
     label: "Delete selected cells",
-    disabled: !bounds,
+    disabled: !bounds || isLocked,
     danger: true,
     onSelect: () => {
       if (bounds) clearRange(bounds);
@@ -159,7 +180,7 @@ const tableContextItems = ({
   },
   {
     label: "Fill down",
-    disabled: fillDownDisabled,
+    disabled: fillDownDisabled || isLocked,
     onSelect: () => {
       if (bounds) fillDownRange(bounds);
     },
@@ -173,7 +194,7 @@ const tableContextItems = ({
   },
   {
     label: "Delete row",
-    disabled: context?.cell?.rowIndex == null,
+    disabled: context?.cell?.rowIndex == null || isLocked,
     danger: true,
     onSelect: () => {
       if (context?.cell) deleteRowAt(context.cell.rowIndex);
@@ -181,11 +202,20 @@ const tableContextItems = ({
   },
   {
     label: "Delete column",
-    disabled: !column,
+    disabled: !column || isLocked,
     danger: true,
     onSelect: () => {
       if (column) deleteColumn(column);
     },
+  },
+  {
+    label: "Insert column",
+    disabled: isLocked,
+    onSelect: insertColumn,
+  },
+  {
+    label: isLocked ? "Unlock table" : "Lock table",
+    onSelect: toggleLock,
   },
   {
     kind: "submenu",

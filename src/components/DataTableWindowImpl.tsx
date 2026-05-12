@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { datasetColumnIds } from "../domain/csv";
@@ -10,6 +10,7 @@ import { useDialog } from "./dialog/DialogProvider";
 import {
   deleteColumnCommand,
   deleteRowCommand,
+  insertColumnCommand,
   plotCommand,
   rangeCommand,
   setCellCommand,
@@ -51,9 +52,16 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   const runScispace = useScispaceStore((state) => state.runScispace);
   const setTableMenuState = useScispaceStore((state) => state.setTableMenuState);
   const clearTableMenuState = useScispaceStore((state) => state.clearTableMenuState);
+  const tableWindow = useScispaceStore((state) =>
+    state.windows.find((window) => window.id === windowId),
+  );
   const [visibleRows, setVisibleRows] = useState<TableVisibleRows>("auto");
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [tableViewportHeight, setTableViewportHeight] = useState(
+    tableScrollHeight(tableFallbackVisibleRows(visibleRows)),
+  );
   const parentRef = useRef<HTMLDivElement>(null);
+  const isLocked = Boolean(tableWindow?.locked);
 
   const requestedColumnIds = useMemo(() => {
     if (!dataset) return [];
@@ -78,6 +86,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   const rows = table.getRowModel().rows;
   const {
     selectedColumn,
+    selectedColumns,
     selectedCell,
     selectedRange,
     isRangeDragging,
@@ -93,6 +102,22 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     cancelEdit,
     handleCellKeyDown,
   } = useTableSelection({ rowsLength: rows.length, columns: visibleDatasetColumns });
+
+  useEffect(() => {
+    const element = parentRef.current;
+    if (!element) return;
+    if (typeof ResizeObserver === "undefined") {
+      if (element.clientHeight > 0) setTableViewportHeight(element.clientHeight);
+      return;
+    }
+    const observer = new ResizeObserver(([entry]) => {
+      const nextHeight = entry?.contentRect.height ?? 0;
+      if (nextHeight > 0) setTableViewportHeight(nextHeight);
+    });
+    observer.observe(element);
+    if (element.clientHeight > 0) setTableViewportHeight(element.clientHeight);
+    return () => observer.disconnect();
+  }, []);
   const getColumnWidth = useCallback(
     (columnId: string) => columnWidths[columnId] ?? defaultColumnWidth,
     [columnWidths],
@@ -137,7 +162,10 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   );
 
   const commitEdit = (nextValue?: string) => {
-    if (!dataset || !editingCell) return;
+    if (!dataset || !editingCell || isLocked) {
+      setEditingCell(undefined);
+      return;
+    }
     const { rowIndex, column, value } = editingCell;
     setEditingCell(undefined);
     void runScispace(setCellCommand(dataset.name, rowIndex, column, nextValue ?? value), {
@@ -146,7 +174,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   };
 
   const deleteRowAt = async (rowIndex: number) => {
-    if (!dataset) return;
+    if (!dataset || isLocked) return;
     const rowNumber = rowIndex + 1;
     const confirmed = await dialog.confirm({
       title: "Delete row",
@@ -165,7 +193,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   };
 
   const deleteColumn = async (columnId: string) => {
-    if (!dataset) return;
+    if (!dataset || isLocked) return;
     const confirmed = await dialog.confirm({
       title: "Delete column",
       message: `Delete column ${columnId} from ${dataset.name}?`,
@@ -182,14 +210,29 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     await deleteColumn(selectedColumn);
   };
 
+  const insertColumn = async () => {
+    if (!dataset || isLocked) return;
+    const name = await dialog.prompt({
+      title: "Insert column",
+      defaultValue: "new_column",
+      confirmLabel: "Insert",
+    });
+    if (!name) return;
+    void runScispace(insertColumnCommand(dataset.name, name, selectedColumn), { source: "gui" });
+  };
+
+  const toggleLock = () => {
+    updateWindow(windowId, { locked: !isLocked });
+  };
+
   const rangeBounds = rangeBoundsFromSelection(selectedRange, visibleDatasetColumns);
   const hasSelectedRange = Boolean(rangeBounds);
   const canFillDownRange = Boolean(rangeBounds && rangeBounds.maxRow > rangeBounds.minRow);
 
   const selectionPlotSpec = useMemo(() => {
     if (!dataset) return undefined;
-    return plotSelectionFromTableSelection(rangeBounds, selectedColumn, visibleDatasetColumns);
-  }, [dataset, rangeBounds, selectedColumn, visibleDatasetColumns]);
+    return plotSelectionFromTableSelection(rangeBounds, selectedColumns, visibleDatasetColumns);
+  }, [dataset, rangeBounds, selectedColumns, visibleDatasetColumns]);
 
   const copyRange = (bounds: TableRangeBounds) => {
     if (!dataset) return;
@@ -206,7 +249,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   };
 
   const clearRange = async (bounds: TableRangeBounds) => {
-    if (!dataset) return;
+    if (!dataset || isLocked) return;
     const confirmed = await dialog.confirm({
       title: "Delete selected cells",
       message: `Delete selected cells from rows ${bounds.minRow + 1}-${bounds.maxRow + 1} in ${dataset.name}?`,
@@ -224,7 +267,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   };
 
   const fillDownRange = async (bounds: TableRangeBounds) => {
-    if (!dataset || bounds.maxRow <= bounds.minRow) return;
+    if (!dataset || isLocked || bounds.maxRow <= bounds.minRow) return;
     const confirmed = await dialog.confirm({
       title: "Fill down",
       message: `Fill down rows ${bounds.minRow + 1}-${bounds.maxRow + 1} in ${dataset.name}?`,
@@ -271,12 +314,16 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     deleteRowAt,
     fillDownRange,
     focusWindow,
+    insertColumn,
+    isLocked,
     openContextMenu,
     plotSelection,
     rangeBounds,
     selectedColumn,
+    selectedColumns,
     title: dataset?.name,
     updateVisibleRows,
+    toggleLock,
     visibleDatasetColumns,
     visibleRows,
     windowId,
@@ -300,10 +347,30 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
       plotSelectedColumns,
       deleteSelectedRow,
       deleteSelectedColumn,
+      insertColumn,
+      toggleLock,
       setVisibleRows: updateVisibleRows,
     }),
-    [updateVisibleRows, rangeBounds, selectedCell, selectedColumn, selectionPlotSpec],
+    [
+      updateVisibleRows,
+      rangeBounds,
+      selectedCell,
+      selectedColumn,
+      selectionPlotSpec,
+      isLocked,
+      insertColumn,
+      toggleLock,
+    ],
   );
+
+  const selectionKey = [
+    selectedColumn ?? "",
+    selectedColumns.join(","),
+    selectedCell ? `${selectedCell.rowIndex}:${selectedCell.column}` : "",
+    rangeBounds
+      ? `${rangeBounds.minRow}:${rangeBounds.maxRow}:${rangeBounds.rangeColumns.join(",")}`
+      : "",
+  ].join("|");
 
   useTableMenuRegistration({
     actions: tableMenuActions,
@@ -314,7 +381,9 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     datasetId,
     hasSelectedRange,
     hasSelectedCell: Boolean(selectedCell),
-    hasSelectedColumn: Boolean(selectedColumn),
+    hasSelectedColumn: selectedColumns.length > 0,
+    isLocked,
+    selectionKey,
     setTableMenuState,
     visibleRows,
     windowId,
@@ -332,11 +401,13 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
         visibleVirtualRows={visibleVirtualRows}
         visibleRows={visibleRows}
         totalSize={rowVirtualizer.getTotalSize()}
+        viewportHeight={tableViewportHeight}
         tableWidth={tableWidth}
-        selectedColumn={selectedColumn}
+        selectedColumns={selectedColumns}
         selectedCell={selectedCell}
         editingCell={editingCell}
         isRangeDragging={isRangeDragging}
+        isLocked={isLocked}
         getColumnWidth={getColumnWidth}
         isCellInRange={isCellInRange}
         onSelectColumn={selectColumn}
@@ -345,8 +416,12 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
         onExtendRangeSelection={extendRangeSelection}
         onStartRangeSelection={startRangeSelection}
         onRangeDraggingChange={setIsRangeDragging}
-        onStartEdit={startEdit}
-        onCellKeyDown={handleCellKeyDown}
+        onStartEdit={(rowIndex, column, value) => {
+          if (!isLocked) startEdit(rowIndex, column, value);
+        }}
+        onCellKeyDown={(event, rowIndex, column, value) => {
+          if (!isLocked) handleCellKeyDown(event, rowIndex, column, value);
+        }}
         onEditingCellChange={setEditingCell}
         onCommitEdit={commitEdit}
         onCancelEdit={cancelEdit}

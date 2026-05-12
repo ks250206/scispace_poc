@@ -25,6 +25,44 @@ describe("scispace store table behavior", () => {
     });
   });
 
+  it("inserts columns and keeps table selections in sync", async () => {
+    const { db, store } = await makeStore();
+
+    const result = await runCommand(
+      store,
+      "table-edit waveform.csv action=insert-column column=derived before=signal",
+      { source: "gui" },
+    );
+
+    expect(result.kind).toBe("dataset-updated");
+    expect(stateOf(store).datasets[0]?.columns.map((column) => column.id)).toEqual([
+      "index",
+      "time",
+      "derived",
+      "signal",
+      "background",
+    ]);
+    expect(stateOf(store).datasets[0]?.rows[0]?.derived).toBe("");
+    expect(stateOf(store).columnSelections["seed-waveform"]).toEqual([
+      "index",
+      "time",
+      "derived",
+      "signal",
+      "background",
+    ]);
+    expect(stateOf(store).windows.find((window) => window.id === "table-seed")).toMatchObject({
+      columnIds: ["index", "time", "derived", "signal", "background"],
+    });
+    expect((await db.files.get("~/raw/waveform.csv"))?.text?.split("\n")[0]).toBe(
+      "index,time,derived,signal,background",
+    );
+    expect(lastCommand(store)).toMatchObject({
+      command: "table-edit waveform.csv action=insert-column column=derived before=signal",
+      source: "gui",
+      status: "success",
+    });
+  });
+
   it("runs table-edit row and column deletes through scispace and persists datasets", async () => {
     const { db, store } = await makeStore();
 
@@ -126,6 +164,28 @@ describe("scispace store table behavior", () => {
     expect((await db.files.get("~/raw/waveform.csv"))?.text?.split("\n")[1]).toBe("0,0,42.5,7");
     expect(stateOf(store).undoStack).toHaveLength(1);
     expect(stateOf(store).redoStack).toHaveLength(0);
+
+    await runCommand(store, "table-edit waveform.csv action=insert-column column=derived");
+    expect(stateOf(store).datasets[0]?.columns.map((column) => column.id)).toContain("derived");
+
+    await stateOf(store).undo();
+    expect(stateOf(store).datasets[0]?.columns.map((column) => column.id)).not.toContain("derived");
+
+    await stateOf(store).redo();
+    expect(stateOf(store).datasets[0]?.columns.map((column) => column.id)).toContain("derived");
+  });
+
+  it("persists table lock state in the layout", async () => {
+    const { db, store } = await makeStore();
+
+    stateOf(store).updateWindow("table-seed", { locked: true });
+
+    expect(stateOf(store).windows.find((window) => window.id === "table-seed")).toMatchObject({
+      locked: true,
+    });
+    expect(
+      (await db.layout.get("main"))?.value.windows.find((window) => window.id === "table-seed"),
+    ).toMatchObject({ locked: true });
   });
 
   it("runs pseudo commands and mutates real store state", async () => {

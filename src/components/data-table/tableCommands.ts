@@ -19,6 +19,18 @@ export const deleteRowCommand = (datasetName: string, rowIndex: number): string 
 export const deleteColumnCommand = (datasetName: string, columnId: string): string =>
   `table-edit ${quoteCommandArg(datasetName)} action=delete-column column=${quoteCommandArg(columnId)}`;
 
+export const insertColumnCommand = (
+  datasetName: string,
+  columnId: string,
+  beforeColumnId?: string,
+): string =>
+  [
+    `table-edit ${quoteCommandArg(datasetName)} action=insert-column column=${quoteCommandArg(columnId)}`,
+    beforeColumnId ? `before=${quoteCommandArg(beforeColumnId)}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
 export const rangeCommand = (
   datasetName: string,
   action: "clear" | "fill-down",

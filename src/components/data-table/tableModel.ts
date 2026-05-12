@@ -75,16 +75,25 @@ export const rangeBoundsFromSelection = (
 
 export const plotSelectionFromTableSelection = (
   rangeBounds: TableRangeBounds | undefined,
-  selectedColumn: string | undefined,
+  selectedColumns: string[],
   columns: DatasetColumn[],
 ): TablePlotSelection | undefined => {
-  const selectedColumns = rangeBounds?.rangeColumns ?? (selectedColumn ? [selectedColumn] : []);
-  if (selectedColumns.length === 0) return undefined;
+  if (rangeBounds) {
+    const [x, ...yColumns] = rangeBounds.rangeColumns;
+    if (!x || yColumns.length === 0) return undefined;
+    return { x, yColumns };
+  }
+
+  const uniqueSelectedColumns = selectedColumns.filter(
+    (columnId, index) => selectedColumns.indexOf(columnId) === index,
+  );
+  if (uniqueSelectedColumns.length === 0) return undefined;
   const visibleColumnIds = columns.map((column) => column.id);
-  const [rangeX, ...rangeY] = selectedColumns;
-  const fallbackX = visibleColumnIds.find((columnId) => columnId !== selectedColumns[0]);
-  const x = selectedColumns.length > 1 ? rangeX : fallbackX;
-  const yColumns = selectedColumns.length > 1 ? rangeY : selectedColumns;
+  const xColumn = uniqueSelectedColumns.at(-1);
+  const fallbackX = visibleColumnIds.find((columnId) => columnId !== uniqueSelectedColumns[0]);
+  const x = uniqueSelectedColumns.length > 1 ? xColumn : fallbackX;
+  const yColumns =
+    uniqueSelectedColumns.length > 1 ? uniqueSelectedColumns.slice(0, -1) : uniqueSelectedColumns;
   const validYColumns = yColumns.filter((columnId) => columnId !== x);
   if (!x || validYColumns.length === 0) return undefined;
   return { x, yColumns: validYColumns };

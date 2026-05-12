@@ -4,6 +4,8 @@ import type { VirtualItem } from "@tanstack/react-virtual";
 import type { DataValue } from "../../domain/types";
 import {
   minColumnWidth,
+  rowHeight,
+  tableHeaderHeight,
   tableFallbackVisibleRows,
   type TableCellPosition,
   type TableEditingCell,
@@ -21,14 +23,16 @@ interface DataTableGridProps {
   visibleVirtualRows: VisibleVirtualRow[];
   visibleRows: TableVisibleRows;
   totalSize: number;
+  viewportHeight: number;
   tableWidth: number;
-  selectedColumn?: string;
+  selectedColumns: string[];
   selectedCell?: TableCellPosition;
   editingCell?: TableEditingCell;
   isRangeDragging: boolean;
+  isLocked: boolean;
   getColumnWidth: (columnId: string) => number;
   isCellInRange: (rowIndex: number, column: string) => boolean;
-  onSelectColumn: (columnId: string) => void;
+  onSelectColumn: (columnId: string, additive?: boolean) => void;
   onStartColumnResize: (columnId: string, startX: number) => void;
   onSelectSingleCell: (position: TableCellPosition) => void;
   onExtendRangeSelection: (position: TableCellPosition) => void;
@@ -56,11 +60,13 @@ export const DataTableGrid = memo(function DataTableGrid({
   visibleVirtualRows,
   visibleRows,
   totalSize,
+  viewportHeight,
   tableWidth,
-  selectedColumn,
+  selectedColumns,
   selectedCell,
   editingCell,
   isRangeDragging,
+  isLocked,
   getColumnWidth,
   isCellInRange,
   onSelectColumn,
@@ -78,6 +84,9 @@ export const DataTableGrid = memo(function DataTableGrid({
   onOpenCellContextMenu,
   onOpenColumnContextMenu,
 }: DataTableGridProps) {
+  const columnIds = table.getAllLeafColumns().map((column) => column.id);
+  const bodyHeight = Math.max(totalSize, Math.max(0, viewportHeight - tableHeaderHeight));
+
   return (
     <div
       ref={parentRef}
@@ -105,8 +114,10 @@ export const DataTableGrid = memo(function DataTableGrid({
               {headerGroup.headers.map((header) => (
                 <th
                   key={header.id}
-                  className={selectedColumn === header.column.id ? "selected-column" : undefined}
-                  aria-selected={selectedColumn === header.column.id}
+                  className={
+                    selectedColumns.includes(header.column.id) ? "selected-column" : undefined
+                  }
+                  aria-selected={selectedColumns.includes(header.column.id)}
                   style={{
                     width: getColumnWidth(header.column.id),
                     minWidth: minColumnWidth,
@@ -116,7 +127,9 @@ export const DataTableGrid = memo(function DataTableGrid({
                     type="button"
                     className="table-header-button"
                     aria-label={`Select column ${header.column.id}`}
-                    onClick={() => onSelectColumn(header.column.id)}
+                    onClick={(event) =>
+                      onSelectColumn(header.column.id, event.metaKey || event.ctrlKey)
+                    }
                     onContextMenu={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
@@ -144,7 +157,7 @@ export const DataTableGrid = memo(function DataTableGrid({
             </tr>
           ))}
         </thead>
-        <tbody style={{ height: totalSize }}>
+        <tbody style={{ height: bodyHeight }}>
           {visibleVirtualRows.map((virtualRow) => {
             const row = rows[virtualRow.index];
             if (!row) return null;
@@ -162,7 +175,7 @@ export const DataTableGrid = memo(function DataTableGrid({
                   const isEditingCell =
                     editingCell?.rowIndex === virtualRow.index && editingCell.column === column;
                   const className = [
-                    selectedColumn === column ? "selected-column" : "",
+                    selectedColumns.includes(column) ? "selected-column" : "",
                     isRangeSelected ? "range-selected" : "",
                     isSelectedCell ? "selected-cell" : "",
                     isEditingCell ? "editing-cell" : "",
@@ -196,7 +209,9 @@ export const DataTableGrid = memo(function DataTableGrid({
                         onExtendRangeSelection({ rowIndex: virtualRow.index, column });
                       }}
                       onPointerUp={() => onRangeDraggingChange(false)}
-                      onDoubleClick={() => onStartEdit(virtualRow.index, column, value)}
+                      onDoubleClick={() => {
+                        if (!isLocked) onStartEdit(virtualRow.index, column, value);
+                      }}
                       onKeyDown={(event) => onCellKeyDown(event, virtualRow.index, column, value)}
                       onContextMenu={(event) => {
                         event.preventDefault();
@@ -223,6 +238,13 @@ export const DataTableGrid = memo(function DataTableGrid({
                               event.preventDefault();
                               onCommitEdit(event.currentTarget.value);
                             }
+                            if (
+                              ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(
+                                event.key,
+                              )
+                            ) {
+                              onCommitEdit(event.currentTarget.value);
+                            }
                             if (event.key === "Escape") {
                               event.preventDefault();
                               onCancelEdit();
@@ -238,8 +260,42 @@ export const DataTableGrid = memo(function DataTableGrid({
               </tr>
             );
           })}
+          <FillerRows
+            columnIds={columnIds}
+            getColumnWidth={getColumnWidth}
+            startY={totalSize}
+            viewportHeight={bodyHeight}
+          />
         </tbody>
       </table>
     </div>
   );
 });
+
+const FillerRows = ({
+  columnIds,
+  getColumnWidth,
+  startY,
+  viewportHeight,
+}: {
+  columnIds: string[];
+  getColumnWidth: (columnId: string) => number;
+  startY: number;
+  viewportHeight: number;
+}) => {
+  const remainingHeight = Math.max(0, viewportHeight - startY);
+  const fillerRowCount = Math.ceil(remainingHeight / rowHeight);
+  if (fillerRowCount <= 0) return null;
+  return Array.from({ length: fillerRowCount }, (_, index) => (
+    <tr
+      key={`filler-${index}`}
+      aria-hidden="true"
+      className="table-filler-row"
+      style={{ transform: `translateY(${startY + index * rowHeight}px)` }}
+    >
+      {columnIds.map((columnId) => (
+        <td key={columnId} style={{ width: getColumnWidth(columnId), minWidth: minColumnWidth }} />
+      ))}
+    </tr>
+  ));
+};

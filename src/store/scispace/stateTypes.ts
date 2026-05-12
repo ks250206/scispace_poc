@@ -31,6 +31,8 @@ export interface TableMenuState {
   canPlotSelection: boolean;
   hasSelectedCell: boolean;
   hasSelectedColumn: boolean;
+  selectionKey: string;
+  isLocked: boolean;
   actions: {
     copySelectedRange: () => void;
     clearSelectedRange: () => void;
@@ -38,6 +40,8 @@ export interface TableMenuState {
     plotSelectedColumns: () => void;
     deleteSelectedRow: () => void;
     deleteSelectedColumn: () => void;
+    insertColumn: () => void;
+    toggleLock: () => void;
     setVisibleRows: (visibleRows: TableVisibleRows) => void;
   };
 }
@@ -109,7 +113,7 @@ export interface ScispaceState {
   deleteVirtualItem: (path: string) => Promise<void>;
   updateWindow: (
     id: string,
-    patch: Partial<Pick<WorkspaceWindow, "x" | "y" | "width" | "height">>,
+    patch: Partial<Pick<WorkspaceWindow, "x" | "y" | "width" | "height" | "locked">>,
   ) => void;
   focusWindow: (id: string) => void;
   blurActiveWindow: () => void;

@@ -1456,11 +1456,17 @@
 .table-scroll th,
 .table-scroll td {
   min-width: 96px;
+  height: 32px;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   padding: 7px 8px;
   text-align: left;
   white-space: nowrap;
+}
+
+.table-scroll th:focus,
+.table-scroll td:focus {
+  outline: none;
 }
 
 .table-scroll th {
@@ -1508,7 +1514,7 @@
 }
 
 .table-scroll .selected-cell {
-  background: #dbeafe;
+  background: #fff;
   box-shadow: inset 0 0 0 2px var(--blue);
 }
 
@@ -1555,6 +1561,10 @@
 .table-scroll tbody tr {
   position: absolute;
   left: 0;
+}
+
+.table-scroll .table-filler-row {
+  pointer-events: none;
 }
 
 .plot-host {

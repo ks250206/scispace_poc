@@ -41,6 +41,32 @@ describe("scispace table commands", () => {
     }
   });
 
+  it("inserts table columns through table-edit commands", () => {
+    const inserted = runCommand(
+      "table-edit waveform.csv action=insert-column column=derived before=signal",
+    );
+
+    expect(inserted.kind).toBe("dataset-updated");
+    if (inserted.kind === "dataset-updated") {
+      expect(inserted.dataset.columns.map((column) => column.id)).toEqual([
+        "index",
+        "time",
+        "derived",
+        "signal",
+        "background",
+      ]);
+      expect(inserted.dataset.rows[0]).toMatchObject({ derived: "" });
+      expect(inserted.output).toBe("Inserted column derived into waveform.csv");
+    }
+
+    const appended = runCommand("table-edit waveform.csv action=insert-column column=tail");
+    expect(appended.kind).toBe("dataset-updated");
+    if (appended.kind === "dataset-updated") {
+      expect(appended.dataset.columns.at(-1)).toMatchObject({ id: "tail", name: "tail" });
+      expect(appended.dataset.rows[0]).toMatchObject({ tail: "" });
+    }
+  });
+
   it("clears and fills table ranges through table-range commands", () => {
     const cleared = runCommand("table-range waveform.csv action=clear r1=1 c1=time r2=2 c2=signal");
 
@@ -102,6 +128,13 @@ describe("scispace table commands", () => {
       executeScispaceCommand("table-edit waveform.csv action=delete-column column=index", {
         datasets: [singleColumnDataset],
       }).kind,
+    ).toBe("error");
+    expect(runCommand("table-edit waveform.csv action=insert-column column=").kind).toBe("error");
+    expect(runCommand("table-edit waveform.csv action=insert-column column=signal").kind).toBe(
+      "error",
+    );
+    expect(
+      runCommand("table-edit waveform.csv action=insert-column column=derived before=missing").kind,
     ).toBe("error");
   });
 });

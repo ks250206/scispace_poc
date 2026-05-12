@@ -1,5 +1,5 @@
-import { normalizeDataValue, resolveDatasetColumnId } from "../csv";
-import type { Dataset, ScispaceCommandResult } from "../types";
+import { createDatasetColumns, normalizeDataValue, resolveDatasetColumnId } from "../csv";
+import type { Dataset, DatasetColumn, ScispaceCommandResult } from "../types";
 import { findDataset, readOption, type CommandContext } from "./commandUtils";
 
 export const executeTableCommand = (
@@ -111,10 +111,45 @@ export const executeTableCommand = (
       };
     }
 
+    if (action === "insert-column") {
+      const columnName = readOption(args, "column")?.trim() ?? "";
+      if (!columnName) return { kind: "error", output: "column is required" };
+      if (resolveDatasetColumnId(dataset, columnName)) {
+        return { kind: "error", output: `Column already exists in ${dataset.name}: ${columnName}` };
+      }
+      const beforeToken = readOption(args, "before");
+      const beforeColumnId = beforeToken ? resolveDatasetColumnId(dataset, beforeToken) : undefined;
+      if (beforeToken && !beforeColumnId) {
+        return { kind: "error", output: `Unknown column for ${dataset.name}: ${beforeToken}` };
+      }
+
+      const column = createDatasetColumns([columnName])[0] as DatasetColumn | undefined;
+      if (!column) return { kind: "error", output: "column is required" };
+      const beforeIndex = beforeColumnId
+        ? dataset.columns.findIndex((item) => item.id === beforeColumnId)
+        : dataset.columns.length;
+      const columns = [
+        ...dataset.columns.slice(0, beforeIndex),
+        { ...column, dataType: "string" as const },
+        ...dataset.columns.slice(beforeIndex),
+      ];
+      const updatedDataset: Dataset = {
+        ...dataset,
+        columns,
+        rows: dataset.rows.map((row) => ({ ...row, [column.id]: "" })),
+      };
+      return {
+        kind: "dataset-updated",
+        datasetId: dataset.id,
+        dataset: updatedDataset,
+        output: `Inserted column ${column.id} into ${dataset.name}`,
+      };
+    }
+
     return {
       kind: "error",
       output:
-        "Usage: table-edit <dataset> action=<delete-row|delete-column|set-cell> index=<n> row=<n> column=<col> value=<value>",
+        "Usage: table-edit <dataset> action=<delete-row|delete-column|set-cell|insert-column> index=<n> row=<n> column=<col> value=<value> before=<col>",
     };
   }
 

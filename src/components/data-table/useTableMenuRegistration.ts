@@ -13,6 +13,8 @@ type TableMenuRegistrationOptions = {
   hasSelectedCell: boolean;
   hasSelectedColumn: boolean;
   hasSelectedRange: boolean;
+  isLocked: boolean;
+  selectionKey: string;
   setTableMenuState: ScispaceState["setTableMenuState"];
   visibleRows: TableVisibleRows;
   windowId: string;
@@ -28,6 +30,8 @@ export function useTableMenuRegistration({
   hasSelectedCell,
   hasSelectedColumn,
   hasSelectedRange,
+  isLocked,
+  selectionKey,
   setTableMenuState,
   visibleRows,
   windowId,
@@ -47,6 +51,8 @@ export function useTableMenuRegistration({
       canPlotSelection,
       hasSelectedCell,
       hasSelectedColumn,
+      selectionKey,
+      isLocked,
       actions,
     });
   }, [
@@ -59,6 +65,8 @@ export function useTableMenuRegistration({
     hasSelectedCell,
     hasSelectedColumn,
     hasSelectedRange,
+    isLocked,
+    selectionKey,
     setTableMenuState,
     visibleRows,
     windowId,

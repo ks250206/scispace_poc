@@ -13,7 +13,7 @@ export const helpText = [
   "  dataset-new <name> columns=<col[,col...]> rows=<n>",
   "  dataset-calc <dataset> column=<newOrExistingCol> expr=<expression>",
   "  table <dataset> columns=<column[,column...]>",
-  "  table-edit <dataset> action=<delete-row|delete-column|set-cell> index=<n> row=<n> column=<col> value=<value>",
+  "  table-edit <dataset> action=<delete-row|delete-column|set-cell|insert-column> index=<n> row=<n> column=<col> value=<value> before=<col>",
   "  table-range <dataset> action=<clear|fill-down> r1=<n> c1=<col> r2=<n> c2=<col>",
   "  plot <dataset> x=<column> y=<column[,column...]> type=<line|line-marker|marker>",
   "  plot-set <plotId> title=<title> type=<line|line-marker|marker> border=<true|false> width=<n> height=<n> fontFamily=<name> fontSize=<n> padding=<t:r:b:l>",

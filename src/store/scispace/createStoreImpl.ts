@@ -240,6 +240,12 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     setTableMenuState: (state) =>
       set((current) => {
         const previous = current.tableMenuState;
+        if (current.activeWindowId && current.activeWindowId !== state.windowId) {
+          return current;
+        }
+        if (!current.activeWindowId && previous && previous.windowId !== state.windowId) {
+          return current;
+        }
         if (
           previous?.windowId === state.windowId &&
           previous.datasetId === state.datasetId &&
@@ -249,7 +255,9 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
           previous.canFillDownRange === state.canFillDownRange &&
           previous.canPlotSelection === state.canPlotSelection &&
           previous.hasSelectedCell === state.hasSelectedCell &&
-          previous.hasSelectedColumn === state.hasSelectedColumn
+          previous.hasSelectedColumn === state.hasSelectedColumn &&
+          previous.selectionKey === state.selectionKey &&
+          previous.isLocked === state.isLocked
         ) {
           return current;
         }

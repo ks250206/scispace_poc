@@ -71,13 +71,13 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
         },
         {
           label: "Delete selected cells",
-          disabled: !tableMenuState.hasSelectedRange,
+          disabled: !tableMenuState.hasSelectedRange || tableMenuState.isLocked,
           danger: true,
           onSelect: tableMenuState.actions.clearSelectedRange,
         },
         {
           label: "Fill down",
-          disabled: !tableMenuState.canFillDownRange,
+          disabled: !tableMenuState.canFillDownRange || tableMenuState.isLocked,
           onSelect: tableMenuState.actions.fillDownSelectedRange,
         },
         {
@@ -87,15 +87,24 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
         },
         {
           label: "Delete row",
-          disabled: !tableMenuState.hasSelectedCell,
+          disabled: !tableMenuState.hasSelectedCell || tableMenuState.isLocked,
           danger: true,
           onSelect: tableMenuState.actions.deleteSelectedRow,
         },
         {
           label: "Delete column",
-          disabled: !tableMenuState.hasSelectedColumn,
+          disabled: !tableMenuState.hasSelectedColumn || tableMenuState.isLocked,
           danger: true,
           onSelect: tableMenuState.actions.deleteSelectedColumn,
+        },
+        {
+          label: "Insert column",
+          disabled: tableMenuState.isLocked,
+          onSelect: tableMenuState.actions.insertColumn,
+        },
+        {
+          label: tableMenuState.isLocked ? "Unlock table" : "Lock table",
+          onSelect: tableMenuState.actions.toggleLock,
         },
         {
           kind: "submenu",

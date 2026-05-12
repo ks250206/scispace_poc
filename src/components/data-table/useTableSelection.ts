@@ -14,6 +14,7 @@ interface UseTableSelectionArgs {
 
 export const useTableSelection = ({ rowsLength, columns }: UseTableSelectionArgs) => {
   const [selectedColumn, setSelectedColumn] = useState<string>();
+  const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [selectedCell, setSelectedCell] = useState<TableCellPosition>();
   const [selectedRange, setSelectedRange] = useState<TableCellRange>();
   const [isRangeDragging, setIsRangeDragging] = useState(false);
@@ -22,12 +23,25 @@ export const useTableSelection = ({ rowsLength, columns }: UseTableSelectionArgs
   const clearSelection = () => {
     setSelectedCell(undefined);
     setSelectedColumn(undefined);
+    setSelectedColumns([]);
     setSelectedRange(undefined);
     setEditingCell(undefined);
   };
 
-  const selectColumn = (columnId: string) => {
-    setSelectedColumn(columnId);
+  const selectColumn = (columnId: string, additive = false) => {
+    if (additive) {
+      setSelectedColumns((current) => {
+        const withoutColumn = current.filter((item) => item !== columnId);
+        const nextColumns = current.includes(columnId)
+          ? withoutColumn
+          : [...withoutColumn, columnId];
+        setSelectedColumn(nextColumns.at(-1));
+        return nextColumns;
+      });
+    } else {
+      setSelectedColumns([columnId]);
+      setSelectedColumn(columnId);
+    }
     setSelectedCell(undefined);
     setSelectedRange(undefined);
     setEditingCell(undefined);
@@ -35,6 +49,7 @@ export const useTableSelection = ({ rowsLength, columns }: UseTableSelectionArgs
 
   const selectSingleCell = (position: TableCellPosition) => {
     setSelectedColumn(undefined);
+    setSelectedColumns([]);
     setSelectedCell(position);
     setSelectedRange(undefined);
   };
@@ -42,6 +57,7 @@ export const useTableSelection = ({ rowsLength, columns }: UseTableSelectionArgs
   const extendRangeSelection = (position: TableCellPosition) => {
     const anchor = selectedRange?.anchor ?? selectedCell ?? position;
     setSelectedColumn(undefined);
+    setSelectedColumns([]);
     setSelectedCell(position);
     setSelectedRange({ anchor, focus: position });
     setEditingCell(undefined);
@@ -49,6 +65,7 @@ export const useTableSelection = ({ rowsLength, columns }: UseTableSelectionArgs
 
   const startRangeSelection = (position: TableCellPosition) => {
     setSelectedColumn(undefined);
+    setSelectedColumns([]);
     setSelectedCell(position);
     setSelectedRange({ anchor: position, focus: position });
     setEditingCell(undefined);
@@ -56,6 +73,7 @@ export const useTableSelection = ({ rowsLength, columns }: UseTableSelectionArgs
 
   const startEdit = (rowIndex: number, column: string, value: unknown) => {
     setSelectedColumn(undefined);
+    setSelectedColumns([]);
     setSelectedCell({ rowIndex, column });
     setSelectedRange(undefined);
     setEditingCell({ rowIndex, column, value: formatCellValue(value) });
@@ -71,6 +89,18 @@ export const useTableSelection = ({ rowsLength, columns }: UseTableSelectionArgs
     column: string,
     value: unknown,
   ) => {
+    const isPrintableKey =
+      event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey;
+    if (isPrintableKey) {
+      event.preventDefault();
+      setSelectedColumn(undefined);
+      setSelectedColumns([]);
+      setSelectedCell({ rowIndex, column });
+      setSelectedRange(undefined);
+      setEditingCell({ rowIndex, column, value: event.key });
+      return;
+    }
+
     if (event.key === "Enter" || event.key === "F2") {
       event.preventDefault();
       startEdit(rowIndex, column, value);
@@ -116,6 +146,7 @@ export const useTableSelection = ({ rowsLength, columns }: UseTableSelectionArgs
 
   return {
     selectedColumn,
+    selectedColumns,
     selectedCell,
     selectedRange,
     isRangeDragging,

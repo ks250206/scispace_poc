@@ -88,7 +88,7 @@ export const isUndoableCommand = (input: string): boolean => {
   const command = input.trim();
   if (/^dataset-(new|calc)\s/.test(command)) return true;
   if (/^table-edit\s/.test(command)) {
-    return /(?:^|\s)action=(set-cell|delete-row|delete-column)(?:\s|$)/.test(command);
+    return /(?:^|\s)action=(set-cell|delete-row|delete-column|insert-column)(?:\s|$)/.test(command);
   }
   if (/^table-range\s/.test(command)) {
     return /(?:^|\s)action=(clear|fill-down)(?:\s|$)/.test(command);

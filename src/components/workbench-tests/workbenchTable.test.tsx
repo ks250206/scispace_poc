@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -60,6 +60,24 @@ describe("Workbench table UI", () => {
       command: "table-edit waveform.csv action=set-cell row=1 column=signal value=123.45",
       source: "gui",
       status: "success",
+    });
+  });
+
+  it("starts cell editing from printable keys and commits on blur", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    const cells = await waitForTableBodyCells(4);
+    await user.click(cells[2] as HTMLElement);
+    await user.keyboard("9");
+
+    const editor = screen.getByLabelText("Edit row 1 signal");
+    expect(editor).toHaveValue("9");
+    fireEvent.blur(editor);
+
+    await waitFor(() => expect(storeState().datasets[0]?.rows[0]?.signal).toBe(9));
+    expect(storeState().commandHistory.at(-1)).toMatchObject({
+      command: "table-edit waveform.csv action=set-cell row=1 column=signal value=9",
+      source: "gui",
     });
   });
 
@@ -220,6 +238,33 @@ describe("Workbench table UI", () => {
     });
   });
 
+  it("creates plots from ordered multi-column header selection", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+
+    await user.click(screen.getByRole("button", { name: "Select column signal" }));
+    fireEvent.click(screen.getByRole("button", { name: "Select column background" }), {
+      metaKey: true,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Select column time" }), {
+      metaKey: true,
+    });
+
+    await clickToolbarItem(user, "Table", "Plot selection");
+
+    await waitFor(() =>
+      expect(storeState().commandHistory.at(-1)).toMatchObject({
+        command: "plot waveform.csv x=time y=signal,background",
+        source: "gui",
+        status: "success",
+      }),
+    );
+    expect(storeState().plotSpecs.at(-1)).toMatchObject({
+      x: "time",
+      series: [{ y: "signal" }, { y: "background" }],
+    });
+  });
+
   it("deletes selected table rows and columns through scispace commands", async () => {
     const user = userEvent.setup();
     await renderWorkbench();
@@ -261,6 +306,57 @@ describe("Workbench table UI", () => {
     });
   });
 
+  it("inserts table columns through the table menu", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    await user.click(screen.getByRole("button", { name: "Select column signal" }));
+    await clickToolbarItem(user, "Table", "Insert column");
+
+    const dialog = within(screen.getByRole("dialog"));
+    const input = dialog.getByRole("textbox");
+    fireEvent.change(input, { target: { value: "derived" } });
+    await user.click(dialog.getByRole("button", { name: "Insert" }));
+
+    await waitFor(() =>
+      expect(storeState().datasets[0]?.columns.map((column) => column.id)).toEqual([
+        "index",
+        "time",
+        "derived",
+        "signal",
+        "background",
+      ]),
+    );
+    expect(storeState().commandHistory.at(-1)).toMatchObject({
+      command: "table-edit waveform.csv action=insert-column column=derived before=signal",
+      source: "gui",
+      status: "success",
+    });
+  });
+
+  it("locks table editing while keeping selection and plotting available", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    const cells = await waitForTableBodyCells(4);
+    await user.click(cells[2] as HTMLElement);
+    await clickToolbarItem(user, "Table", "Lock table");
+
+    await user.click(screen.getByRole("button", { name: "Table" }));
+    expect(screen.getByRole("menuitem", { name: "Delete row" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Insert column" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Unlock table" })).toBeEnabled();
+    await user.keyboard("{Escape}");
+
+    const previousHistoryLength = storeState().commandHistory.length;
+    await user.keyboard("9");
+    expect(screen.queryByLabelText("Edit row 1 signal")).toBeNull();
+    expect(storeState().commandHistory).toHaveLength(previousHistoryLength);
+
+    await clickToolbarItem(user, "Table", "Unlock table");
+    await user.click(cells[2] as HTMLElement);
+    await user.keyboard("9");
+    expect(screen.getByLabelText("Edit row 1 signal")).toHaveValue("9");
+  });
+
   it("does not delete table data when confirmation is cancelled", async () => {
     const user = userEvent.setup();
     await renderWorkbench();
@@ -297,5 +393,18 @@ describe("Workbench table UI", () => {
     fireEvent.pointerUp(document);
 
     expect(signalHeader).toHaveStyle({ width: "96px" });
+  });
+
+  it("draws filler rows for sparse datasets so the grid fills the window", async () => {
+    await renderWorkbench();
+    await act(async () => {
+      await storeState().runScispace("dataset-new Data1 columns=x,y,z,a,b,c rows=5", {
+        source: "gui",
+      });
+      await storeState().runScispace("table Data1", { source: "gui" });
+    });
+
+    await waitFor(() => expect(screen.getByText("Table - Data1")).toBeInTheDocument());
+    expect(document.querySelectorAll(".table-filler-row").length).toBeGreaterThan(0);
   });
 });
