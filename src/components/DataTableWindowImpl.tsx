@@ -401,8 +401,12 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   if (!dataset) return <div className="empty-state">Dataset not found.</div>;
 
   return (
-    <div className="table-window">
-      <DataTableSummary rowCount={dataset.rows.length} visibleRows={visibleRows} />
+    <div className={`table-window ${isLocked ? "is-locked" : ""}`}>
+      <DataTableSummary
+        isLocked={isLocked}
+        rowCount={dataset.rows.length}
+        visibleRows={visibleRows}
+      />
       <DataTableGrid
         parentRef={parentRef}
         table={table}

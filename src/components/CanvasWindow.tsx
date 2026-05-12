@@ -204,6 +204,9 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
         <header className="window-titlebar">
           <span className={`window-dot ${window.kind}`} />
           <strong>{window.title}</strong>
+          {window.kind === "table" && window.locked ? (
+            <span className="window-lock-badge">Locked</span>
+          ) : null}
           <span className="window-kind">{window.kind}</span>
           {canClose ? (
             <button

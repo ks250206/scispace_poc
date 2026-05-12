@@ -356,6 +356,10 @@ describe("Workbench table UI", () => {
     await user.click(cells[2] as HTMLElement);
     await clickToolbarItem(user, "Table", "Lock table");
 
+    expect(screen.getByText("Locked")).toBeInTheDocument();
+    expect(screen.getByText(/rows auto · locked/)).toBeInTheDocument();
+    expect(document.querySelector(".table-window.is-locked")).toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Table" }));
     expect(screen.getByRole("menuitem", { name: "Delete row" })).toBeDisabled();
     expect(screen.getByRole("menuitem", { name: "Insert column" })).toBeDisabled();
@@ -368,6 +372,7 @@ describe("Workbench table UI", () => {
     expect(storeState().commandHistory).toHaveLength(previousHistoryLength);
 
     await clickToolbarItem(user, "Table", "Unlock table");
+    expect(screen.queryByText("Locked")).not.toBeInTheDocument();
     await user.click(cells[2] as HTMLElement);
     await user.keyboard("9");
     expect(screen.getByLabelText("Edit row 1 signal")).toHaveValue("9");
