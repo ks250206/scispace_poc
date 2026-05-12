@@ -35,7 +35,16 @@ describe("Workbench workspace UI", () => {
     const menuLabels = Array.from(
       document.querySelectorAll<HTMLElement>(".toolbar-menus .toolbar-menu-trigger"),
     ).map((button) => button.textContent);
-    expect(menuLabels).toEqual(["Project", "Data", "Table", "Plot", "Edit", "View", "Windows"]);
+    expect(menuLabels).toEqual([
+      "Project",
+      "Data",
+      "Table",
+      "Plot",
+      "Edit",
+      "View",
+      "Help",
+      "Windows",
+    ]);
 
     await user.click(screen.getByRole("button", { name: "Project" }));
     expect(screen.getByRole("menu", { name: "Project menu" })).toBeInTheDocument();
@@ -50,8 +59,9 @@ describe("Workbench workspace UI", () => {
     expect(screen.getByRole("menuitem", { name: "Load Data" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "New Folder" })).toBeInTheDocument();
 
-    await user.hover(screen.getByRole("button", { name: "View" }));
+    await user.hover(screen.getByRole("button", { name: "Help" }));
     expect(screen.getByRole("menuitem", { name: "SciSpace Help" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Keyboard Shortcuts" })).toBeInTheDocument();
   });
 
   it("switches open toolbar menus on hover", async () => {
@@ -84,7 +94,16 @@ describe("Workbench workspace UI", () => {
         ":scope > .context-menu-row > .context-menu-item-main > .context-menu-label",
       ),
     ).map((element) => element.textContent);
-    expect(contextLabels).toEqual(["Project", "Data", "Table", "Plot", "Edit", "View", "Windows"]);
+    expect(contextLabels).toEqual([
+      "Project",
+      "Data",
+      "Table",
+      "Plot",
+      "Edit",
+      "View",
+      "Help",
+      "Windows",
+    ]);
     const currentProjectName =
       storeState().projects.find((project) => project.id === storeState().currentProjectId)?.name ??
       "";
@@ -101,16 +120,18 @@ describe("Workbench workspace UI", () => {
     expect(within(menu).getByRole("menuitem", { name: "Plot" })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Edit" })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "View" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Help" })).toBeInTheDocument();
 
     await user.click(within(menu).getByRole("menuitem", { name: "Reset View" }));
     expect(storeState().viewport).toMatchObject({ x: -1920, y: -1080, scale: 1 });
 
     fireEvent.contextMenu(shell, { clientX: 160, clientY: 120 });
-    await user.click(screen.getByRole("menuitem", { name: "SciSpace Help" }));
+    await user.click(screen.getAllByRole("menuitem", { name: "SciSpace Help" })[0]!);
     await waitFor(() => expect(getWindowTitle("SciSpace Help")).toBeDefined());
     expect(
       await screen.findByText((text) => text.includes("dataset-new <name>")),
     ).toBeInTheDocument();
+    expect(screen.getByText("Keyboard Shortcuts")).toBeInTheDocument();
   });
 
   it("lists open windows in the Windows menu and focuses the clicked window", async () => {
@@ -123,6 +144,7 @@ describe("Workbench workspace UI", () => {
     expect(within(menu).getByRole("menuitem", { name: /Data Browser/ })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: /Terminal/ })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: /Command History/ })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: /SciSpace Help/ })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: /Tables/ })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: /Graphs/ })).toBeInTheDocument();
     expect(
@@ -161,6 +183,15 @@ describe("Workbench workspace UI", () => {
     await user.click(screen.getByRole("button", { name: "Windows" }));
     await user.click(screen.getByRole("menuitem", { name: "Data Browser" }));
     expect(storeState().windows.some((window) => window.kind === "browser")).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "Windows" }));
+    await user.click(screen.getByRole("menuitem", { name: "SciSpace Help" }));
+    expect(storeState().windows.some((window) => window.kind === "help")).toBe(true);
+    expect(getWindowTitle("SciSpace Help")).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: "Windows" }));
+    await user.click(screen.getByRole("menuitem", { name: "SciSpace Help" }));
+    expect(storeState().windows.some((window) => window.kind === "help")).toBe(false);
   });
 
   it("updates current plot and closes closable windows from the Windows menu", async () => {

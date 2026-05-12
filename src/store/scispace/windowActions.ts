@@ -5,6 +5,7 @@ import { persistLayout } from "./projectPersistence";
 import type { ScispaceState } from "./stateTypes";
 import {
   defaultBrowserWindow,
+  defaultHelpWindow,
   defaultHistoryWindow,
   defaultTerminalWindow,
 } from "./workspaceDefaults";
@@ -76,9 +77,11 @@ export const createWindowActions = ({
       const nextWindow: WorkspaceWindow =
         kind === "browser"
           ? defaultBrowserWindow(zIndex)
-          : kind === "terminal"
-            ? defaultTerminalWindow(zIndex)
-            : defaultHistoryWindow(zIndex);
+          : kind === "help"
+            ? defaultHelpWindow(zIndex)
+            : kind === "terminal"
+              ? defaultTerminalWindow(zIndex)
+              : defaultHistoryWindow(zIndex);
       return {
         windows: [...state.windows, nextWindow],
         activeWindowId: nextWindow.id,

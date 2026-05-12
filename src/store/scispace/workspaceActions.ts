@@ -5,6 +5,7 @@ import type { SciSpaceDatabase } from "../db";
 import { persistLayout } from "./projectPersistence";
 import type { ScispaceState } from "./stateTypes";
 import {
+  defaultHelpWindow,
   newWindowPosition,
   normalizePlotSpec,
   plotWindowHeightForSpec,
@@ -231,13 +232,8 @@ export const createWorkspaceActions = ({
       const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
       const windowId = "help-main";
       const nextWindow: WorkspaceWindow = {
-        id: windowId,
-        kind: "help",
-        title: "SciSpace Help",
+        ...defaultHelpWindow(zIndex),
         ...newWindowPosition(state, 520, 120),
-        width: 680,
-        height: 560,
-        zIndex,
       };
       return {
         activeWindowId: existing?.id ?? windowId,

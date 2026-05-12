@@ -102,7 +102,7 @@ export interface ScispaceState {
   undo: () => Promise<void>;
   redo: () => Promise<void>;
   closeWindow: (id: string) => void;
-  toggleUtilityWindow: (kind: "browser" | "terminal" | "history") => void;
+  toggleUtilityWindow: (kind: "browser" | "terminal" | "history" | "help") => void;
   createNewProject: (name?: string) => Promise<void>;
   saveCurrentProject: (name?: string) => Promise<void>;
   switchProject: (projectId: string) => Promise<void>;

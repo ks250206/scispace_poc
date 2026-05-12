@@ -117,6 +117,26 @@ const helpSections = [
       },
     ],
   },
+  {
+    title: "Keyboard Shortcuts",
+    commands: [
+      {
+        command: "Tab",
+        description: "Complete SciSpace REPL command names when the cursor is at the line end.",
+        example: "plot<Tab>",
+      },
+      {
+        command: "Ctrl+K",
+        description: "Delete text from the terminal cursor to the end of the current line.",
+        example: "dataset-calc ... <Ctrl+K>",
+      },
+      {
+        command: "Alt+Left / Alt+Right",
+        description: "Move the terminal cursor by space-delimited words.",
+        example: "plot waveform.csv x=time y=signal",
+      },
+    ],
+  },
 ];
 
 export function ScispaceHelpWindow() {

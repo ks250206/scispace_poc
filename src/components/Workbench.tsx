@@ -271,15 +271,23 @@ export function Workbench() {
     browser: windows.filter((window) => window.kind === "browser"),
     terminal: windows.filter((window) => window.kind === "terminal"),
     history: windows.filter((window) => window.kind === "history"),
+    help: windows.filter((window) => window.kind === "help"),
     plotConfig: windows.filter((window) => window.kind === "plot-config"),
     tables: windows.filter((window) => window.kind === "table"),
     graphs: windows.filter((window) => window.kind === "plot"),
     imports: windows.filter((window) => window.kind === "import"),
     other: windows.filter(
       (window) =>
-        !["browser", "terminal", "history", "plot-config", "table", "plot", "import"].includes(
-          window.kind,
-        ),
+        ![
+          "browser",
+          "terminal",
+          "history",
+          "help",
+          "plot-config",
+          "table",
+          "plot",
+          "import",
+        ].includes(window.kind),
     ),
   };
   const windowItems = (items: WorkspaceWindow[]): ToolbarMenuItem[] =>
@@ -301,6 +309,11 @@ export function Workbench() {
       kind: "history" as const,
       label: "Command History",
       visible: windowsByKind.history.length > 0,
+    },
+    {
+      kind: "help" as const,
+      label: "SciSpace Help",
+      visible: windowsByKind.help.length > 0,
     },
   ].map(
     (window): ToolbarMenuItem => ({
@@ -483,8 +496,17 @@ export function Workbench() {
       setOpenMenu: setOpenToolbarMenu,
       items: [
         { label: "Reset View", onSelect: () => setViewport(centerViewport) },
-        { label: "SciSpace Help", onSelect: openHelpWindow },
         { label: `Zoom ${Math.round(viewport.scale * 100)}%`, disabled: true },
+      ],
+    },
+    {
+      label: "Help",
+      openMenu: openToolbarMenu,
+      setOpenMenu: setOpenToolbarMenu,
+      items: [
+        { label: "SciSpace Help", onSelect: openHelpWindow },
+        { label: "Command Help", onSelect: openHelpWindow },
+        { label: "Keyboard Shortcuts", onSelect: openHelpWindow },
       ],
     },
     {

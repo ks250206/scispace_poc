@@ -63,6 +63,17 @@ export const defaultHistoryWindow = (zIndex = 5): WorkspaceWindow => ({
   zIndex,
 });
 
+export const defaultHelpWindow = (zIndex = 6): WorkspaceWindow => ({
+  id: "help-main",
+  kind: "help",
+  title: "SciSpace Help",
+  x: centerTileX + 520,
+  y: centerTileY + 120,
+  width: 680,
+  height: 560,
+  zIndex,
+});
+
 export const initialWindows = (): WorkspaceWindow[] => [
   defaultBrowserWindow(1),
   {
