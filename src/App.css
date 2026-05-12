@@ -1287,6 +1287,11 @@
   resize: vertical;
 }
 
+.plot-schema-apply-window .dataset-tool-panel textarea {
+  min-height: 250px;
+  font: 12px/1.4 var(--mono);
+}
+
 .dataset-column-editor {
   display: grid;
   gap: 8px;

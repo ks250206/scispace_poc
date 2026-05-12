@@ -68,6 +68,12 @@ const helpSections = [
         description: "Print the current plot JSON schema for reproducible graph settings.",
         example: "plot-schema plot-abc",
       },
+      {
+        command: "plot-apply-schema <plotId> json=<encodedJson>",
+        description:
+          "Apply a plot-schema JSON document to an existing plot after validating the source dataset and columns.",
+        example: "plot-apply-schema plot-abc json=%7B...%7D",
+      },
     ],
   },
   {

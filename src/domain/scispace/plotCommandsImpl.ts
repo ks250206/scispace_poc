@@ -1,6 +1,7 @@
 import type { ScispaceCommandResult } from "../types";
 import type { CommandContext } from "./commandUtils";
 import { executePlotAnnotationCommand } from "./plotAnnotationCommand";
+import { executePlotApplySchemaCommand } from "./plotApplySchemaCommand";
 import { executePlotAxisCommand } from "./plotAxisCommand";
 import { executePlotCreateCommand } from "./plotCreateCommand";
 import { executePlotGridCommand } from "./plotGridCommand";
@@ -20,6 +21,7 @@ export const executePlotCommand = (
   if (command === "plot-grid") return executePlotGridCommand(args, context);
   if (command === "plot-series") return executePlotSeriesCommand(args, context);
   if (command === "plot-annotation") return executePlotAnnotationCommand(args, context);
+  if (command === "plot-apply-schema") return executePlotApplySchemaCommand(args, context);
 
   return undefined;
 };

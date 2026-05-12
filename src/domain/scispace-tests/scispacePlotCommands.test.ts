@@ -234,6 +234,37 @@ describe("scispace plot commands", () => {
     });
   });
 
+  it("applies encoded plot schema json to an existing plot", () => {
+    const created = runCommand("plot waveform.csv x=time y=signal width=700 height=420");
+    expect(created.kind).toBe("plot-created");
+    if (created.kind !== "plot-created") return;
+    const plotSpecs = [{ ...created.spec, id: "plot-1" }];
+    const schema = {
+      ...plotSpecs[0],
+      title: "Applied schema",
+      x: "index",
+      size: { width: 820, height: 460 },
+      series: [{ ...plotSpecs[0].series[0], y: "background", label: "Background" }],
+    };
+
+    const result = runCommand(
+      `plot-apply-schema plot-1 json=${encodeURIComponent(JSON.stringify(schema))}`,
+      { plotSpecs },
+    );
+
+    expect(result).toMatchObject({
+      kind: "plot-updated",
+      spec: {
+        id: "plot-1",
+        title: "Applied schema",
+        source: "seed-waveform",
+        x: "index",
+        size: { width: 820, height: 460 },
+        series: [{ y: "background", label: "Background" }],
+      },
+    });
+  });
+
   it("reports invalid rich plot updates", () => {
     const result = runCommand("plot waveform.csv x=time y=signal");
     expect(result.kind).toBe("plot-created");
@@ -270,5 +301,13 @@ describe("scispace plot commands", () => {
     expect(runCommand("plot-annotation plot-1 action=add x=1 y=2", { plotSpecs }).kind).toBe(
       "error",
     );
+    expect(runCommand("plot-apply-schema missing json=%7B%7D", { plotSpecs }).kind).toBe("error");
+    expect(runCommand("plot-apply-schema plot-1 json=not-json", { plotSpecs }).kind).toBe("error");
+    expect(
+      runCommand(
+        `plot-apply-schema plot-1 json=${encodeURIComponent(JSON.stringify({ x: "missing" }))}`,
+        { plotSpecs },
+      ).kind,
+    ).toBe("error");
   });
 });

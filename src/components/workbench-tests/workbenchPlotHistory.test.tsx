@@ -107,6 +107,34 @@ describe("Workbench plot and history UI", () => {
     expect(svgLink?.download).toBe("waveform.csv_signal_vs_time.svg");
   });
 
+  it("opens the plot schema apply window and applies pasted json", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    const schema = {
+      ...storeState().plotSpecs[0],
+      title: "Applied from GUI",
+      size: { width: 760, height: 410 },
+    };
+
+    await clickToolbarItem(user, "Plot", "Apply plot schema");
+
+    const textarea = await screen.findByLabelText("Plot schema JSON");
+    fireEvent.change(textarea, { target: { value: JSON.stringify(schema) } });
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() =>
+      expect(storeState().plotSpecs[0]).toMatchObject({
+        title: "Applied from GUI",
+        size: { width: 760, height: 410 },
+      }),
+    );
+    expect(storeState().commandHistory.at(-1)).toMatchObject({
+      command: expect.stringContaining("plot-apply-schema seed-plot"),
+      source: "gui",
+      status: "success",
+    });
+  });
+
   it("runs plot actions from the right click context menu", async () => {
     const user = userEvent.setup();
     const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
@@ -128,6 +156,11 @@ describe("Workbench plot and history UI", () => {
     fireEvent.contextMenu(plotHost, { clientX: 360, clientY: 240 });
     await user.click(screen.getByRole("menuitem", { name: "Copy plot schema" }));
     await waitFor(() => expect(writeText).toHaveBeenCalled());
+
+    fireEvent.contextMenu(plotHost, { clientX: 360, clientY: 240 });
+    await user.click(screen.getByRole("menuitem", { name: "Apply plot schema" }));
+    expect(await screen.findByLabelText("Plot schema JSON")).toBeInTheDocument();
+    storeState().closeWindow("plot-schema-apply-main");
 
     fireEvent.contextMenu(plotHost, { clientX: 360, clientY: 240 });
     await user.click(screen.getByRole("menuitem", { name: "Export plot PNG" }));

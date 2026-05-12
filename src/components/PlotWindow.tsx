@@ -31,6 +31,7 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
     state.datasets.find((item) => item.id === spec?.source),
   );
   const openPlotConfig = useScispaceStore((state) => state.openPlotConfig);
+  const openPlotSchemaApplyWindow = useScispaceStore((state) => state.openPlotSchemaApplyWindow);
   const runScispace = useScispaceStore((state) => state.runScispace);
   const focusWindow = useScispaceStore((state) => state.focusWindow);
   const setPlotMenuState = useScispaceStore((state) => state.setPlotMenuState);
@@ -178,6 +179,7 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
       items: [
         { label: "Plot Config", onSelect: () => openPlotConfig(plotId) },
         { label: "Copy plot schema", onSelect: () => void copySchema() },
+        { label: "Apply plot schema", onSelect: () => openPlotSchemaApplyWindow(plotId) },
         { label: "Export plot PNG", onSelect: exportPng },
         { label: "Export plot SVG", onSelect: exportSvg },
       ],
@@ -194,6 +196,7 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
       actions: {
         openConfig: () => openPlotConfig(plotId),
         copySchema: () => void copySchema(),
+        applySchema: () => openPlotSchemaApplyWindow(plotId),
         exportPng,
         exportSvg,
       },
@@ -205,6 +208,7 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
     exportPng,
     exportSvg,
     openPlotConfig,
+    openPlotSchemaApplyWindow,
     plotId,
     setPlotMenuState,
     spec,

@@ -52,6 +52,7 @@ export interface PlotMenuState {
   actions: {
     openConfig: () => void;
     copySchema: () => void;
+    applySchema: () => void;
     exportPng: () => void;
     exportSvg: () => void;
   };
@@ -95,6 +96,7 @@ export interface ScispaceState {
   openDatasetCalcWindow: (datasetId?: string) => void;
   openHelpWindow: () => void;
   openPlotConfig: (plotId: string) => void;
+  openPlotSchemaApplyWindow: (plotId: string) => void;
   runScispace: (
     input: string,
     options?: { source?: CommandHistorySource },

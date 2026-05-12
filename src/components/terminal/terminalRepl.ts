@@ -18,6 +18,7 @@ const scispaceReplCommands = [
   "plot-series",
   "plot-annotation",
   "plot-schema",
+  "plot-apply-schema",
   "file-list",
   "file-mkdir",
   "file-rename",

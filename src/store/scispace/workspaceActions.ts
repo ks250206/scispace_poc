@@ -34,6 +34,7 @@ export const createWorkspaceActions = ({
   | "openDatasetCalcWindow"
   | "openHelpWindow"
   | "openPlotConfig"
+  | "openPlotSchemaApplyWindow"
 > => ({
   setDatasetColumnSelection: (datasetId, columnIds) => {
     const dataset = get().datasets.find((item) => item.id === datasetId);
@@ -273,6 +274,37 @@ export const createWorkspaceActions = ({
               window.id === existing.id ? { ...window, zIndex, plotId } : window,
             )
           : [...state.windows, configWindow],
+      };
+    });
+    persistLayout(db, get());
+  },
+
+  openPlotSchemaApplyWindow: (plotId) => {
+    const plot = get().plotSpecs.find((item) => item.id === plotId);
+    if (!plot) return;
+
+    set((state) => {
+      const existing = state.windows.find((window) => window.kind === "plot-schema-apply");
+      const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
+      const schemaWindow: WorkspaceWindow = {
+        id: "plot-schema-apply-main",
+        kind: "plot-schema-apply",
+        title: "Apply Plot Schema",
+        ...newWindowPosition(state, 720, 160),
+        width: 620,
+        height: 560,
+        zIndex,
+        plotId,
+      };
+      return {
+        currentPlotId: plotId,
+        activeWindowId: existing?.id ?? schemaWindow.id,
+        projectDirty: true,
+        windows: existing
+          ? state.windows.map((window) =>
+              window.id === existing.id ? { ...window, zIndex, plotId } : window,
+            )
+          : [...state.windows, schemaWindow],
       };
     });
     persistLayout(db, get());

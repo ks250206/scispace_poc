@@ -15,6 +15,9 @@ const ImportSettingsWindow = lazy(() =>
 const PlotConfigWindow = lazy(() =>
   import("./PlotConfigWindow").then((module) => ({ default: module.PlotConfigWindow })),
 );
+const PlotSchemaApplyWindow = lazy(() =>
+  import("./PlotSchemaApplyWindow").then((module) => ({ default: module.PlotSchemaApplyWindow })),
+);
 const NewPlotWindow = lazy(() =>
   import("./NewPlotWindow").then((module) => ({ default: module.NewPlotWindow })),
 );
@@ -54,6 +57,7 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
     window.kind === "dataset-new" ||
     window.kind === "dataset-calc" ||
     window.kind === "help" ||
+    window.kind === "plot-schema-apply" ||
     window.kind === "plot-config";
   const handleClose = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -147,6 +151,7 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
       items.push(
         { label: "Plot Config", onSelect: plotMenuState.actions.openConfig },
         { label: "Copy plot schema", onSelect: plotMenuState.actions.copySchema },
+        { label: "Apply plot schema", onSelect: plotMenuState.actions.applySchema },
         { label: "Export plot PNG", onSelect: plotMenuState.actions.exportPng },
         { label: "Export plot SVG", onSelect: plotMenuState.actions.exportSvg },
       );
@@ -239,6 +244,9 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
               />
             ) : null}
             {window.kind === "plot-config" ? <PlotConfigWindow /> : null}
+            {window.kind === "plot-schema-apply" && window.plotId ? (
+              <PlotSchemaApplyWindow plotId={window.plotId} windowId={window.id} />
+            ) : null}
             {window.kind === "help" ? <ScispaceHelpWindow /> : null}
             {window.kind === "terminal" ? <TerminalPanel /> : null}
             {window.kind === "import" && window.importId ? (

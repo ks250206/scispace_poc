@@ -22,6 +22,7 @@ export const helpText = [
   "  plot-series <plotId> y=<column> action=<add|remove> markerShape=<circle|square|triangle|diamond|cross|plus> order=<n>",
   "  plot-annotation <plotId> action=<add|update|remove>",
   "  plot-schema [plotId]",
+  "  plot-apply-schema <plotId> json=<encodedJson>",
   "  file-list [path]",
   "  file-mkdir <path>",
   "  file-rename <path> name=<newName>",

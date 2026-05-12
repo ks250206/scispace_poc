@@ -120,4 +120,37 @@ describe("scispace store plot behavior", () => {
       expect.objectContaining({ kind: "plot-config", plotId: "seed-plot" }),
     );
   });
+
+  it("applies plot schema through scispace and resizes the plot window", async () => {
+    const { store } = await makeStore();
+    const schema = {
+      ...store.getState().plotSpecs[0],
+      title: "Schema applied",
+      x: "index",
+      size: { width: 780, height: 420 },
+      series: [{ ...store.getState().plotSpecs[0]?.series[0], y: "background" }],
+    };
+
+    await store
+      .getState()
+      .runScispace(
+        `plot-apply-schema seed-plot json=${encodeURIComponent(JSON.stringify(schema))}`,
+      );
+
+    expect(store.getState().plotSpecs[0]).toMatchObject({
+      id: "seed-plot",
+      title: "Schema applied",
+      x: "index",
+      size: { width: 780, height: 420 },
+      series: [{ y: "background" }],
+    });
+    expect(store.getState().windows.find((window) => window.id === "plot-seed")).toMatchObject({
+      width: 780,
+      height: 514,
+    });
+    expect(store.getState().commandHistory.at(-1)).toMatchObject({
+      command: expect.stringContaining("plot-apply-schema seed-plot"),
+      status: "success",
+    });
+  });
 });

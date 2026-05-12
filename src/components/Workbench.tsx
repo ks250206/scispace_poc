@@ -38,6 +38,7 @@ export function Workbench() {
   const openDatasetCalcWindow = useScispaceStore((state) => state.openDatasetCalcWindow);
   const openHelpWindow = useScispaceStore((state) => state.openHelpWindow);
   const openPlotConfig = useScispaceStore((state) => state.openPlotConfig);
+  const openPlotSchemaApplyWindow = useScispaceStore((state) => state.openPlotSchemaApplyWindow);
   const stageUploadPayload = useScispaceStore((state) => state.stageUploadPayload);
   const createNewProject = useScispaceStore((state) => state.createNewProject);
   const saveCurrentProject = useScispaceStore((state) => state.saveCurrentProject);
@@ -250,6 +251,14 @@ export function Workbench() {
       return;
     }
     if (spec) openPlotConfig(spec.id);
+  };
+  const openActivePlotSchemaApply = () => {
+    const { spec, registeredActions } = resolveActivePlot();
+    if (registeredActions) {
+      registeredActions.applySchema();
+      return;
+    }
+    if (spec) openPlotSchemaApplyWindow(spec.id);
   };
   const exportActivePlotPng = () => {
     const { spec, registeredActions } = resolveActivePlot();
@@ -469,6 +478,11 @@ export function Workbench() {
         {
           label: "Copy plot schema",
           onSelect: () => void copyActivePlotSchema(),
+        },
+        {
+          label: "Apply plot schema",
+          onSelect: openActivePlotSchemaApply,
+          disabled: !activePlotSpec,
         },
         {
           label: "Export plot PNG",

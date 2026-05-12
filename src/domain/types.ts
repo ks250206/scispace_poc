@@ -7,6 +7,7 @@ export type WindowKind =
   | "dataset-calc"
   | "help"
   | "plot-config"
+  | "plot-schema-apply"
   | "terminal"
   | "import"
   | "history";
