@@ -9,6 +9,7 @@ import {
   plotRenderScale,
   plotSelectionRectForZoomMode,
   plotSizeFromRenderedRect,
+  plotScaleRange,
   scalePlotSpecForRender,
   scaledPlotCursorBind,
   sortedPlotSeries,
@@ -106,6 +107,8 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
       const height = Math.abs(end.top - start.top);
       const zoomAxis = inferPlotDragZoomMode(width, height);
       if (zoomAxis) {
+        const currentXRange = plotScaleRange(plot.scales.x);
+        const currentYRange = plotScaleRange(plot.scales.y);
         plot.batch(() => {
           if (zoomAxis === "x" || zoomAxis === "xy") {
             plot.setScale("x", {
@@ -113,12 +116,14 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
               max: plot.posToVal(Math.max(start.left, end.left), "x"),
             });
           }
+          if (zoomAxis === "x" && currentYRange) plot.setScale("y", currentYRange);
           if (zoomAxis === "y" || zoomAxis === "xy") {
             plot.setScale("y", {
               min: plot.posToVal(Math.max(start.top, end.top), "y"),
               max: plot.posToVal(Math.min(start.top, end.top), "y"),
             });
           }
+          if (zoomAxis === "y" && currentXRange) plot.setScale("x", currentXRange);
         });
       }
       plot.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false);

@@ -170,6 +170,14 @@ export const plotSelectionRectForZoomMode = (
   return { ...horizontal, ...vertical };
 };
 
+export const plotScaleRange = (
+  scale: Pick<uPlot.Scale, "min" | "max"> | undefined,
+): { min: number; max: number } | undefined => {
+  const min = Number(scale?.min);
+  const max = Number(scale?.max);
+  return Number.isFinite(min) && Number.isFinite(max) && min < max ? { min, max } : undefined;
+};
+
 export const sortedPlotSeries = (series: PlotSeries[]): PlotSeries[] =>
   [...series].sort(
     (left, right) => left.drawOrder - right.drawOrder || left.y.localeCompare(right.y),

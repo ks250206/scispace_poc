@@ -184,6 +184,12 @@ const helpSections = [
         example: "clear",
       },
       {
+        command: "pwd / cd / ls / cat",
+        description:
+          "Inspect the safe virtual filesystem from the REPL. These commands never leave SciSpace.",
+        example: "cd ~/raw && ls",
+      },
+      {
         command: "repl",
         description: "Return to the SciSpace REPL prompt from unsafe shell mode.",
         example: "scispace repl",

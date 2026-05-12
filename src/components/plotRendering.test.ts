@@ -6,8 +6,9 @@ import {
   createScaledPlotMouseEvent,
   inferPlotDragZoomMode,
   normalizePlotClientPoint,
-  plotSelectionRectForZoomMode,
   plotRenderScale,
+  plotScaleRange,
+  plotSelectionRectForZoomMode,
   plotSizeFromRenderedRect,
   scalePlotSpecForRender,
   scaledPlotClientPoint,
@@ -190,5 +191,12 @@ describe("plot rendering options", () => {
     expect(
       plotSelectionRectForZoomMode({ left: 120, top: 40 }, { left: 220, top: 140 }, plotSize),
     ).toEqual({ left: 120, top: 40, width: 100, height: 100 });
+  });
+
+  it("keeps only valid finite plot scale ranges", () => {
+    expect(plotScaleRange({ min: 0, max: 10 })).toEqual({ min: 0, max: 10 });
+    expect(plotScaleRange({ min: 10, max: 0 })).toBeUndefined();
+    expect(plotScaleRange({ min: undefined, max: 10 })).toBeUndefined();
+    expect(plotScaleRange(undefined)).toBeUndefined();
   });
 });
