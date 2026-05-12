@@ -299,6 +299,9 @@ describe("terminal input handling", () => {
   });
 
   it("supports basic scispace repl tab completion without taking over bash completion", () => {
+    expect(replTabCompletion("dataset-")).toEqual({
+      choices: ["dataset-calc", "dataset-new"],
+    });
     expect(replTabCompletion("plo")).toEqual({
       choices: [
         "plot",

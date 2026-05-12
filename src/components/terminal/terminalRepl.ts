@@ -6,6 +6,8 @@ export const tabSequence = "\t";
 const scispaceReplCommands = [
   "help",
   "lsdata",
+  "dataset-new",
+  "dataset-calc",
   "table",
   "table-edit",
   "table-range",

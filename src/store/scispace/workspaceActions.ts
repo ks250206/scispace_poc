@@ -31,6 +31,7 @@ export const createWorkspaceActions = ({
   | "openNewPlotWindow"
   | "openNewDatasetWindow"
   | "openDatasetCalcWindow"
+  | "openHelpWindow"
   | "openPlotConfig"
 > => ({
   setDatasetColumnSelection: (datasetId, columnIds) => {
@@ -176,7 +177,7 @@ export const createWorkspaceActions = ({
         title: "New Dataset",
         ...newWindowPosition(state, 600, 160),
         width: 520,
-        height: 360,
+        height: 440,
         zIndex,
       };
       return {
@@ -203,8 +204,8 @@ export const createWorkspaceActions = ({
         kind: "dataset-calc",
         title: "Calculate Column",
         ...newWindowPosition(state, 640, 200),
-        width: 560,
-        height: 420,
+        width: 600,
+        height: 520,
         zIndex,
         datasetId: resolvedDatasetId,
       };
@@ -217,6 +218,32 @@ export const createWorkspaceActions = ({
               window.id === existing.id
                 ? { ...window, zIndex, datasetId: resolvedDatasetId }
                 : window,
+            )
+          : [...state.windows, nextWindow],
+      };
+    });
+    persistLayout(db, get());
+  },
+
+  openHelpWindow: () => {
+    set((state) => {
+      const existing = state.windows.find((window) => window.kind === "help");
+      const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
+      const windowId = "help-main";
+      const nextWindow: WorkspaceWindow = {
+        id: windowId,
+        kind: "help",
+        title: "SciSpace Help",
+        ...newWindowPosition(state, 520, 120),
+        width: 680,
+        height: 560,
+        zIndex,
+      };
+      return {
+        activeWindowId: existing?.id ?? windowId,
+        windows: existing
+          ? state.windows.map((window) =>
+              window.id === existing.id ? { ...window, zIndex } : window,
             )
           : [...state.windows, nextWindow],
       };

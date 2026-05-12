@@ -27,6 +27,9 @@ const DatasetCalcWindow = lazy(() =>
 const PlotWindow = lazy(() =>
   import("./PlotWindow").then((module) => ({ default: module.PlotWindow })),
 );
+const ScispaceHelpWindow = lazy(() =>
+  import("./ScispaceHelpWindow").then((module) => ({ default: module.ScispaceHelpWindow })),
+);
 const TerminalPanel = lazy(() =>
   import("./TerminalPanel").then((module) => ({ default: module.TerminalPanel })),
 );
@@ -50,6 +53,7 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
     window.kind === "plot-new" ||
     window.kind === "dataset-new" ||
     window.kind === "dataset-calc" ||
+    window.kind === "help" ||
     window.kind === "plot-config";
   const handleClose = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -101,6 +105,11 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
           label: "Insert column",
           disabled: tableMenuState.isLocked,
           onSelect: tableMenuState.actions.insertColumn,
+        },
+        {
+          label: "Calculate column",
+          disabled: tableMenuState.isLocked,
+          onSelect: tableMenuState.actions.calculateColumn,
         },
         {
           label: tableMenuState.isLocked ? "Unlock table" : "Lock table",
@@ -230,6 +239,7 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
               />
             ) : null}
             {window.kind === "plot-config" ? <PlotConfigWindow /> : null}
+            {window.kind === "help" ? <ScispaceHelpWindow /> : null}
             {window.kind === "terminal" ? <TerminalPanel /> : null}
             {window.kind === "import" && window.importId ? (
               <ImportSettingsWindow importId={window.importId} />

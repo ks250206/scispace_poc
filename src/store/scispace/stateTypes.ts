@@ -41,6 +41,7 @@ export interface TableMenuState {
     deleteSelectedRow: () => void;
     deleteSelectedColumn: () => void;
     insertColumn: () => void;
+    calculateColumn: () => void;
     toggleLock: () => void;
     setVisibleRows: (visibleRows: TableVisibleRows) => void;
   };
@@ -92,6 +93,7 @@ export interface ScispaceState {
   openNewPlotWindow: () => void;
   openNewDatasetWindow: () => void;
   openDatasetCalcWindow: (datasetId?: string) => void;
+  openHelpWindow: () => void;
   openPlotConfig: (plotId: string) => void;
   runScispace: (
     input: string,

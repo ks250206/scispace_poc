@@ -49,6 +49,9 @@ describe("Workbench workspace UI", () => {
     await user.click(screen.getByRole("button", { name: "Data" }));
     expect(screen.getByRole("menuitem", { name: "Load Data" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "New Folder" })).toBeInTheDocument();
+
+    await user.hover(screen.getByRole("button", { name: "View" }));
+    expect(screen.getByRole("menuitem", { name: "SciSpace Help" })).toBeInTheDocument();
   });
 
   it("switches open toolbar menus on hover", async () => {
@@ -101,6 +104,13 @@ describe("Workbench workspace UI", () => {
 
     await user.click(within(menu).getByRole("menuitem", { name: "Reset View" }));
     expect(storeState().viewport).toMatchObject({ x: -1920, y: -1080, scale: 1 });
+
+    fireEvent.contextMenu(shell, { clientX: 160, clientY: 120 });
+    await user.click(screen.getByRole("menuitem", { name: "SciSpace Help" }));
+    await waitFor(() => expect(getWindowTitle("SciSpace Help")).toBeDefined());
+    expect(
+      await screen.findByText((text) => text.includes("dataset-new <name>")),
+    ).toBeInTheDocument();
   });
 
   it("lists open windows in the Windows menu and focuses the clicked window", async () => {

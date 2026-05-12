@@ -5,6 +5,7 @@ export type WindowKind =
   | "plot-new"
   | "dataset-new"
   | "dataset-calc"
+  | "help"
   | "plot-config"
   | "terminal"
   | "import"

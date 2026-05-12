@@ -19,6 +19,7 @@ type OpenContextMenu = (options: {
 
 type TableContextMenuOptions = {
   clearRange: (bounds: TableRangeBounds) => void;
+  calculateColumn: () => void;
   copyRange: (bounds: TableRangeBounds) => void;
   deleteColumn: (columnId: string) => void;
   deleteRowAt: (rowIndex: number) => void;
@@ -41,6 +42,7 @@ type TableContextMenuOptions = {
 
 export function useTableContextMenu({
   clearRange,
+  calculateColumn,
   copyRange,
   deleteColumn,
   deleteRowAt,
@@ -86,6 +88,7 @@ export function useTableContextMenu({
         items: tableContextItems({
           bounds,
           clearRange,
+          calculateColumn,
           column,
           context,
           copyRange,
@@ -105,6 +108,7 @@ export function useTableContextMenu({
     },
     [
       clearRange,
+      calculateColumn,
       copyRange,
       deleteColumn,
       deleteRowAt,
@@ -131,6 +135,7 @@ export function useTableContextMenu({
 const tableContextItems = ({
   bounds,
   clearRange,
+  calculateColumn,
   column,
   context,
   copyRange,
@@ -148,6 +153,7 @@ const tableContextItems = ({
 }: {
   bounds?: TableRangeBounds;
   clearRange: (bounds: TableRangeBounds) => void;
+  calculateColumn: () => void;
   column?: string;
   context?: { cell?: TableCellPosition; column?: string };
   copyRange: (bounds: TableRangeBounds) => void;
@@ -212,6 +218,11 @@ const tableContextItems = ({
     label: "Insert column",
     disabled: isLocked,
     onSelect: insertColumn,
+  },
+  {
+    label: "Calculate column",
+    disabled: isLocked,
+    onSelect: calculateColumn,
   },
   {
     label: isLocked ? "Unlock table" : "Lock table",

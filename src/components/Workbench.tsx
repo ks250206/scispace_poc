@@ -36,6 +36,7 @@ export function Workbench() {
   const openNewPlotWindow = useScispaceStore((state) => state.openNewPlotWindow);
   const openNewDatasetWindow = useScispaceStore((state) => state.openNewDatasetWindow);
   const openDatasetCalcWindow = useScispaceStore((state) => state.openDatasetCalcWindow);
+  const openHelpWindow = useScispaceStore((state) => state.openHelpWindow);
   const openPlotConfig = useScispaceStore((state) => state.openPlotConfig);
   const stageUploadPayload = useScispaceStore((state) => state.stageUploadPayload);
   const createNewProject = useScispaceStore((state) => state.createNewProject);
@@ -399,6 +400,11 @@ export function Workbench() {
           disabled: !activeTableMenuState || activeTableMenuState.isLocked,
         },
         {
+          label: "Calculate column",
+          onSelect: () => activeTableMenuState?.actions.calculateColumn(),
+          disabled: !activeTableMenuState || activeTableMenuState.isLocked,
+        },
+        {
           label: activeTableMenuState?.isLocked ? "Unlock table" : "Lock table",
           onSelect: () => activeTableMenuState?.actions.toggleLock(),
           disabled: !activeTableMenuState,
@@ -476,6 +482,7 @@ export function Workbench() {
       setOpenMenu: setOpenToolbarMenu,
       items: [
         { label: "Reset View", onSelect: () => setViewport(centerViewport) },
+        { label: "SciSpace Help", onSelect: openHelpWindow },
         { label: `Zoom ${Math.round(viewport.scale * 100)}%`, disabled: true },
       ],
     },

@@ -333,6 +333,22 @@ describe("Workbench table UI", () => {
     });
   });
 
+  it("opens calculate column from the active table menu and context menu", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    const cells = await waitForTableBodyCells(2);
+    await user.click(cells[1] as HTMLElement);
+
+    await clickToolbarItem(user, "Table", "Calculate column");
+    expect(await screen.findByLabelText("Calculation dataset")).toHaveValue("seed-waveform");
+
+    await user.click(screen.getByRole("button", { name: "Close Calculate Column" }));
+    fireEvent.contextMenu(cells[1], { clientX: 120, clientY: 140 });
+    await user.click(screen.getByRole("menuitem", { name: "Calculate column" }));
+
+    expect(await screen.findByLabelText("Calculation dataset")).toHaveValue("seed-waveform");
+  });
+
   it("locks table editing while keeping selection and plotting available", async () => {
     const user = userEvent.setup();
     await renderWorkbench();

@@ -14,6 +14,8 @@ describe("scispace utility commands", () => {
     expect(help).toContain("scispace commands");
     expect(help).toContain("unsafe on|off");
     expect(help).toContain("shell");
+    expect(help).toContain("dataset-new <name> columns=<col[,col...]> rows=<n>");
+    expect(help).toContain("dataset-calc <dataset> column=<newOrExistingCol> expr=<expression>");
     expect(help).toContain("file-list [path]");
     expect(help).toContain("file-rename <path> name=<newName>");
     expect(runEmptyCommand("lsdata").output).toBe("No datasets loaded");

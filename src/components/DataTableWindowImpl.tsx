@@ -52,6 +52,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   const runScispace = useScispaceStore((state) => state.runScispace);
   const setTableMenuState = useScispaceStore((state) => state.setTableMenuState);
   const clearTableMenuState = useScispaceStore((state) => state.clearTableMenuState);
+  const openDatasetCalcWindow = useScispaceStore((state) => state.openDatasetCalcWindow);
   const tableWindow = useScispaceStore((state) =>
     state.windows.find((window) => window.id === windowId),
   );
@@ -225,6 +226,11 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     updateWindow(windowId, { locked: !isLocked });
   };
 
+  const calculateColumn = () => {
+    if (!dataset || isLocked) return;
+    openDatasetCalcWindow(dataset.id);
+  };
+
   const rangeBounds = rangeBoundsFromSelection(selectedRange, visibleDatasetColumns);
   const hasSelectedRange = Boolean(rangeBounds);
   const canFillDownRange = Boolean(rangeBounds && rangeBounds.maxRow > rangeBounds.minRow);
@@ -309,6 +315,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
 
   const openTableContextMenu = useTableContextMenu({
     clearRange,
+    calculateColumn,
     copyRange,
     deleteColumn,
     deleteRowAt,
@@ -348,6 +355,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
       deleteSelectedRow,
       deleteSelectedColumn,
       insertColumn,
+      calculateColumn,
       toggleLock,
       setVisibleRows: updateVisibleRows,
     }),
@@ -359,6 +367,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
       selectionPlotSpec,
       isLocked,
       insertColumn,
+      calculateColumn,
       toggleLock,
     ],
   );
