@@ -45,6 +45,9 @@ export { executeTerminalFsCommand } from "./terminal/terminalFs";
 export {
   clearTerminalScrollbackRows,
   handleForwardDelete,
+  handleKillLineRight,
+  handleMoveWordLeft,
+  handleMoveWordRight,
   handleTerminalInput,
   normalizeTerminalOutput,
   scrollTerminalToBottom,
