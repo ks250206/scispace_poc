@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { CanvasWindow } from "./CanvasWindow";
-import { uploadOpenCommand } from "./DataBrowser";
 import { useContextMenu, type ContextMenuItem } from "./context-menu/ContextMenuProvider";
 import { useDialog } from "./dialog/DialogProvider";
 import { useScispaceStore } from "../store/scispaceStore";
@@ -10,7 +9,8 @@ import { useActivePlotActions } from "./workbench/useActivePlotActions";
 import { useWorkspacePanZoom } from "./workbench/useWorkspacePanZoom";
 import { useWorkbenchWindowMenu } from "./workbench/useWorkbenchWindowMenu";
 import { useProjectMenuActions } from "./workbench/useProjectMenuActions";
-import { centerViewport, quoteCommandArg } from "./workbench/workbenchView";
+import { useWorkbenchDataActions } from "./workbench/useWorkbenchDataActions";
+import { centerViewport } from "./workbench/workbenchView";
 
 export function Workbench() {
   const dialog = useDialog();
@@ -98,34 +98,11 @@ export function Workbench() {
     isPanning,
   } = useWorkspacePanZoom({ blurActiveWindow, setViewport, viewport });
 
-  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const files = Array.from(event.dataTransfer.files);
-    for (const file of files) {
-      const text = await file.text();
-      const uploadId = stageUploadPayload(file.name, text);
-      void runScispace(uploadOpenCommand(uploadId, file.name), { source: "gui" });
-    }
-  };
-
-  const handleLoadDataFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.currentTarget.files ?? []);
-    event.currentTarget.value = "";
-    for (const file of files) {
-      const text = await file.text();
-      const uploadId = stageUploadPayload(file.name, text);
-      void runScispace(uploadOpenCommand(uploadId, file.name), { source: "gui" });
-    }
-  };
-
-  const handleNewFolder = async () => {
-    const name = await dialog.prompt({
-      title: "Folder name",
-      defaultValue: "New Folder",
-      confirmLabel: "Create",
-    });
-    if (name) void runScispace(`file-mkdir ~/raw/${quoteCommandArg(name)}`, { source: "gui" });
-  };
+  const { handleDrop, handleLoadDataFiles, handleNewFolder } = useWorkbenchDataActions({
+    dialog,
+    runScispace,
+    stageUploadPayload,
+  });
 
   const {
     currentProjectName,
