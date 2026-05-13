@@ -10,7 +10,6 @@ import { buildInitialFiles, syncBashFiles } from "./terminal/terminalFs";
 import {
   clearVisibleScreenSequence,
   handleTerminalInput,
-  scrollTerminalToBottom,
   writeTerminalOutput,
 } from "./terminal/terminalIo";
 import {
@@ -18,7 +17,6 @@ import {
   resetEditableLine,
   stripScispacePrefix,
   tabSequence,
-  terminalCommandLineText,
   terminalControlCommandFromInput,
   terminalControlResult,
   terminalPrompt,
@@ -26,19 +24,10 @@ import {
   terminalReplScispaceCommandFromInput,
   terminalReplShellCommandMessage,
 } from "./terminal/terminalRepl";
-import {
-  applyTerminalLogicalMetrics,
-  calculateTerminalGrid,
-  measureTerminalMetrics,
-  terminalBottomInsetRows,
-  terminalLogicalRowHeight,
-} from "./terminal/terminalSizing";
-import type {
-  EditableBashShell,
-  TerminalFsState,
-  TerminalMode,
-  TerminalSize,
-} from "./terminal/terminalTypes";
+import { applyTerminalLogicalMetrics } from "./terminal/terminalSizing";
+import { useTerminalCommandLineRequest } from "./terminal/useTerminalCommandLineRequest";
+import { useTerminalSizing } from "./terminal/useTerminalSizing";
+import type { EditableBashShell, TerminalFsState, TerminalMode } from "./terminal/terminalTypes";
 
 export type { TerminalFsCommandResult, TerminalFsState } from "./terminal/terminalTypes";
 export { executeTerminalFsCommand } from "./terminal/terminalFs";
@@ -86,7 +75,6 @@ export function TerminalPanel() {
   });
   const viewportRef = useRef<HTMLDivElement>(null);
   const commandLineRequestIdRef = useRef<string | undefined>(undefined);
-  const [terminalSize, setTerminalSize] = useState<TerminalSize>();
   const files = useScispaceStore((state) => state.files);
   const datasets = useScispaceStore((state) => state.datasets);
   const workspaceScale = useScispaceStore((state) => state.viewport.scale);
@@ -98,37 +86,13 @@ export function TerminalPanel() {
 
   const initialFiles = useMemo(() => buildInitialFiles(files), [files]);
 
-  const syncTerminalSize = useCallback(() => {
-    const viewport = viewportRef.current;
-    const terminalInstance = terminalRef.current ?? ref.current?.instance;
-    if (!viewport) return;
-
-    const terminal = terminalInstance?.element;
-    applyTerminalLogicalMetrics(terminalInstance);
-    const metrics = measureTerminalMetrics(viewport, terminal, workspaceScale);
-    const { width, height } = viewport.getBoundingClientRect();
-    const { cols, rows } = calculateTerminalGrid({
-      viewportWidth: width,
-      viewportHeight: height,
-      charWidth: metrics.charWidth,
-      rowHeight: metrics.rowHeight,
-      horizontalPadding: metrics.horizontalPadding,
-      verticalPadding: metrics.verticalPadding + terminalLogicalRowHeight * terminalBottomInsetRows,
-      workspaceScale,
-    });
-    setTerminalSize((current) =>
-      current && current.cols === cols && current.rows === rows ? current : { cols, rows },
-    );
-    terminalInstance?.resize(cols, rows);
-    applyTerminalLogicalMetrics(terminalInstance);
-    resize(cols, rows);
-    scrollTerminalToBottom(terminal, viewport);
-  }, [ref, resize, workspaceScale]);
-
-  const scrollToBottom = useCallback(() => {
-    const terminalElement = terminalRef.current?.element ?? ref.current?.instance?.element;
-    scrollTerminalToBottom(terminalElement, viewportRef.current);
-  }, [ref]);
+  const { scrollToBottom, syncTerminalSize, terminalSize } = useTerminalSizing({
+    resize,
+    terminalRef,
+    viewportRef,
+    wtermRef: ref,
+    workspaceScale,
+  });
 
   const writeOutput = useCallback(
     (data: string) => {
@@ -342,27 +306,16 @@ export function TerminalPanel() {
     datasetsRef.current = datasets;
   }, [datasets]);
 
-  useEffect(() => {
-    if (!terminalCommandLineRequest || !shellRef.current) return;
-    if (commandLineRequestIdRef.current === terminalCommandLineRequest.id) return;
-    commandLineRequestIdRef.current = terminalCommandLineRequest.id;
-    const editableShell = shellRef.current as unknown as EditableBashShell;
-    if (editableShell._line) {
-      resetEditableLine(shellRef.current, "");
-      writeOutput(
-        `\r\x1b[2K${terminalPrompt(terminalModeRef.current.mode, terminalFsStateRef.current.cwd)}`,
-      );
-    }
-    void shellRef.current
-      .handleInput(terminalCommandLineText(terminalCommandLineRequest.command))
-      .then(() => {
-        if (terminalCommandLineRequest.execute) {
-          handleData("\r");
-          return;
-        }
-        scrollToBottom();
-      });
-  }, [handleData, scrollToBottom, terminalCommandLineRequest]);
+  useTerminalCommandLineRequest({
+    commandLineRequestIdRef,
+    handleData,
+    request: terminalCommandLineRequest,
+    scrollToBottom,
+    shellRef,
+    terminalFsStateRef,
+    terminalModeRef,
+    writeOutput,
+  });
 
   useEffect(() => {
     const viewport = viewportRef.current;
