@@ -1,7 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { datasetColumnIds } from "../domain/csv";
+import { useCallback, useMemo, useState } from "react";
 import { useScispaceStore } from "../store/scispaceStore";
 import { useContextMenu } from "./context-menu/ContextMenuProvider";
 import { DataTableSummary } from "./data-table/DataTableSummary";
@@ -16,20 +13,17 @@ import {
   setCellCommand,
 } from "./data-table/tableCommands";
 import {
-  defaultColumnWidth,
   formatCellValue,
-  minColumnWidth,
   plotSelectionFromTableSelection,
   positionInRange,
   rangeBoundsFromSelection,
-  rowHeight,
-  tableFallbackVisibleRows,
-  tableScrollHeight,
   tableWindowHeightForRows,
   type TableRangeBounds,
   type TableVisibleRows,
 } from "./data-table/tableModel";
 import { useTableContextMenu } from "./data-table/useTableContextMenu";
+import { useDataTableModel } from "./data-table/useDataTableModel";
+import { useDataTableViewport } from "./data-table/useDataTableViewport";
 import { useSelectedCellFocus } from "./data-table/useSelectedCellFocus";
 import { useTableMenuRegistration } from "./data-table/useTableMenuRegistration";
 import { useTableSelection } from "./data-table/useTableSelection";
@@ -46,7 +40,6 @@ export type { TableVisibleRows };
 export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWindowProps) {
   const dialog = useDialog();
   const { openContextMenu } = useContextMenu();
-  const dataset = useScispaceStore((state) => state.datasets.find((item) => item.id === datasetId));
   const updateWindow = useScispaceStore((state) => state.updateWindow);
   const focusWindow = useScispaceStore((state) => state.focusWindow);
   const runScispace = useScispaceStore((state) => state.runScispace);
@@ -57,34 +50,24 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     state.windows.find((window) => window.id === windowId),
   );
   const [visibleRows, setVisibleRows] = useState<TableVisibleRows>("auto");
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
-  const [tableViewportHeight, setTableViewportHeight] = useState(
-    tableScrollHeight(tableFallbackVisibleRows(visibleRows)),
-  );
-  const parentRef = useRef<HTMLDivElement>(null);
   const isLocked = Boolean(tableWindow?.locked);
-
-  const requestedColumnIds = useMemo(() => {
-    if (!dataset) return [];
-    return columnIds && columnIds.length > 0 ? columnIds : datasetColumnIds(dataset);
-  }, [columnIds, dataset]);
-
-  const visibleDatasetColumns = useMemo(() => {
-    if (!dataset) return [];
-    return dataset.columns.filter((column) => requestedColumnIds.includes(column.id));
-  }, [dataset, requestedColumnIds]);
-
-  const columns = useMemo(() => {
-    return visibleDatasetColumns.map((column) => ({
-      accessorKey: column.id,
-      header: column.name,
-      cell: (info: { getValue: () => unknown }) => formatCellValue(info.getValue()),
-    }));
-  }, [visibleDatasetColumns]);
-
-  const data = useMemo(() => dataset?.rows ?? [], [dataset]);
-  const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel() });
-  const rows = table.getRowModel().rows;
+  const { dataset, rows, table, visibleDatasetColumns } = useDataTableModel({
+    columnIds,
+    datasetId,
+  });
+  const {
+    getColumnWidth,
+    parentRef,
+    rowVirtualizer,
+    startColumnResize,
+    tableViewportHeight,
+    tableWidth,
+    visibleVirtualRows,
+  } = useDataTableViewport({
+    rowsLength: rows.length,
+    visibleDatasetColumns,
+    visibleRows,
+  });
   const {
     selectedColumn,
     selectedColumns,
@@ -103,59 +86,6 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     cancelEdit,
     handleCellKeyDown,
   } = useTableSelection({ rowsLength: rows.length, columns: visibleDatasetColumns });
-
-  useEffect(() => {
-    const element = parentRef.current;
-    if (!element) return;
-    if (typeof ResizeObserver === "undefined") {
-      if (element.clientHeight > 0) setTableViewportHeight(element.clientHeight);
-      return;
-    }
-    const observer = new ResizeObserver(([entry]) => {
-      const nextHeight = entry?.contentRect.height ?? 0;
-      if (nextHeight > 0) setTableViewportHeight(nextHeight);
-    });
-    observer.observe(element);
-    if (element.clientHeight > 0) setTableViewportHeight(element.clientHeight);
-    return () => observer.disconnect();
-  }, []);
-  const getColumnWidth = useCallback(
-    (columnId: string) => columnWidths[columnId] ?? defaultColumnWidth,
-    [columnWidths],
-  );
-  const tableWidth = useMemo(
-    () => visibleDatasetColumns.reduce((total, column) => total + getColumnWidth(column.id), 0),
-    [getColumnWidth, visibleDatasetColumns],
-  );
-  const rowVirtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => rowHeight,
-    initialRect: { width: 650, height: tableScrollHeight(tableFallbackVisibleRows(visibleRows)) },
-    overscan: 6,
-  });
-  const virtualRows = rowVirtualizer.getVirtualItems();
-  const visibleVirtualRows =
-    virtualRows.length > 0
-      ? virtualRows
-      : rows.slice(0, tableFallbackVisibleRows(visibleRows) + 6).map((_, index) => ({
-          index,
-          start: index * rowHeight,
-        }));
-
-  const startColumnResize = (columnId: string, startX: number) => {
-    const startWidth = getColumnWidth(columnId);
-    const handlePointerMove = (event: PointerEvent) => {
-      const nextWidth = Math.max(minColumnWidth, startWidth + event.clientX - startX);
-      setColumnWidths((current) => ({ ...current, [columnId]: nextWidth }));
-    };
-    const handlePointerUp = () => {
-      document.removeEventListener("pointermove", handlePointerMove);
-      document.removeEventListener("pointerup", handlePointerUp);
-    };
-    document.addEventListener("pointermove", handlePointerMove);
-    document.addEventListener("pointerup", handlePointerUp);
-  };
 
   const cellColumnIndex = useCallback(
     (column: string): number => visibleDatasetColumns.findIndex((item) => item.id === column),
