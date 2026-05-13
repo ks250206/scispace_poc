@@ -5,16 +5,11 @@ import { useContextMenu, type ContextMenuItem } from "./context-menu/ContextMenu
 import { useDialog } from "./dialog/DialogProvider";
 import { useScispaceStore } from "../store/scispaceStore";
 import { ProjectPicker } from "./workbench/ProjectPicker";
-import {
-  ToolbarMenu,
-  toContextMenuItem,
-  type ToolbarMenuItem,
-  type ToolbarMenuProps,
-} from "./workbench/ToolbarMenu";
+import { ToolbarMenu, toContextMenuItem, type ToolbarMenuProps } from "./workbench/ToolbarMenu";
 import { useActivePlotActions } from "./workbench/useActivePlotActions";
 import { useWorkspacePanZoom } from "./workbench/useWorkspacePanZoom";
 import { useWorkbenchWindowMenu } from "./workbench/useWorkbenchWindowMenu";
-import { emptyWindowMenuItem } from "./workbench/windowMenuItems";
+import { useProjectMenuActions } from "./workbench/useProjectMenuActions";
 import { centerViewport, quoteCommandArg } from "./workbench/workbenchView";
 
 export function Workbench() {
@@ -132,78 +127,29 @@ export function Workbench() {
     if (name) void runScispace(`file-mkdir ~/raw/${quoteCommandArg(name)}`, { source: "gui" });
   };
 
-  const handleNewProject = async () => {
-    const confirmed = await dialog.confirm({
-      title: "Create new project",
-      message: "Current project will be saved first.",
-      confirmLabel: "Create",
-    });
-    if (!confirmed) return;
-    const name = await dialog.prompt({
-      title: "Project name",
-      defaultValue: `Untitled Project ${projects.length + 1}`,
-      confirmLabel: "Create",
-    });
-    void createNewProject(name ?? undefined);
-  };
-
-  const handleSaveProjectAs = async () => {
-    const currentName =
-      projects.find((project) => project.id === currentProjectId)?.name ?? "Main Project";
-    const name = await dialog.prompt({
-      title: "Project name",
-      defaultValue: currentName,
-      confirmLabel: "Save",
-    });
-    if (name !== null) void saveCurrentProject(name);
-  };
-
-  const handleDeleteProject = async (projectId = currentProjectId) => {
-    if (!projectId) return;
-    const currentName =
-      projects.find((project) => project.id === projectId)?.name ?? "current project";
-    const confirmed = await dialog.confirm({
-      title: "Delete project",
-      message: `Delete project "${currentName}"?`,
-      confirmLabel: "Delete",
-      tone: "destructive",
-    });
-    if (confirmed) void deleteProject(projectId);
-  };
-
-  const handleExportProject = async () => {
-    const json = await exportCurrentProjectJson();
-    const currentName =
-      projects.find((project) => project.id === currentProjectId)?.name ?? "scispace-project";
-    const link = document.createElement("a");
-    link.href = `data:application/json;charset=utf-8,${encodeURIComponent(json)}`;
-    link.download = `${currentName.replace(/[^\w.-]+/g, "_") || "scispace-project"}.scispace.json`;
-    link.click();
-  };
-
-  const handleImportProjectFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = "";
-    if (!file) return;
-    await importProjectJson(await file.text());
-  };
-
-  const handleSwitchProject = async (projectId: string) => {
-    if (!projectId || projectId === currentProjectId) return;
-    if (
-      projectDirty &&
-      !(await dialog.confirm({
-        title: "Switch project",
-        message: "Switch projects and save current unsaved changes?",
-        confirmLabel: "Switch",
-      }))
-    ) {
-      return;
-    }
-    void switchProject(projectId);
-  };
-  const currentProjectName =
-    projects.find((project) => project.id === currentProjectId)?.name ?? "No Project";
+  const {
+    currentProjectName,
+    handleDeleteProject,
+    handleExportProject,
+    handleImportProjectFile,
+    handleNewProject,
+    handleSaveProjectAs,
+    handleSwitchProject,
+    openProjectImportFile,
+    recentProjectItems,
+  } = useProjectMenuActions({
+    createNewProject,
+    currentProjectId,
+    deleteProject,
+    dialog,
+    exportCurrentProjectJson,
+    importProjectJson,
+    projectDirty,
+    projectImportInputRef,
+    projects,
+    saveCurrentProject,
+    switchProject,
+  });
 
   const activeWindow = windows.find((window) => window.id === activeWindowId);
   const activeTableMenuState =
@@ -234,18 +180,6 @@ export function Workbench() {
     toggleUtilityWindow,
     windows,
   });
-  const recentProjectItems: ToolbarMenuItem[] =
-    projects.length > 0
-      ? projects.map((project) => ({
-          label: project.name,
-          active: project.id === currentProjectId,
-          onSelect: () => void handleSwitchProject(project.id),
-          rightLabel: "×",
-          rightAriaLabel: `Delete project ${project.name}`,
-          onRightSelect: () => void handleDeleteProject(project.id),
-        }))
-      : [emptyWindowMenuItem()];
-
   const toolbarMenus: ToolbarMenuProps[] = [
     {
       label: "Project",
@@ -263,7 +197,7 @@ export function Workbench() {
         { kind: "separator" },
         { kind: "submenu", label: "Recent Projects", items: recentProjectItems },
         { kind: "separator" },
-        { label: "Import Project", onSelect: () => projectImportInputRef.current?.click() },
+        { label: "Import Project", onSelect: openProjectImportFile },
         { label: "Export Project", onSelect: () => void handleExportProject() },
       ],
     },
