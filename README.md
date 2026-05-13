@@ -1,6 +1,8 @@
-# SciSpace PoC
+# SciSpace
 
-Vite+ / React based scientific data workspace prototype.
+SciSpace is a Vite+ / React based scientific data workspace prototype. It provides a Figma-like
+canvas with movable windows for data browsing, tabular editing, plotting, command history, and a
+SciSpace REPL terminal.
 
 ## Development
 
@@ -35,3 +37,7 @@ The executable starts a local server at `http://127.0.0.1:4173/` by default. The
 ```sh
 ./bin/scispace --port 4183
 ```
+
+## License
+
+MIT License. See [LICENSE](./LICENSE).
