@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vp dev",
     "build": "tsc -b && vp build",
+    "binary:build": "pnpm build && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o bin/scispace .",
+    "binary:build:windows-x64": "pnpm build && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o bin/scispace-windows-x64.exe .",
     "lint": "eslint .",
     "test": "vp test",
     "coverage": "vp test --coverage",
