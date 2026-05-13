@@ -3,8 +3,6 @@ import { CanvasWindow } from "./CanvasWindow";
 import { uploadOpenCommand } from "./DataBrowser";
 import { useContextMenu, type ContextMenuItem } from "./context-menu/ContextMenuProvider";
 import { useDialog } from "./dialog/DialogProvider";
-import { buildPlotSvg, safePlotFileName, svgDataUrl } from "./plotExport";
-import type { WorkspaceWindow } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
 import { ProjectPicker } from "./workbench/ProjectPicker";
 import {
@@ -13,8 +11,10 @@ import {
   type ToolbarMenuItem,
   type ToolbarMenuProps,
 } from "./workbench/ToolbarMenu";
-import { emptyWindowMenuItem, windowMenuItem } from "./workbench/windowMenuItems";
+import { useActivePlotActions } from "./workbench/useActivePlotActions";
 import { useWorkspacePanZoom } from "./workbench/useWorkspacePanZoom";
+import { useWorkbenchWindowMenu } from "./workbench/useWorkbenchWindowMenu";
+import { emptyWindowMenuItem } from "./workbench/windowMenuItems";
 import { centerViewport, quoteCommandArg } from "./workbench/workbenchView";
 
 export function Workbench() {
@@ -211,129 +211,29 @@ export function Workbench() {
     (!activeWindow || tableMenuState?.windowId === activeWindow.id)
       ? tableMenuState
       : undefined;
-  const activePlotSpec = plotSpecs.find((plot) => plot.id === currentPlotId) ?? plotSpecs[0];
-  const activePlotDataset = datasets.find((dataset) => dataset.id === activePlotSpec?.source);
-  const hasResolvablePlotDataset =
-    Boolean(activePlotDataset) || Boolean(resolveActivePlotDatasetFromStore());
-  const resolveActivePlot = () => {
-    const state = useScispaceStore.getState();
-    const spec =
-      state.plotSpecs.find((plot) => plot.id === state.currentPlotId) ?? state.plotSpecs[0];
-    return {
-      spec,
-      dataset: state.datasets.find((dataset) => dataset.id === spec?.source),
-      registeredActions:
-        spec && state.plotMenuState?.plotId === spec.id ? state.plotMenuState.actions : undefined,
-    };
-  };
-  function resolveActivePlotDatasetFromStore() {
-    const state = useScispaceStore.getState();
-    const spec =
-      state.plotSpecs.find((plot) => plot.id === state.currentPlotId) ?? state.plotSpecs[0];
-    return state.datasets.find((dataset) => dataset.id === spec?.source);
-  }
-  const clickDownload = (href: string, download: string) => {
-    const link = document.createElement("a");
-    link.href = href;
-    link.download = download;
-    link.click();
-  };
-  const copyActivePlotSchema = async () => {
-    const { spec } = resolveActivePlot();
-    if (!spec) return;
-    const result = await runScispace(`plot-schema ${spec.id}`, { source: "gui" });
-    if (result.kind !== "error") await navigator.clipboard?.writeText(result.output);
-  };
-  const openActivePlotConfig = () => {
-    const { spec, registeredActions } = resolveActivePlot();
-    if (registeredActions) {
-      registeredActions.openConfig();
-      return;
-    }
-    if (spec) openPlotConfig(spec.id);
-  };
-  const openActivePlotSchemaApply = () => {
-    const { spec, registeredActions } = resolveActivePlot();
-    if (registeredActions) {
-      registeredActions.applySchema();
-      return;
-    }
-    if (spec) openPlotSchemaApplyWindow(spec.id);
-  };
-  const exportActivePlotPng = () => {
-    const { spec, registeredActions } = resolveActivePlot();
-    if (registeredActions) {
-      registeredActions.exportPng();
-      return;
-    }
-    if (!spec) return;
-    const canvas = document.querySelector<HTMLCanvasElement>(".plot-window canvas");
-    if (!canvas) return;
-    clickDownload(canvas.toDataURL("image/png"), safePlotFileName(spec.title, "png"));
-  };
-  const exportActivePlotSvg = () => {
-    const { spec, dataset } = resolveActivePlot();
-    if (!spec || !dataset) return;
-    clickDownload(svgDataUrl(buildPlotSvg(spec, dataset)), safePlotFileName(spec.title, "svg"));
-  };
-  const windowsByKind = {
-    browser: windows.filter((window) => window.kind === "browser"),
-    terminal: windows.filter((window) => window.kind === "terminal"),
-    history: windows.filter((window) => window.kind === "history"),
-    help: windows.filter((window) => window.kind === "help"),
-    plotConfig: windows.filter((window) => window.kind === "plot-config"),
-    tables: windows.filter((window) => window.kind === "table"),
-    graphs: windows.filter((window) => window.kind === "plot"),
-    imports: windows.filter((window) => window.kind === "import"),
-    other: windows.filter(
-      (window) =>
-        ![
-          "browser",
-          "terminal",
-          "history",
-          "help",
-          "plot-config",
-          "table",
-          "plot",
-          "import",
-        ].includes(window.kind),
-    ),
-  };
-  const windowItems = (items: WorkspaceWindow[]): ToolbarMenuItem[] =>
-    items.length
-      ? items.map((window) => windowMenuItem(window, activeWindowId, focusWindow, closeWindow))
-      : [emptyWindowMenuItem()];
-  const directWindowItems = [
-    {
-      kind: "browser" as const,
-      label: "Data Browser",
-      visible: windowsByKind.browser.length > 0,
-    },
-    {
-      kind: "terminal" as const,
-      label: "Terminal",
-      visible: windowsByKind.terminal.length > 0,
-    },
-    {
-      kind: "history" as const,
-      label: "Command History",
-      visible: windowsByKind.history.length > 0,
-    },
-    {
-      kind: "help" as const,
-      label: "SciSpace Help",
-      visible: windowsByKind.help.length > 0,
-    },
-  ].map(
-    (window): ToolbarMenuItem => ({
-      label: window.label,
-      active: window.visible,
-      onSelect: () => toggleUtilityWindow(window.kind),
-    }),
-  );
-  const directPlotConfigItems = [...windowsByKind.plotConfig].map((window) =>
-    windowMenuItem(window, activeWindowId, focusWindow, closeWindow),
-  );
+  const {
+    activePlotSpec,
+    copyActivePlotSchema,
+    exportActivePlotPng,
+    exportActivePlotSvg,
+    hasResolvablePlotDataset,
+    openActivePlotConfig,
+    openActivePlotSchemaApply,
+  } = useActivePlotActions({
+    currentPlotId,
+    datasets,
+    openPlotConfig,
+    openPlotSchemaApplyWindow,
+    plotSpecs,
+    runScispace,
+  });
+  const { directPlotConfigItems, directWindowItems, windowSubmenuItems } = useWorkbenchWindowMenu({
+    activeWindowId,
+    closeWindow,
+    focusWindow,
+    toggleUtilityWindow,
+    windows,
+  });
   const recentProjectItems: ToolbarMenuItem[] =
     projects.length > 0
       ? projects.map((project) => ({
@@ -540,10 +440,10 @@ export function Workbench() {
         ...directWindowItems,
         ...directPlotConfigItems,
         { kind: "separator" },
-        { kind: "submenu", label: "Tables", items: windowItems(windowsByKind.tables) },
-        { kind: "submenu", label: "Graphs", items: windowItems(windowsByKind.graphs) },
-        { kind: "submenu", label: "Imports", items: windowItems(windowsByKind.imports) },
-        { kind: "submenu", label: "Other Windows", items: windowItems(windowsByKind.other) },
+        { kind: "submenu", label: "Tables", items: windowSubmenuItems.tables },
+        { kind: "submenu", label: "Graphs", items: windowSubmenuItems.graphs },
+        { kind: "submenu", label: "Imports", items: windowSubmenuItems.imports },
+        { kind: "submenu", label: "Other Windows", items: windowSubmenuItems.other },
       ],
     },
   ];
