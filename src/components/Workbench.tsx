@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { CanvasWindow } from "./CanvasWindow";
-import { useContextMenu, type ContextMenuItem } from "./context-menu/ContextMenuProvider";
+import { useContextMenu } from "./context-menu/ContextMenuProvider";
 import { useDialog } from "./dialog/DialogProvider";
 import { useScispaceStore } from "../store/scispaceStore";
 import { ProjectPicker } from "./workbench/ProjectPicker";
-import { ToolbarMenu, toContextMenuItem, type ToolbarMenuProps } from "./workbench/ToolbarMenu";
+import { ToolbarMenu } from "./workbench/ToolbarMenu";
 import { useActivePlotActions } from "./workbench/useActivePlotActions";
 import { useWorkspacePanZoom } from "./workbench/useWorkspacePanZoom";
 import { useWorkbenchWindowMenu } from "./workbench/useWorkbenchWindowMenu";
 import { useProjectMenuActions } from "./workbench/useProjectMenuActions";
 import { useWorkbenchDataActions } from "./workbench/useWorkbenchDataActions";
-import { centerViewport } from "./workbench/workbenchView";
+import { useWorkbenchToolbarMenus } from "./workbench/useWorkbenchToolbarMenus";
 
 export function Workbench() {
   const dialog = useDialog();
@@ -157,213 +157,44 @@ export function Workbench() {
     toggleUtilityWindow,
     windows,
   });
-  const toolbarMenus: ToolbarMenuProps[] = [
-    {
-      label: "Project",
-      openMenu: openToolbarMenu,
-      setOpenMenu: setOpenToolbarMenu,
-      items: [
-        { label: "New Project", onSelect: () => void handleNewProject() },
-        { label: "Save", onSelect: () => void saveCurrentProject() },
-        { label: "Save As...", onSelect: () => void handleSaveProjectAs() },
-        {
-          label: "Delete Project",
-          onSelect: () => void handleDeleteProject(),
-          disabled: !currentProjectId,
-        },
-        { kind: "separator" },
-        { kind: "submenu", label: "Recent Projects", items: recentProjectItems },
-        { kind: "separator" },
-        { label: "Import Project", onSelect: openProjectImportFile },
-        { label: "Export Project", onSelect: () => void handleExportProject() },
-      ],
-    },
-    {
-      label: "Data",
-      openMenu: openToolbarMenu,
-      setOpenMenu: setOpenToolbarMenu,
-      items: [
-        { label: "Load Data", onSelect: () => dataLoadInputRef.current?.click() },
-        { label: "New Dataset", onSelect: openNewDatasetWindow },
-        {
-          label: "Calculate Column",
-          onSelect: () => openDatasetCalcWindow(),
-          disabled: datasets.length === 0,
-        },
-        { label: "New Folder", onSelect: () => void handleNewFolder() },
-      ],
-    },
-    {
-      label: "Table",
-      openMenu: openToolbarMenu,
-      setOpenMenu: setOpenToolbarMenu,
-      items: [
-        {
-          label: "Copy TSV",
-          onSelect: () => activeTableMenuState?.actions.copySelectedRange(),
-          disabled: !activeTableMenuState?.hasSelectedRange,
-        },
-        {
-          label: "Delete selected cells",
-          onSelect: () => activeTableMenuState?.actions.clearSelectedRange(),
-          disabled: !activeTableMenuState?.hasSelectedRange || activeTableMenuState?.isLocked,
-        },
-        {
-          label: "Fill down",
-          onSelect: () => activeTableMenuState?.actions.fillDownSelectedRange(),
-          disabled: !activeTableMenuState?.canFillDownRange || activeTableMenuState?.isLocked,
-        },
-        {
-          label: "Plot selection",
-          onSelect: () => activeTableMenuState?.actions.plotSelectedColumns(),
-          disabled: !activeTableMenuState?.canPlotSelection,
-        },
-        {
-          label: "Delete row",
-          onSelect: () => activeTableMenuState?.actions.deleteSelectedRow(),
-          disabled: !activeTableMenuState?.hasSelectedCell || activeTableMenuState?.isLocked,
-        },
-        {
-          label: "Delete column",
-          onSelect: () => activeTableMenuState?.actions.deleteSelectedColumn(),
-          disabled: !activeTableMenuState?.hasSelectedColumn || activeTableMenuState?.isLocked,
-        },
-        {
-          label: "Insert column",
-          onSelect: () => activeTableMenuState?.actions.insertColumn(),
-          disabled: !activeTableMenuState || activeTableMenuState.isLocked,
-        },
-        {
-          label: "Calculate column",
-          onSelect: () => activeTableMenuState?.actions.calculateColumn(),
-          disabled: !activeTableMenuState || activeTableMenuState.isLocked,
-        },
-        {
-          label: activeTableMenuState?.isLocked ? "Unlock table" : "Lock table",
-          onSelect: () => activeTableMenuState?.actions.toggleLock(),
-          disabled: !activeTableMenuState,
-        },
-        {
-          kind: "submenu",
-          label: "Rows",
-          disabled: !activeTableMenuState,
-          items: [
-            {
-              label: "Rows Auto",
-              onSelect: () => activeTableMenuState?.actions.setVisibleRows("auto"),
-              disabled: !activeTableMenuState || activeTableMenuState.visibleRows === "auto",
-            },
-            {
-              label: "Rows 10",
-              onSelect: () => activeTableMenuState?.actions.setVisibleRows(10),
-              disabled: !activeTableMenuState || activeTableMenuState.visibleRows === 10,
-            },
-            {
-              label: "Rows 20",
-              onSelect: () => activeTableMenuState?.actions.setVisibleRows(20),
-              disabled: !activeTableMenuState || activeTableMenuState.visibleRows === 20,
-            },
-            {
-              label: "Rows 50",
-              onSelect: () => activeTableMenuState?.actions.setVisibleRows(50),
-              disabled: !activeTableMenuState || activeTableMenuState.visibleRows === 50,
-            },
-          ],
-        },
-      ],
-    },
-    {
-      label: "Plot",
-      openMenu: openToolbarMenu,
-      setOpenMenu: setOpenToolbarMenu,
-      items: [
-        {
-          label: "New Plot",
-          onSelect: openNewPlotWindow,
-          disabled: datasets.length === 0,
-        },
-        {
-          label: "Plot Config",
-          onSelect: openActivePlotConfig,
-        },
-        {
-          label: "Copy plot schema",
-          onSelect: () => void copyActivePlotSchema(),
-        },
-        {
-          label: "Apply plot schema",
-          onSelect: openActivePlotSchemaApply,
-          disabled: !activePlotSpec,
-        },
-        {
-          label: "Export plot PNG",
-          onSelect: exportActivePlotPng,
-        },
-        {
-          label: "Export plot SVG",
-          onSelect: exportActivePlotSvg,
-          disabled: !hasResolvablePlotDataset,
-        },
-      ],
-    },
-    {
-      label: "Edit",
-      openMenu: openToolbarMenu,
-      setOpenMenu: setOpenToolbarMenu,
-      items: [
-        { label: "Undo", onSelect: () => void undo(), disabled: undoStackLength === 0 },
-        { label: "Redo", onSelect: () => void redo(), disabled: redoStackLength === 0 },
-      ],
-    },
-    {
-      label: "View",
-      openMenu: openToolbarMenu,
-      setOpenMenu: setOpenToolbarMenu,
-      items: [
-        { label: "Reset View", onSelect: () => setViewport(centerViewport) },
-        { label: `Zoom ${Math.round(viewport.scale * 100)}%`, disabled: true },
-      ],
-    },
-    {
-      label: "Help",
-      openMenu: openToolbarMenu,
-      setOpenMenu: setOpenToolbarMenu,
-      items: [
-        { label: "SciSpace Help", onSelect: openHelpWindow },
-        { label: "Command Help", onSelect: openHelpWindow },
-        { label: "Keyboard Shortcuts", onSelect: openHelpWindow },
-      ],
-    },
-    {
-      label: "Windows",
-      openMenu: openToolbarMenu,
-      setOpenMenu: setOpenToolbarMenu,
-      items: [
-        {
-          label: "Bring to Front",
-          onSelect: () => {
-            if (activeWindowId) focusWindow(activeWindowId);
-          },
-          disabled: !activeWindowId,
-        },
-        { label: "Send to Back", disabled: true },
-        { kind: "separator" },
-        ...directWindowItems,
-        ...directPlotConfigItems,
-        { kind: "separator" },
-        { kind: "submenu", label: "Tables", items: windowSubmenuItems.tables },
-        { kind: "submenu", label: "Graphs", items: windowSubmenuItems.graphs },
-        { kind: "submenu", label: "Imports", items: windowSubmenuItems.imports },
-        { kind: "submenu", label: "Other Windows", items: windowSubmenuItems.other },
-      ],
-    },
-  ];
-
-  const backgroundContextItems: ContextMenuItem[] = toolbarMenus.map((menu) => ({
-    kind: "submenu",
-    label: menu.label,
-    items: menu.items.map(toContextMenuItem),
-  }));
+  const { backgroundContextItems, toolbarMenus } = useWorkbenchToolbarMenus({
+    activePlotSpec,
+    activeTableMenuState,
+    activeWindowId,
+    copyActivePlotSchema,
+    currentProjectId,
+    datasets,
+    directPlotConfigItems,
+    directWindowItems,
+    exportActivePlotPng,
+    exportActivePlotSvg,
+    focusWindow,
+    handleDeleteProject,
+    handleExportProject,
+    handleNewFolder,
+    handleNewProject,
+    handleSaveProjectAs,
+    hasResolvablePlotDataset,
+    openActivePlotConfig,
+    openActivePlotSchemaApply,
+    openDatasetCalcWindow,
+    openHelpWindow,
+    openMenu: openToolbarMenu,
+    openNewDatasetWindow,
+    openNewPlotWindow,
+    openProjectImportFile,
+    redo,
+    redoStackLength,
+    recentProjectItems,
+    saveCurrentProject,
+    setOpenMenu: setOpenToolbarMenu,
+    setViewport,
+    showDataLoadPicker: () => dataLoadInputRef.current?.click(),
+    undo,
+    undoStackLength,
+    viewport,
+    windowSubmenuItems,
+  });
 
   const handleBackgroundContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
