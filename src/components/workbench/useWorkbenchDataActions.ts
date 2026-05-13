@@ -23,7 +23,7 @@ export const useWorkbenchDataActions = ({
     }
   };
 
-  const handleDrop = async (event: DragEvent<HTMLDivElement>) => {
+  const handleDrop = async (event: DragEvent<HTMLElement>) => {
     event.preventDefault();
     await openFiles(Array.from(event.dataTransfer.files));
   };

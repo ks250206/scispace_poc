@@ -1,16 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { CanvasWindow } from "./CanvasWindow";
 import { useContextMenu } from "./context-menu/ContextMenuProvider";
 import { useDialog } from "./dialog/DialogProvider";
 import { useScispaceStore } from "../store/scispaceStore";
-import { ProjectPicker } from "./workbench/ProjectPicker";
-import { ToolbarMenu } from "./workbench/ToolbarMenu";
 import { useActivePlotActions } from "./workbench/useActivePlotActions";
 import { useWorkspacePanZoom } from "./workbench/useWorkspacePanZoom";
 import { useWorkbenchWindowMenu } from "./workbench/useWorkbenchWindowMenu";
 import { useProjectMenuActions } from "./workbench/useProjectMenuActions";
 import { useWorkbenchDataActions } from "./workbench/useWorkbenchDataActions";
 import { useWorkbenchToolbarMenus } from "./workbench/useWorkbenchToolbarMenus";
+import { WorkbenchTopbar } from "./workbench/WorkbenchTopbar";
+import { WorkspaceCanvas } from "./workbench/WorkspaceCanvas";
 
 export function Workbench() {
   const dialog = useDialog();
@@ -217,66 +216,35 @@ export function Workbench() {
 
   return (
     <main className="workbench" onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}>
-      <div className="topbar">
-        <div className="topbar-left">
-          <div className="brand">SciSpace</div>
-        </div>
-        <nav className="toolbar-menus" aria-label="SciSpace tools">
-          {toolbarMenus.map((menu) => (
-            <ToolbarMenu key={menu.label} {...menu} />
-          ))}
-        </nav>
-        <div className="topbar-right">
-          <ProjectPicker
-            currentProjectId={currentProjectId}
-            currentProjectName={currentProjectName}
-            onDeleteProject={(projectId) => void handleDeleteProject(projectId)}
-            onSwitchProject={(projectId) => void handleSwitchProject(projectId)}
-            open={projectSelectorOpen}
-            projects={projects}
-            projectSelectorRef={projectSelectorRef}
-            setOpen={setProjectSelectorOpen}
-            setOpenToolbarMenu={setOpenToolbarMenu}
-          />
-          {projectDirty ? <span className="project-dirty">Unsaved</span> : null}
-          <span className="zoom-control">Zoom {Math.round(viewport.scale * 100)}%</span>
-        </div>
-        <div className="toolbar-hidden-inputs">
-          <input
-            ref={projectImportInputRef}
-            aria-label="Import project file"
-            className="visually-hidden"
-            type="file"
-            accept="application/json,.json,.scispace.json"
-            onChange={(event) => void handleImportProjectFile(event)}
-          />
-          <input
-            ref={dataLoadInputRef}
-            aria-label="Load toolbar data files"
-            className="visually-hidden"
-            type="file"
-            multiple
-            onChange={(event) => void handleLoadDataFiles(event)}
-          />
-        </div>
-      </div>
-      <section
-        className="canvas-shell"
-        data-grid-mode={viewport.scale < 0.5 ? "overview" : "dots"}
-        data-panning={isPanning}
-        style={canvasShellStyle}
-        onWheel={handleWheel}
-        onPointerDown={handlePointerDown}
-        onContextMenu={handleBackgroundContextMenu}
-        onDragOver={(event) => event.preventDefault()}
-        onDrop={handleDrop}
-      >
-        <div className="workspace-plane" style={canvasStyle}>
-          {windows.map((window) => (
-            <CanvasWindow key={window.id} window={window} />
-          ))}
-        </div>
-      </section>
+      <WorkbenchTopbar
+        currentProjectId={currentProjectId}
+        currentProjectName={currentProjectName}
+        dataLoadInputRef={dataLoadInputRef}
+        handleDeleteProject={handleDeleteProject}
+        handleImportProjectFile={handleImportProjectFile}
+        handleLoadDataFiles={handleLoadDataFiles}
+        projectDirty={projectDirty}
+        projectImportInputRef={projectImportInputRef}
+        projectSelectorOpen={projectSelectorOpen}
+        projectSelectorRef={projectSelectorRef}
+        projects={projects}
+        setOpenToolbarMenu={setOpenToolbarMenu}
+        setProjectSelectorOpen={setProjectSelectorOpen}
+        switchProject={handleSwitchProject}
+        toolbarMenus={toolbarMenus}
+        zoomPercent={Math.round(viewport.scale * 100)}
+      />
+      <WorkspaceCanvas
+        canvasShellStyle={canvasShellStyle}
+        canvasStyle={canvasStyle}
+        handleBackgroundContextMenu={handleBackgroundContextMenu}
+        handleDrop={handleDrop}
+        handlePointerDown={handlePointerDown}
+        handleWheel={handleWheel}
+        isPanning={isPanning}
+        viewport={viewport}
+        windows={windows}
+      />
     </main>
   );
 }
