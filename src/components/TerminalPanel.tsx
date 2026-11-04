@@ -205,10 +205,11 @@ export function TerminalPanel() {
             source: "terminal",
           });
           scrollToBottom();
+          const failed = result.kind === "error";
           return {
-            stdout: `${result.output}\n`,
-            stderr: result.kind === "error" ? `${result.output}\n` : "",
-            exitCode: result.kind === "error" ? 1 : 0,
+            stdout: failed ? "" : `${result.output}\n`,
+            stderr: failed ? `${result.output}\n` : "",
+            exitCode: failed ? 1 : 0,
           };
         }),
       );
