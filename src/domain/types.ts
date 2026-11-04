@@ -129,6 +129,7 @@ export interface PlotPaddingSpec {
 
 export interface PlotAxisSpec {
   label: string;
+  mirror?: boolean;
   range: { mode: "auto" | "manual"; min?: number; max?: number };
   ticks: {
     mode: "auto" | "manual";
@@ -136,6 +137,7 @@ export interface PlotAxisSpec {
     orientation: PlotTickDirection;
     length: number;
     minor: boolean;
+    mirror?: boolean;
   };
   scale: PlotScale;
   labelStyle: PlotTextStyle;

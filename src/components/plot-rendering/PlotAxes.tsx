@@ -42,14 +42,38 @@ export function PlotAxisFigure({ axis, spec, geometry, scale }: AxisProps) {
   const horizontal = axis === "x";
   const { left, top, right, bottom } = geometry;
   const { major, minor } = plotTicks(settings, scale, axis);
-  const tickLength =
+  const mirrorTicks = settings.mirror || settings.ticks.mirror;
+  const mirroredEdge = horizontal ? top : right;
+  const titleHeight = spec.title ? spec.font.size * 1.65 : 0;
+  const mirroredRoom = horizontal
+    ? top - spec.padding.top - titleHeight
+    : spec.size.width - spec.padding.right - right;
+  const requestedLength =
     settings.ticks.orientation === "none"
       ? 0
       : settings.ticks.length * (settings.ticks.orientation === "in" ? -1 : 1);
+  const tickLength =
+    mirrorTicks && requestedLength > 0
+      ? Math.min(requestedLength, Math.max(0, mirroredRoom - 1))
+      : requestedLength;
   const labelOffset = Math.max(0, tickLength) + settings.gap;
   const labelPosition = axisLabelPosition(spec, settings, geometry, horizontal);
   const titleX = horizontal ? (left + right) / 2 : labelPosition;
   const titleY = horizontal ? labelPosition : (top + bottom) / 2;
+  const valueSpace = horizontal
+    ? settings.valueStyle.size
+    : major.reduce(
+        (width, { label }) => Math.max(width, label.length * settings.valueStyle.size * 0.66),
+        0,
+      );
+  const halfTitle = settings.labelStyle.size / 2;
+  const mirrorTitleDistance = Math.max(
+    Math.min(halfTitle, mirroredRoom / 2),
+    Math.min(
+      mirroredRoom - halfTitle,
+      Math.max(settings.size, labelOffset + valueSpace) + settings.labelGap + halfTitle,
+    ),
+  );
 
   const gridLine = (position: number, key: string | number, dashed = false) => (
     <line
@@ -60,6 +84,38 @@ export function PlotAxisFigure({ axis, spec, geometry, scale }: AxisProps) {
       y2={horizontal ? bottom : position}
       strokeDasharray={dashed ? "2 3" : undefined}
     />
+  );
+
+  const tickMark = (position: number, mirrored = false) => {
+    const edge = horizontal ? (mirrored ? top : bottom) : mirrored ? right : left;
+    const end = edge + tickLength * (horizontal === mirrored ? -1 : 1);
+    return (
+      <line
+        data-mirrored-tick={mirrored ? "" : undefined}
+        x1={horizontal ? position : edge}
+        x2={horizontal ? position : end}
+        y1={horizontal ? edge : position}
+        y2={horizontal ? end : position}
+        stroke={settings.tickColor}
+      />
+    );
+  };
+
+  const axisTitle = (x: number, y: number, mirrored = false) => (
+    <text
+      x={x}
+      y={y}
+      fill={settings.color}
+      fontFamily={settings.labelStyle.family}
+      fontSize={settings.labelStyle.size}
+      textAnchor="middle"
+      dominantBaseline="central"
+      transform={horizontal ? undefined : `rotate(${mirrored ? 90 : -90} ${x} ${y})`}
+      data-axis-label={mirrored ? undefined : axis}
+      data-mirrored-axis-label={mirrored ? axis : undefined}
+    >
+      {settings.label}
+    </text>
   );
 
   return (
@@ -83,6 +139,16 @@ export function PlotAxisFigure({ axis, spec, geometry, scale }: AxisProps) {
           stroke={settings.color}
         />
       ) : null}
+      {settings.mirror && spec.border && (
+        <line
+          data-mirrored-axis={axis}
+          x1={horizontal ? left : right}
+          x2={right}
+          y1={top}
+          y2={horizontal ? top : bottom}
+          stroke={settings.color}
+        />
+      )}
       <g
         fill={settings.color}
         fontFamily={settings.valueStyle.family}
@@ -92,15 +158,8 @@ export function PlotAxisFigure({ axis, spec, geometry, scale }: AxisProps) {
       >
         {major.map(({ value, position, label }) => (
           <g key={value} data-tick-value={value}>
-            {tickLength !== 0 ? (
-              <line
-                x1={horizontal ? position : left}
-                x2={horizontal ? position : left - tickLength}
-                y1={horizontal ? bottom : position}
-                y2={horizontal ? bottom + tickLength : position}
-                stroke={settings.tickColor}
-              />
-            ) : null}
+            {tickLength !== 0 && tickMark(position)}
+            {mirrorTicks && tickLength !== 0 && tickMark(position, true)}
             {label ? (
               <text
                 x={horizontal ? position : left - labelOffset}
@@ -114,24 +173,32 @@ export function PlotAxisFigure({ axis, spec, geometry, scale }: AxisProps) {
                 {label}
               </text>
             ) : null}
+            {settings.mirror && label && (
+              <text
+                data-mirrored-tick-label=""
+                x={horizontal ? position : mirroredEdge + labelOffset}
+                y={horizontal ? mirroredEdge - labelOffset : position}
+                textAnchor={
+                  horizontal
+                    ? xTickAnchor(position, label, spec.size.width, settings.valueStyle.size)
+                    : "start"
+                }
+                dominantBaseline={horizontal ? "auto" : "central"}
+              >
+                {label}
+              </text>
+            )}
           </g>
         ))}
       </g>
-      {settings.label ? (
-        <text
-          x={titleX}
-          y={titleY}
-          fill={settings.color}
-          fontFamily={settings.labelStyle.family}
-          fontSize={settings.labelStyle.size}
-          textAnchor="middle"
-          dominantBaseline="central"
-          transform={horizontal ? undefined : `rotate(-90 ${titleX} ${titleY})`}
-          data-axis-label={axis}
-        >
-          {settings.label}
-        </text>
-      ) : null}
+      {settings.label && axisTitle(titleX, titleY)}
+      {settings.mirror &&
+        settings.label &&
+        axisTitle(
+          horizontal ? titleX : mirroredEdge + mirrorTitleDistance,
+          horizontal ? mirroredEdge - mirrorTitleDistance : titleY,
+          true,
+        )}
     </g>
   );
 }

@@ -122,6 +122,15 @@ export function PlotConfigAxesTab({ spec, onSetAxis }: PlotConfigAxesTabProps) {
             </ConfigField>
           </div>
 
+          <label className="plot-config-check">
+            <input
+              aria-label={`${axis} mirror axis`}
+              type="checkbox"
+              checked={spec.axes[axis].mirror ?? false}
+              onChange={(event) => onSetAxis(axis, { mirror: event.target.checked })}
+            />
+            <span>Mirror axis</span>
+          </label>
           <div className="plot-subgroup-title">Range</div>
           <AxisRangeFields
             key={[
@@ -191,6 +200,15 @@ export function PlotConfigAxesTab({ spec, onSetAxis }: PlotConfigAxesTabProps) {
                 onChange={(event) => onSetAxis(axis, { ticks: { minor: event.target.checked } })}
               />
               <span>Minor tick</span>
+            </label>
+            <label className="plot-config-check">
+              <input
+                aria-label={`${axis} mirror ticks`}
+                type="checkbox"
+                checked={spec.axes[axis].ticks.mirror ?? false}
+                onChange={(event) => onSetAxis(axis, { ticks: { mirror: event.target.checked } })}
+              />
+              <span>Mirror ticks</span>
             </label>
           </div>
 

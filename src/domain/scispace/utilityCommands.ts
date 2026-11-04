@@ -17,7 +17,7 @@ export const helpText = [
   "  table-range <dataset> action=<clear|fill-down> r1=<n> c1=<col> r2=<n> c2=<col>",
   "  plot <dataset> x=<column> y=<column[,column...]> type=<line|line-marker|marker>",
   "  plot-set <plotId> title=<title> type=<line|line-marker|marker> border=<true|false> width=<n> height=<n> fontFamily=<name> fontSize=<n> padding=<t:r:b:l>",
-  "  plot-axis <plotId> axis=<x|y> range=<auto|min:max> tick=<auto|interval> tickDir=<out|in|none> scale=<linear|log>",
+  "  plot-axis <plotId> axis=<x|y> range=<auto|min:max> tick=<auto|interval> tickDir=<out|in|none> mirrorTick=<true|false> mirrorAxis=<true|false> scale=<linear|log>",
   "  plot-grid <plotId> x=<true|false> y=<true|false>",
   "  plot-series <plotId> y=<column> action=<add|remove> markerShape=<circle|square|triangle|diamond|cross|plus> order=<n>",
   "  plot-annotation <plotId> action=<add|update|remove>",
