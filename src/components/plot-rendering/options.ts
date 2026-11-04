@@ -3,6 +3,7 @@ import type { PlotAxisSpec, PlotMarkerShape, PlotSeries, PlotSpec } from "../../
 import { sortedPlotSeries } from "./data";
 
 export const xAxisLabelHeight = 24;
+const maxMinorTickSteps = 1000;
 
 const font = (size: number, family: string): string => `${size}px ${family}`;
 
@@ -103,19 +104,21 @@ const minorTickPlugin = (spec: PlotSpec): uPlot.Plugin => ({
       for (const [axisKey, axis] of axes) {
         if (!axis.ticks.minor || axis.ticks.mode !== "manual" || !axis.ticks.interval) continue;
         const scale = self.scales[axisKey];
-        if (scale.min === undefined || scale.max === undefined) continue;
+        if (scale.min == null || scale.max == null) continue;
         const minorStep = axis.ticks.interval / 2;
-        context.strokeStyle = axis.gridColor;
-        for (
-          let value = Math.ceil(Number(scale.min) / minorStep) * minorStep;
-          value < Number(scale.max);
-          value += minorStep
+        const firstIndex = Math.ceil(scale.min / minorStep);
+        const endIndex = Math.ceil(scale.max / minorStep);
+        if (
+          !Number.isSafeInteger(firstIndex) ||
+          !Number.isSafeInteger(endIndex) ||
+          endIndex - firstIndex > maxMinorTickSteps
         ) {
-          if (
-            Math.abs(value / axis.ticks.interval - Math.round(value / axis.ticks.interval)) < 1e-6
-          ) {
-            continue;
-          }
+          continue;
+        }
+        context.strokeStyle = axis.gridColor;
+        for (let index = firstIndex; index < endIndex; index += 1) {
+          if (index % 2 === 0) continue;
+          const value = index * minorStep;
           context.beginPath();
           if (axisKey === "x") {
             const left = self.valToPos(value, "x", true);

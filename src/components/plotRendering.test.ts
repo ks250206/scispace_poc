@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import type uPlot from "uplot";
+import { describe, expect, it, vi } from "vitest";
 import { createSeedDataset } from "../domain/csv";
 import { executeScispaceCommand } from "../domain/scispace";
 import {
@@ -111,6 +112,32 @@ describe("plot rendering options", () => {
     ]);
 
     expect(series.map((item) => item.y)).toEqual(["background", "signal"]);
+  });
+
+  it.each([
+    { min: 0, max: 10, interval: 2, expected: [1, 3, 5, 7, 9] },
+    { min: 0, max: 20, interval: 0.01, expected: [] },
+  ])("bounds minor ticks for range $min–$max and interval $interval", (testCase) => {
+    const { min, max, interval, expected } = testCase;
+    const created = executeScispaceCommand("plot waveform.csv x=time y=signal", {
+      datasets: [createSeedDataset()],
+    });
+    if (created.kind !== "plot-created") throw new Error(created.output);
+    const { spec } = created;
+    const { ticks } = spec.axes.x;
+    spec.axes.x.ticks = { ...ticks, mode: "manual", interval, minor: true };
+    const draw = buildPlotOptions(spec).plugins?.[0]?.hooks?.draw;
+    if (typeof draw !== "function") throw new Error("Minor tick draw hook is missing");
+
+    const valToPos = vi.fn((value: number) => value);
+    const plot = {
+      ctx: document.createElement("canvas").getContext("2d"),
+      scales: { x: { min, max } },
+      bbox: { top: 0, height: 100 },
+      valToPos,
+    } as unknown as uPlot;
+    draw(plot);
+    expect(valToPos.mock.calls.map(([value]) => value)).toEqual(expected);
   });
 
   it("sorts finite plot data by x before passing it to uPlot", () => {
