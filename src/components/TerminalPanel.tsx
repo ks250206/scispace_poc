@@ -329,7 +329,7 @@ export function TerminalPanel() {
   return (
     <section className="terminal-panel" onContextMenu={openTerminalContextMenu}>
       <header className="terminal-header">
-        <span>scispace REPL</span>
+        <span>{terminalControlState.mode === "bash" ? "just-bash shell" : "scispace REPL"}</span>
         <span className={`terminal-mode-badge ${terminalControlState.unsafe ? "unsafe" : "safe"}`}>
           {terminalControlState.unsafe ? "unsafe" : "safe"}
         </span>
