@@ -1,4 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
+import { quoteCommandToken } from "../domain/scispace/commandUtils";
+import { ColumnConversionDialog } from "./data-table/ColumnConversionDialog";
 import { useScispaceStore } from "../store/scispaceStore";
 import { useContextMenu } from "./context-menu/ContextMenuProvider";
 import { DataTableSummary } from "./data-table/DataTableSummary";
@@ -51,6 +53,7 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
   );
   const [visibleRows, setVisibleRows] = useState<TableVisibleRows>("auto");
   const isLocked = Boolean(tableWindow?.locked);
+  const [conversionColumnId, setConversionColumnId] = useState<string>();
   const { dataset, rows, table, visibleDatasetColumns } = useDataTableModel({
     columnIds,
     datasetId,
@@ -101,6 +104,10 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     setEditingCell(undefined);
     void runScispace(setCellCommand(dataset.name, rowIndex, column, nextValue ?? value), {
       source: "gui",
+    }).then((result) => {
+      if (result.kind === "error") {
+        return dialog.alert({ title: "Could not update cell", message: result.output });
+      }
     });
   };
 
@@ -243,9 +250,21 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
     return positionInRange(rowIndex, column, rangeBounds, visibleDatasetColumns);
   };
 
+  const sortDates = (columnId: string, order: "asc" | "desc") => {
+    if (!dataset || isLocked) return;
+    clearSelection();
+    void runScispace(
+      `table-edit ${quoteCommandToken(dataset.id)} action=sort-dates column=${quoteCommandToken(columnId)} order=${order}`,
+      { source: "gui" },
+    );
+  };
+  const conversionColumn = dataset?.columns.find(({ id }) => id === conversionColumnId);
+
   const openTableContextMenu = useTableContextMenu({
     clearRange,
     calculateColumn,
+    convertColumn: setConversionColumnId,
+    sortDates,
     copyRange,
     deleteColumn,
     deleteRowAt,
@@ -332,6 +351,14 @@ export function DataTableWindow({ datasetId, windowId, columnIds }: DataTableWin
 
   return (
     <div className={`table-window ${isLocked ? "is-locked" : ""}`}>
+      {conversionColumn && !isLocked && (
+        <ColumnConversionDialog
+          dataset={dataset}
+          column={conversionColumn}
+          onClose={() => setConversionColumnId(undefined)}
+          onRun={(command) => runScispace(command, { source: "gui" })}
+        />
+      )}
       <DataTableSummary
         isLocked={isLocked}
         rowCount={dataset.rows.length}

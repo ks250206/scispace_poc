@@ -77,6 +77,7 @@ export const normalizeDataset = (dataset: Dataset): Dataset => {
       name: column.name || column.id || `column_${index + 1}`,
       sourceName: column.sourceName ?? column.name ?? column.id,
       dataType: column.dataType ?? inferColumnType(dataset.rows.map((row) => row[column.id] ?? "")),
+      ...(column.explicitType === true ? { explicitType: true as const } : {}),
     }));
     return { ...dataset, columns };
   }

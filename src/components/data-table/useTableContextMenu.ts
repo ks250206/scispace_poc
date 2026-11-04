@@ -20,6 +20,8 @@ type OpenContextMenu = (options: {
 type TableContextMenuOptions = {
   clearRange: (bounds: TableRangeBounds) => void;
   calculateColumn: () => void;
+  convertColumn: (columnId: string) => void;
+  sortDates: (columnId: string, order: "asc" | "desc") => void;
   copyRange: (bounds: TableRangeBounds) => void;
   deleteColumn: (columnId: string) => void;
   deleteRowAt: (rowIndex: number) => void;
@@ -43,6 +45,8 @@ type TableContextMenuOptions = {
 export function useTableContextMenu({
   clearRange,
   calculateColumn,
+  convertColumn,
+  sortDates,
   copyRange,
   deleteColumn,
   deleteRowAt,
@@ -89,7 +93,12 @@ export function useTableContextMenu({
           bounds,
           clearRange,
           calculateColumn,
+          convertColumn,
+          sortDates,
           column,
+          isDateColumn: visibleDatasetColumns.some(
+            ({ id, dataType }) => id === column && (dataType === "date" || dataType === "datetime"),
+          ),
           context,
           copyRange,
           deleteColumn,
@@ -109,6 +118,8 @@ export function useTableContextMenu({
     [
       clearRange,
       calculateColumn,
+      convertColumn,
+      sortDates,
       copyRange,
       deleteColumn,
       deleteRowAt,
@@ -136,7 +147,10 @@ const tableContextItems = ({
   bounds,
   clearRange,
   calculateColumn,
+  convertColumn,
+  sortDates,
   column,
+  isDateColumn,
   context,
   copyRange,
   deleteColumn,
@@ -154,7 +168,10 @@ const tableContextItems = ({
   bounds?: TableRangeBounds;
   clearRange: (bounds: TableRangeBounds) => void;
   calculateColumn: () => void;
+  convertColumn: (columnId: string) => void;
+  sortDates: (columnId: string, order: "asc" | "desc") => void;
   column?: string;
+  isDateColumn: boolean;
   context?: { cell?: TableCellPosition; column?: string };
   copyRange: (bounds: TableRangeBounds) => void;
   deleteColumn: (columnId: string) => void;
@@ -224,6 +241,20 @@ const tableContextItems = ({
     disabled: isLocked,
     onSelect: calculateColumn,
   },
+  {
+    label: "Convert column type",
+    disabled: !column || isLocked,
+    onSelect: () => {
+      if (column) convertColumn(column);
+    },
+  },
+  ...(column && isDateColumn
+    ? (["asc", "desc"] as const).map((order) => ({
+        label: order === "asc" ? "Sort dates oldest first" : "Sort dates newest first",
+        disabled: isLocked,
+        onSelect: () => sortDates(column, order),
+      }))
+    : []),
   {
     label: isLocked ? "Unlock table" : "Lock table",
     onSelect: toggleLock,

@@ -38,6 +38,19 @@ const helpSections = [
         example: "table-edit waveform.csv action=insert-column column=fit before=signal",
       },
       {
+        command:
+          "table-edit <dataset> action=<convert-column|preview-conversion> column=<col> type=<number|string|date|datetime>",
+        description:
+          "Preview or convert an existing column. Use format=dmy or format=mdy for slash dates. Datetimes require Z or an explicit offset and are stored in UTC. Use invalid=missing to replace invalid values with blanks.",
+        example:
+          "table-edit measurements.csv action=convert-column column=measured type=date format=dmy",
+      },
+      {
+        command: "table-edit <dataset> action=sort-dates column=<col> order=<asc|desc>",
+        description: "Reorder rows by a date or datetime column, with blanks at the end.",
+        example: "table-edit measurements.csv action=sort-dates column=measured order=asc",
+      },
+      {
         command: "table-range <dataset> action=<clear|fill-down> r1=<n> c1=<col> r2=<n> c2=<col>",
         description: "Apply a destructive operation to a selected rectangular cell range.",
         example: "table-range waveform.csv action=fill-down r1=1 c1=signal r2=10 c2=signal",
