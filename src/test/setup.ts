@@ -88,3 +88,15 @@ Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
     } as unknown as CanvasRenderingContext2D;
   },
 });
+
+// jsdom does not implement the native dialog lifecycle.
+if (typeof HTMLDialogElement.prototype.showModal !== "function") {
+  Object.assign(HTMLDialogElement.prototype, {
+    showModal(this: HTMLDialogElement) {
+      this.open = true;
+    },
+    close(this: HTMLDialogElement) {
+      this.open = false;
+    },
+  });
+}

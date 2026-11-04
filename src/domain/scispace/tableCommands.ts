@@ -1,6 +1,8 @@
+import { convertColumnValue, isConversionType } from "../columnConversion";
 import { createDatasetColumns, normalizeDataValue, resolveDatasetColumnId } from "../csv";
 import type { Dataset, DatasetColumn, ScispaceCommandResult } from "../types";
 import { findDataset, readOption, type CommandContext } from "./commandUtils";
+import { executeTableColumnCommand } from "./tableColumnCommands";
 
 export const executeTableCommand = (
   command: string,
@@ -36,6 +38,9 @@ export const executeTableCommand = (
     if (!dataset) return { kind: "error", output: `Dataset not found: ${args[0] ?? ""}` };
 
     const action = readOption(args, "action");
+    if (action === "convert-column" || action === "preview-conversion" || action === "sort-dates") {
+      return executeTableColumnCommand(dataset, args, action);
+    }
     if (action === "delete-row") {
       const indexText = readOption(args, "index") ?? "";
       const rowIndex = Number(indexText);
@@ -97,10 +102,17 @@ export const executeTableCommand = (
       }
       const value = readOption(args, "value");
       if (value === undefined) return { kind: "error", output: "value is required" };
+      const column = dataset.columns.find(({ id }) => id === columnId);
+      const dataValue =
+        column?.explicitType && isConversionType(column.dataType)
+          ? convertColumnValue(value, column.dataType)
+          : normalizeDataValue(value);
+      if (dataValue === undefined)
+        return { kind: "error", output: `Invalid ${column?.dataType} value for ${columnId}` };
       const updatedDataset: Dataset = {
         ...dataset,
         rows: dataset.rows.map((row, index) =>
-          index === rowNumber - 1 ? { ...row, [columnId]: normalizeDataValue(value) } : row,
+          index === rowNumber - 1 ? { ...row, [columnId]: dataValue } : row,
         ),
       };
       return {

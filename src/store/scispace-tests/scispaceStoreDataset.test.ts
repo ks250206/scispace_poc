@@ -71,6 +71,54 @@ describe("scispace store dataset commands", () => {
     });
   });
 
+  it("persists converted date and time columns and undoes values and metadata together", async () => {
+    const { db, store } = await makeStore();
+    const state = () => stateOf(store);
+    const dataset = () => state().datasets.find(({ name }) => name === "dates");
+    await runCommand(store, "dataset-new dates columns=measured,clock rows=2");
+    await runCommand(
+      store,
+      "table-edit dates action=set-cell row=1 column=measured value=01/02/2026",
+    );
+    const before = state().undoStack.length;
+    await runCommand(
+      store,
+      "table-edit dates action=preview-conversion column=measured type=date format=dmy",
+    );
+    expect(state().undoStack).toHaveLength(before);
+    await runCommand(
+      store,
+      "table-edit dates action=convert-column column=measured type=date format=dmy",
+    );
+    expect(state().undoStack).toHaveLength(before + 1);
+    expect(dataset()?.rows[0]?.measured).toBe("2026-02-01");
+    expect(dataset()?.columns[0]?.dataType).toBe("date");
+    expect((await db.datasets.get(dataset()!.id))?.columns[0]?.dataType).toBe("date");
+
+    await state().undo();
+    expect(dataset()?.rows[0]?.measured).toBe("01/02/2026");
+    expect(dataset()?.columns[0]?.dataType).toBe("string");
+    await state().redo();
+
+    await runCommand(store, "table-edit dates action=set-cell row=1 column=clock value=9:30");
+    await runCommand(store, "table-edit dates action=convert-column column=clock type=time");
+
+    const json = await state().exportCurrentProjectJson();
+    await state().importProjectJson(json);
+    expect(dataset()?.rows[0]?.measured).toBe("2026-02-01");
+    expect(dataset()?.columns[0]).toMatchObject({
+      id: "measured",
+      dataType: "date",
+      explicitType: true,
+    });
+    expect(dataset()?.rows[0]?.clock).toBe("09:30:00");
+    expect(dataset()?.columns[1]).toMatchObject({
+      id: "clock",
+      dataType: "time",
+      explicitType: true,
+    });
+  });
+
   it("undoes and redoes dataset creation and calculation snapshots", async () => {
     const { store } = await makeStore();
 

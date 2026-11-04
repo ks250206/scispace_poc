@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vite-plus/test";
 import {
@@ -11,6 +11,43 @@ import {
 
 describe("Workbench table commands", () => {
   setupWorkbenchSuite();
+
+  it("previews column conversion and requires opt-in to replace invalid rows", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    await act(async () => {
+      await storeState().runScispace(
+        "table-edit waveform.csv action=set-cell row=1 column=signal value=invalid",
+      );
+    });
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Select column signal" }), {
+      clientX: 120,
+      clientY: 140,
+    });
+    await user.click(screen.getByRole("menuitem", { name: "Convert column type" }));
+    expect(await screen.findByRole("dialog", { name: "Convert column type" })).toBeVisible();
+    const targetType = screen.getByRole("combobox", { name: "Target type" });
+    await user.selectOptions(targetType, "time");
+    expect(screen.getByText(/Use 24-hour time/)).toBeVisible();
+    expect(screen.getByText("0 convertible, 0 blank, 160 invalid")).toBeVisible();
+    await user.selectOptions(targetType, "number");
+    expect(screen.getByText("159 convertible, 0 blank, 1 invalid")).toBeVisible();
+    await user.click(screen.getByText("Invalid row numbers (1)"));
+    expect(screen.getByText("1", { selector: "details p" })).toBeVisible();
+    const convert = screen.getByRole("button", { name: "Convert" });
+    expect(convert).toBeDisabled();
+    await user.click(screen.getByRole("checkbox", { name: "Set invalid values to missing" }));
+    await user.click(convert);
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Convert column type" })).not.toBeInTheDocument(),
+    );
+    expect(storeState().datasets[0]?.rows[0]?.signal).toBe("");
+    expect(storeState().commandHistory.at(-1)).toMatchObject({
+      source: "gui",
+      status: "success",
+      command: expect.stringContaining("action=convert-column"),
+    });
+  });
 
   it("deletes selected table rows and columns through scispace commands", async () => {
     const user = userEvent.setup();

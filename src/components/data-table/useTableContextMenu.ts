@@ -20,6 +20,8 @@ type OpenContextMenu = (options: {
 type TableContextMenuOptions = {
   clearRange: (bounds: TableRangeBounds) => void;
   calculateColumn: () => void;
+  convertColumn: (columnId: string) => void;
+  sortDates: (columnId: string, order: "asc" | "desc") => void;
   copyRange: (bounds: TableRangeBounds) => void;
   deleteColumn: (columnId: string) => void;
   deleteRowAt: (rowIndex: number) => void;
@@ -43,6 +45,8 @@ type TableContextMenuOptions = {
 export function useTableContextMenu({
   clearRange,
   calculateColumn,
+  convertColumn,
+  sortDates,
   copyRange,
   deleteColumn,
   deleteRowAt,
@@ -76,6 +80,7 @@ export function useTableContextMenu({
       focusWindow(windowId);
       const bounds = context?.cell ? singleCellRange(context.cell) : rangeBounds;
       const column = context?.column ?? context?.cell?.column ?? selectedColumn;
+      const columnType = visibleDatasetColumns.find(({ id }) => id === column)?.dataType;
       const plotSelectionSpec = plotSelectionFromTableSelection(
         bounds,
         context?.column ? [context.column] : selectedColumns,
@@ -89,7 +94,10 @@ export function useTableContextMenu({
           bounds,
           clearRange,
           calculateColumn,
+          convertColumn,
+          sortDates,
           column,
+          columnType,
           context,
           copyRange,
           deleteColumn,
@@ -109,6 +117,8 @@ export function useTableContextMenu({
     [
       clearRange,
       calculateColumn,
+      convertColumn,
+      sortDates,
       copyRange,
       deleteColumn,
       deleteRowAt,
@@ -136,7 +146,10 @@ const tableContextItems = ({
   bounds,
   clearRange,
   calculateColumn,
+  convertColumn,
+  sortDates,
   column,
+  columnType,
   context,
   copyRange,
   deleteColumn,
@@ -154,7 +167,10 @@ const tableContextItems = ({
   bounds?: TableRangeBounds;
   clearRange: (bounds: TableRangeBounds) => void;
   calculateColumn: () => void;
+  convertColumn: (columnId: string) => void;
+  sortDates: (columnId: string, order: "asc" | "desc") => void;
   column?: string;
+  columnType?: DatasetColumn["dataType"];
   context?: { cell?: TableCellPosition; column?: string };
   copyRange: (bounds: TableRangeBounds) => void;
   deleteColumn: (columnId: string) => void;
@@ -224,6 +240,27 @@ const tableContextItems = ({
     disabled: isLocked,
     onSelect: calculateColumn,
   },
+  {
+    label: "Convert column type",
+    disabled: !column || isLocked,
+    onSelect: () => {
+      if (column) convertColumn(column);
+    },
+  },
+  ...(column && (columnType === "date" || columnType === "datetime" || columnType === "time")
+    ? (["asc", "desc"] as const).map((order) => ({
+        label:
+          columnType === "time"
+            ? order === "asc"
+              ? "Sort times earliest first"
+              : "Sort times latest first"
+            : order === "asc"
+              ? "Sort dates oldest first"
+              : "Sort dates newest first",
+        disabled: isLocked,
+        onSelect: () => sortDates(column, order),
+      }))
+    : []),
   {
     label: isLocked ? "Unlock table" : "Lock table",
     onSelect: toggleLock,

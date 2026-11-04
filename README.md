@@ -97,6 +97,9 @@ dataset-calc calc column=sum expr="x + y * 2"
 table waveform.csv columns=time,signal
 table-edit waveform.csv action=set-cell row=1 column=signal value=3.14
 table-edit waveform.csv action=insert-column column=new before=signal
+table-edit measurements.csv action=preview-conversion column=measured type=date format=dmy
+table-edit measurements.csv action=convert-column column=measured type=date format=dmy
+table-edit measurements.csv action=sort-dates column=measured order=asc
 table-range waveform.csv action=fill-down r1=1 c1=signal r2=10 c2=signal
 
 plot waveform.csv x=time y=signal,background type=line-marker
@@ -106,6 +109,8 @@ plot-grid plot-1 x=true y=true
 plot-schema plot-1
 plot-apply-schema plot-1 json=%7B...%7D
 ```
+
+列の型変換は表の右クリックメニューからも実行できます。日付は暦日（`YYYY-MM-DD`）で保存し、日時は入力に `Z` または UTC オフセットが必要です。時刻（`type=time`）は `09:30` や `14:30:45.250` のような24時間表記を受け付けます。無効値があれば既定で変換を中止します。欠損に置き換える場合は `invalid=missing` を指定します。
 
 詳しいコマンド説明はアプリ内の `Help` メニューまたは `help` コマンドから確認できます。
 
