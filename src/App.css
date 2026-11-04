@@ -1714,6 +1714,7 @@
 }
 
 .plot-host {
+  position: relative;
   min-height: 0;
   max-width: 100%;
   flex: 1;
@@ -1721,9 +1722,44 @@
   padding: 0;
 }
 
-.plot-canvas-host {
-  min-height: 0;
-  overflow: hidden;
+.plot-figure,
+.plot-interaction {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.plot-interaction {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.plot-cursor-values {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 3px 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #334155;
+  font:
+    11px system-ui,
+    sans-serif;
+  pointer-events: none;
+}
+
+.plot-cursor-values i {
+  display: inline-block;
+  width: 8px;
+  height: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
 }
 
 .plot-window-toolbar {

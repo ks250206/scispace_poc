@@ -34,7 +34,7 @@ export default defineConfig({
             },
             {
               name: "plot-vendor",
-              test: /node_modules[\\/]uplot[\\/]/,
+              test: /node_modules[\\/](?:d3-[a-z]+|internmap)[\\/]/,
               priority: 30,
             },
             {

@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   clickToolbarItem,
   initializeStore,
@@ -12,6 +12,16 @@ import {
 
 describe("Workbench plot and history UI", () => {
   setupWorkbenchSuite();
+  afterEach(() => vi.unstubAllGlobals());
+
+  function mockPngDecode() {
+    vi.stubGlobal(
+      "Image",
+      class {
+        decode = vi.fn().mockResolvedValue(undefined);
+      },
+    );
+  }
 
   it("opens a new plot chooser from the plot menu and creates a plot via scispace", async () => {
     const user = userEvent.setup();
@@ -224,8 +234,9 @@ describe("Workbench plot and history UI", () => {
     expect(storeState().plotSpecs[0]?.series[0]?.label).toBe("signal");
   });
 
-  it("copies plot schema and exports the current plot canvas as png and svg", async () => {
+  it("copies plot schema and exports the displayed plot as png and svg", async () => {
     const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
+    mockPngDecode();
     const toDataUrl = vi
       .spyOn(HTMLCanvasElement.prototype, "toDataURL")
       .mockReturnValue("data:image/png;base64,plot");
@@ -258,7 +269,7 @@ describe("Workbench plot and history UI", () => {
     );
 
     await clickToolbarItem(userEvent.setup(), "Plot", "Export plot PNG");
-    expect(toDataUrl).toHaveBeenCalledWith("image/png");
+    await waitFor(() => expect(toDataUrl).toHaveBeenCalledWith("image/png"));
     expect(click).toHaveBeenCalled();
 
     await clickToolbarItem(userEvent.setup(), "Plot", "Export plot SVG");
@@ -267,6 +278,43 @@ describe("Workbench plot and history UI", () => {
       .find((element) => element.download?.endsWith(".svg"));
     expect(svgLink?.href).toMatch(/^data:image\/svg\+xml/);
     expect(svgLink?.download).toBe("waveform.csv_signal_vs_time.svg");
+    const figure = document.querySelector(".plot-figure") as SVGSVGElement;
+    const svg = decodeURIComponent(svgLink?.href.split(",")[1] ?? "");
+    expect(svg).toBe(new XMLSerializer().serializeToString(figure));
+    const exported = new DOMParser().parseFromString(svg, "image/svg+xml");
+    expect(exported.documentElement.namespaceURI).toBe("http://www.w3.org/2000/svg");
+    expect(exported.querySelector("[data-plot-title]")?.textContent).toBe(
+      "waveform.csv: signal vs time",
+    );
+    expect(exported.querySelector("[data-series] path")).not.toBeNull();
+    expect(exported.querySelector('[data-axis-label="x"]')?.textContent).toBe("time");
+    expect(exported.querySelector(".plot-interaction")).toBeNull();
+  });
+
+  it("zooms on the configured axis in a scaled plot and resets on double click", async () => {
+    await renderWorkbench();
+    await act(async () => {
+      await storeState().runScispace("plot-set seed-plot zoom=x", { source: "gui" });
+    });
+    const interaction = document.querySelector(".plot-interaction") as SVGSVGElement;
+    vi.spyOn(interaction, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 50, 1280, 720));
+    const ticks = (axis: "x" | "y") =>
+      [...document.querySelectorAll(`[data-plot-axis="${axis}"] [data-tick-value]`)].map((tick) =>
+        tick.getAttribute("data-tick-value"),
+      );
+    const before = { x: ticks("x"), y: ticks("y") };
+    const pointer = { isPrimary: true, pointerId: 1, button: 0 };
+    fireEvent.pointerDown(interaction, { ...pointer, clientX: 400, clientY: 140 });
+    fireEvent.pointerMove(interaction, { ...pointer, clientX: 500, clientY: 520 });
+    expect(interaction.querySelector("rect")).not.toBeNull();
+    fireEvent.pointerUp(interaction, { ...pointer, clientX: 500, clientY: 520 });
+    expect(interaction.querySelector("rect")).toBeNull();
+    expect(ticks("x")).not.toEqual(before.x);
+    expect(ticks("y")).toEqual(before.y);
+
+    fireEvent.doubleClick(interaction);
+    expect(ticks("x")).toEqual(before.x);
+    expect(storeState().plotSpecs[0]?.axes.x.range.mode).toBe("auto");
   });
 
   it("opens the plot schema apply window and applies pasted json", async () => {
@@ -300,6 +348,7 @@ describe("Workbench plot and history UI", () => {
   it("runs plot actions from the right click context menu", async () => {
     const user = userEvent.setup();
     const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
+    mockPngDecode();
     const toDataUrl = vi
       .spyOn(HTMLCanvasElement.prototype, "toDataURL")
       .mockReturnValue("data:image/png;base64,plot");
@@ -326,7 +375,7 @@ describe("Workbench plot and history UI", () => {
 
     fireEvent.contextMenu(plotHost, { clientX: 360, clientY: 240 });
     await user.click(screen.getByRole("menuitem", { name: "Export plot PNG" }));
-    expect(toDataUrl).toHaveBeenCalledWith("image/png");
+    await waitFor(() => expect(toDataUrl).toHaveBeenCalledWith("image/png"));
 
     fireEvent.contextMenu(plotHost, { clientX: 360, clientY: 240 });
     await user.click(screen.getByRole("menuitem", { name: "Export plot SVG" }));
