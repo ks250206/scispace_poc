@@ -149,14 +149,17 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
       closeContextMenu();
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeContextMenu();
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeContextMenu();
     };
     window.addEventListener("pointerdown", closeOnPointerDown);
-    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("keydown", closeOnEscape, true);
     window.addEventListener("scroll", closeContextMenu, true);
     return () => {
       window.removeEventListener("pointerdown", closeOnPointerDown);
-      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("keydown", closeOnEscape, true);
       window.removeEventListener("scroll", closeContextMenu, true);
     };
   }, [closeContextMenu, menu]);

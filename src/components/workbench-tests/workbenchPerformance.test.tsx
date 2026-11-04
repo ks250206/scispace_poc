@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { DataTableWindow } from "../DataTableWindow";
 import { ContextMenuProvider } from "../context-menu/ContextMenuProvider";
 import { DialogProvider } from "../dialog/DialogProvider";

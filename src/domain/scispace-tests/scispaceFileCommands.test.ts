@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { dataset, executeScispaceCommand, runEmptyCommand } from "./scispaceCommandTestUtils";
 
 describe("scispace file commands", () => {
@@ -46,6 +46,10 @@ describe("scispace file commands", () => {
     expect(runEmptyCommand("file-move ~/raw/a.csv").kind).toBe("error");
     expect(runEmptyCommand("file-move ~/raw/a.csv to=/tmp").kind).toBe("error");
     expect(runEmptyCommand("file-delete").kind).toBe("error");
+    expect(runEmptyCommand("file-list /tmp")).toMatchObject({
+      kind: "error",
+      output: "Usage: file-list [~/raw/<path>]",
+    });
   });
 
   it("prints virtual file lists with parsed and raw statuses", () => {

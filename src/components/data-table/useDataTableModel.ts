@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import { useTable } from "@tanstack/react-table";
+import { visibleTableFeatures } from "../tableFeatures";
 import { datasetColumnIds } from "../../domain/csv";
 import { useScispaceStore } from "../../store/scispaceStore";
 import { formatCellValue } from "./tableModel";
@@ -31,7 +32,7 @@ export const useDataTableModel = ({ columnIds, datasetId }: UseDataTableModelOpt
   }, [visibleDatasetColumns]);
 
   const data = useMemo(() => dataset?.rows ?? [], [dataset]);
-  const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel() });
+  const table = useTable({ data, columns, features: visibleTableFeatures });
   const rows = table.getRowModel().rows;
 
   return { dataset, rows, table, visibleDatasetColumns };

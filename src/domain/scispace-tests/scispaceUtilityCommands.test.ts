@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { dataset, runCommand, runEmptyCommand } from "./scispaceCommandTestUtils";
 
 describe("scispace utility commands", () => {

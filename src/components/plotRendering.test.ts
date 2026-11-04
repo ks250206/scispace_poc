@@ -1,5 +1,5 @@
 import type uPlot from "uplot";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { createSeedDataset } from "../domain/csv";
 import { executeScispaceCommand } from "../domain/scispace";
 import {

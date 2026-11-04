@@ -7,7 +7,8 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import { useTable } from "@tanstack/react-table";
+import { visibleTableFeatures } from "./tableFeatures";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useScispaceStore } from "../store/scispaceStore";
 import { ImportColumnsTab } from "./import-window/ImportColumnsTab";
@@ -61,7 +62,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
     [preview],
   );
   const data = useMemo(() => preview?.rows ?? [], [preview]);
-  const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel() });
+  const table = useTable({ data, columns, features: visibleTableFeatures });
   const rows = table.getRowModel().rows;
   const rowVirtualizer = useVirtualizer({
     count: rows.length,

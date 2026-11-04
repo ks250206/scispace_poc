@@ -1,5 +1,6 @@
 import { memo, type CSSProperties, type KeyboardEvent, type RefObject } from "react";
 import { flexRender, type Row, type Table } from "@tanstack/react-table";
+import type { visibleTableFeatures } from "../tableFeatures";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import type { DataValue } from "../../domain/types";
 import {
@@ -18,8 +19,8 @@ type VisibleVirtualRow = Pick<VirtualItem, "index" | "start">;
 
 interface DataTableGridProps {
   parentRef: RefObject<HTMLDivElement | null>;
-  table: Table<TableRow>;
-  rows: Row<TableRow>[];
+  table: Table<typeof visibleTableFeatures, TableRow>;
+  rows: Row<typeof visibleTableFeatures, TableRow>[];
   visibleVirtualRows: VisibleVirtualRow[];
   visibleRows: TableVisibleRows;
   totalSize: number;

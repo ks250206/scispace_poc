@@ -1,9 +1,15 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import "fake-indexeddb/auto";
-import { afterEach } from "vitest";
+import { afterEach } from "vite-plus/test";
 
 afterEach(() => cleanup());
+
+// The Node TextEncoder and just-bash need to agree on the Uint8Array realm.
+const nodeUint8Array = new TextEncoder().encode("").constructor as Uint8ArrayConstructor;
+if (nodeUint8Array !== Uint8Array) {
+  globalThis.Uint8Array = nodeUint8Array;
+}
 
 Object.defineProperty(globalThis, "crypto", {
   value: {
