@@ -55,7 +55,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
     columnSelections: {},
     currentPlotId: undefined,
     tableMenuState: undefined,
-    plotMenuState: undefined,
+    plotMenuStates: {},
     viewport: initialViewport(),
 
     initialize: async () => {
@@ -136,7 +136,7 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
             ? persistedConfigPlotId
             : nextPlotSpecs[0]?.id,
         tableMenuState: undefined,
-        plotMenuState: undefined,
+        plotMenuStates: {},
       });
       persistLayout(db, get());
     },
@@ -268,11 +268,15 @@ export const createScispaceStore = (db: SciSpaceDatabase = appDb) =>
         tableMenuState:
           state.tableMenuState?.windowId === windowId ? undefined : state.tableMenuState,
       })),
-    setPlotMenuState: (state) => set({ plotMenuState: state }),
+    setPlotMenuState: (menu) =>
+      set((state) => ({ plotMenuStates: { ...state.plotMenuStates, [menu.plotId]: menu } })),
     clearPlotMenuState: (plotId) =>
-      set((state) => ({
-        plotMenuState: state.plotMenuState?.plotId === plotId ? undefined : state.plotMenuState,
-      })),
+      set((state) => {
+        if (!state.plotMenuStates[plotId]) return state;
+        const plotMenuStates = { ...state.plotMenuStates };
+        delete plotMenuStates[plotId];
+        return { plotMenuStates };
+      }),
     ...createProjectActions({ db, get, set }),
     ...createFileActions({ db, get, set }),
   }));

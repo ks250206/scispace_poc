@@ -1,5 +1,5 @@
 import type { PlotAnnotation, PlotSpec } from "../../domain/types";
-import { ConfigField, ConfigGroup } from "./PlotConfigFields";
+import { CommittedTextInput, ConfigField, ConfigGroup } from "./PlotConfigFields";
 import type { AnnotationDraft } from "./plotConfigModel";
 
 interface PlotConfigAnnotationsTabProps {
@@ -41,14 +41,11 @@ export function PlotConfigAnnotationsTab({
           {(["x", "y", "dx", "dy"] as const).map((field) => (
             <ConfigField key={field} label={field} compact>
               <input
-                aria-label={`Annotation ${field}`}
+                aria-label={"Annotation " + field}
                 type="number"
                 value={annotationDraft[field]}
                 onChange={(event) =>
-                  onSetAnnotationDraft((current) => ({
-                    ...current,
-                    [field]: event.target.value,
-                  }))
+                  onSetAnnotationDraft((current) => ({ ...current, [field]: event.target.value }))
                 }
               />
             </ConfigField>
@@ -59,10 +56,11 @@ export function PlotConfigAnnotationsTab({
         <ConfigGroup key={annotation.id} title={`Annotation: ${annotation.text}`}>
           <div className="plot-field-grid three">
             <ConfigField label="Text">
-              <input
-                aria-label={`Annotation label ${annotation.id}`}
+              <CommittedTextInput
+                key={spec.id}
+                label={"Annotation label " + annotation.id}
                 value={annotation.text}
-                onChange={(event) => onUpdateAnnotation(annotation, { text: event.target.value })}
+                onCommit={(text) => onUpdateAnnotation(annotation, { text })}
               />
             </ConfigField>
             <ConfigField label="Color" compact>

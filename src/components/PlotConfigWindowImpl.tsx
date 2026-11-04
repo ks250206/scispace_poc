@@ -130,8 +130,7 @@ export function PlotConfigWindow() {
     runPlotCommand(plotAxisCommand(currentPlotId, axis, next));
   };
   const updateSeries = (series: PlotSeries, patch: Partial<PlotSeries>) => {
-    const next = { ...series, ...patch };
-    runPlotCommand(plotSeriesStyleCommand(currentPlotId, next));
+    runPlotCommand(plotSeriesStyleCommand(currentPlotId, series.y, patch));
   };
   const addSeries = () => {
     if (!seriesToAdd) return;
@@ -148,8 +147,7 @@ export function PlotConfigWindow() {
     runPlotCommand(addAnnotationCommand(currentPlotId, annotationDraft, parsed));
   };
   const updateAnnotation = (annotation: PlotAnnotation, patch: Partial<PlotAnnotation>) => {
-    const next = { ...annotation, ...patch };
-    runPlotCommand(updateAnnotationCommand(currentPlotId, next));
+    runPlotCommand(updateAnnotationCommand(currentPlotId, annotation.id, patch));
   };
   const removeAnnotation = (annotation: PlotAnnotation) => {
     runPlotCommand(removeAnnotationCommand(currentPlotId, annotation.id));

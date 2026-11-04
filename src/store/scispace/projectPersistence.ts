@@ -1,3 +1,4 @@
+import { readOption, tokenizeCommand } from "../../domain/scispace/commandUtils";
 import type { CommandHistoryEntry, PersistedLayout } from "../../domain/types";
 import { type ProjectRecord, type SciSpaceDatabase, writePersistedLayout } from "../db";
 import type { ProjectSnapshot, ProjectSummary, ScispaceState } from "./stateTypes";
@@ -92,6 +93,11 @@ export const isUndoableCommand = (input: string): boolean => {
   }
   if (/^table-range\s/.test(command)) {
     return /(?:^|\s)action=(clear|fill-down)(?:\s|$)/.test(command);
+  }
+  if (/^plot-(set|series|annotation)\s/.test(command)) {
+    const [name, ...args] = tokenizeCommand(command);
+    const textOption = name === "plot-set" ? "title" : name === "plot-series" ? "label" : "text";
+    return readOption(args, textOption) !== undefined;
   }
   if (/^import-confirm\s/.test(command)) return true;
   return /^file-(delete|rename|move)\s/.test(command);

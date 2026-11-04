@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { PlotAxisSpec, PlotSpec } from "../../domain/types";
 import { ConfigField, ConfigGroup } from "./PlotConfigFields";
 import type { AxisPatch } from "./plotConfigModel";
@@ -5,6 +6,93 @@ import type { AxisPatch } from "./plotConfigModel";
 interface PlotConfigAxesTabProps {
   spec: PlotSpec;
   onSetAxis: (axis: "x" | "y", patch: AxisPatch) => void;
+}
+
+function AxisRangeFields({
+  axis,
+  axisSpec,
+  onChange,
+}: {
+  axis: "x" | "y";
+  axisSpec: PlotAxisSpec;
+  onChange: (range: PlotAxisSpec["range"]) => void;
+}) {
+  const { range, scale } = axisSpec;
+  const [draft, setDraft] = useState<{ min: string; max: string }>();
+  const [error, setError] = useState("");
+  const values = draft ?? { min: String(range.min ?? 0), max: String(range.max ?? 1) };
+  const manual = draft !== undefined || range.mode === "manual";
+
+  const apply = () => {
+    const min = Number(values.min);
+    const max = Number(values.max);
+    if (
+      !values.min.trim() ||
+      !values.max.trim() ||
+      !Number.isFinite(min) ||
+      !Number.isFinite(max) ||
+      min >= max ||
+      (scale === "log" && min <= 0)
+    ) {
+      setError(
+        scale === "log"
+          ? "Enter a positive minimum below the maximum."
+          : "Enter a minimum below the maximum.",
+      );
+      return;
+    }
+    setError("");
+    if (range.mode !== "manual" || min !== range.min || max !== range.max) {
+      onChange({ mode: "manual", min, max });
+    }
+  };
+
+  return (
+    <>
+      <div className="plot-field-grid four">
+        <ConfigField label="Mode">
+          <select
+            aria-label={axis + " range mode"}
+            value={manual ? "manual" : "auto"}
+            onChange={(event) => {
+              setError("");
+              if (event.target.value === "manual") {
+                setDraft({ min: "", max: "" });
+              } else {
+                setDraft(undefined);
+                if (range.mode === "manual") onChange({ mode: "auto" });
+              }
+            }}
+          >
+            <option value="auto">auto range</option>
+            <option value="manual">manual range</option>
+          </select>
+        </ConfigField>
+        {(["min", "max"] as const).map((bound) => (
+          <ConfigField key={bound} label={bound === "min" ? "Min" : "Max"} compact>
+            <input
+              aria-label={axis + " range " + bound}
+              type="number"
+              step="any"
+              disabled={!manual}
+              value={manual ? values[bound] : ""}
+              onChange={(event) => {
+                setDraft({ ...values, [bound]: event.target.value });
+                setError("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") apply();
+              }}
+            />
+          </ConfigField>
+        ))}
+        <button type="button" className="plot-config-command" disabled={!manual} onClick={apply}>
+          Apply {axis.toUpperCase()} range
+        </button>
+      </div>
+      {error && <div role="alert">{error}</div>}
+    </>
+  );
 }
 
 export function PlotConfigAxesTab({ spec, onSetAxis }: PlotConfigAxesTabProps) {
@@ -35,59 +123,18 @@ export function PlotConfigAxesTab({ spec, onSetAxis }: PlotConfigAxesTabProps) {
           </div>
 
           <div className="plot-subgroup-title">Range</div>
-          <div className="plot-field-grid four">
-            <ConfigField label="Mode">
-              <select
-                aria-label={`${axis} range mode`}
-                value={spec.axes[axis].range.mode}
-                onChange={(event) =>
-                  onSetAxis(axis, {
-                    range:
-                      event.target.value === "manual"
-                        ? { mode: "manual", min: 0, max: 1 }
-                        : { mode: "auto" },
-                  })
-                }
-              >
-                <option value="auto">auto range</option>
-                <option value="manual">manual range</option>
-              </select>
-            </ConfigField>
-            <ConfigField label="Min" compact>
-              <input
-                aria-label={`${axis} range min`}
-                type="number"
-                disabled={spec.axes[axis].range.mode === "auto"}
-                value={spec.axes[axis].range.min ?? ""}
-                onChange={(event) =>
-                  onSetAxis(axis, {
-                    range: {
-                      mode: "manual",
-                      min: Number(event.target.value),
-                      max: spec.axes[axis].range.max ?? 1,
-                    },
-                  })
-                }
-              />
-            </ConfigField>
-            <ConfigField label="Max" compact>
-              <input
-                aria-label={`${axis} range max`}
-                type="number"
-                disabled={spec.axes[axis].range.mode === "auto"}
-                value={spec.axes[axis].range.max ?? ""}
-                onChange={(event) =>
-                  onSetAxis(axis, {
-                    range: {
-                      mode: "manual",
-                      min: spec.axes[axis].range.min ?? 0,
-                      max: Number(event.target.value),
-                    },
-                  })
-                }
-              />
-            </ConfigField>
-          </div>
+          <AxisRangeFields
+            key={[
+              spec.id,
+              axis,
+              spec.axes[axis].range.mode,
+              spec.axes[axis].range.min,
+              spec.axes[axis].range.max,
+            ].join(":")}
+            axis={axis}
+            axisSpec={spec.axes[axis]}
+            onChange={(range) => onSetAxis(axis, { range })}
+          />
 
           <div className="plot-subgroup-title">Ticks</div>
           <div className="plot-field-grid four">

@@ -48,7 +48,9 @@ export function CanvasWindow({ window }: CanvasWindowProps) {
   const focusWindow = useScispaceStore((state) => state.focusWindow);
   const closeWindow = useScispaceStore((state) => state.closeWindow);
   const tableMenuState = useScispaceStore((state) => state.tableMenuState);
-  const plotMenuState = useScispaceStore((state) => state.plotMenuState);
+  const plotMenuState = useScispaceStore((state) =>
+    window.plotId ? state.plotMenuStates[window.plotId] : undefined,
+  );
   const { openContextMenu } = useContextMenu();
   const canClose =
     window.kind === "table" ||

@@ -1,5 +1,5 @@
 import type { Dataset, PlotSpec, PlotType } from "../../domain/types";
-import { ConfigField, ConfigGroup } from "./PlotConfigFields";
+import { CommittedTextInput, ConfigField, ConfigGroup } from "./PlotConfigFields";
 import { plotSetCommand } from "./plotConfigCommands";
 import { plotSizeDraftFromSpec, type PlotSizeDraft } from "./plotConfigModel";
 
@@ -40,11 +40,12 @@ export function PlotConfigBasicTab({
         <ConfigGroup title="Data">
           <div className="plot-field-grid two">
             <ConfigField label="Title">
-              <input
-                aria-label="Plot title"
+              <CommittedTextInput
+                key={spec.id}
+                label="Plot title"
                 className="plot-title-input"
                 value={spec.title}
-                onChange={(event) => onSetTitle(event.target.value)}
+                onCommit={onSetTitle}
               />
             </ConfigField>
             <ConfigField label="X column">

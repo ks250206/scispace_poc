@@ -1,14 +1,13 @@
 import { useEffect, type RefObject } from "react";
 import type { BashShell } from "@wterm/just-bash";
+import type { ScispaceState } from "../../store/scispace/stateTypes";
 import { resetEditableLine, terminalCommandLineText, terminalPrompt } from "./terminalRepl";
 import type { EditableBashShell, TerminalFsState, TerminalMode } from "./terminalTypes";
-
-type TerminalCommandLineRequest = { id: string; command: string; execute?: boolean };
 
 interface UseTerminalCommandLineRequestOptions {
   commandLineRequestIdRef: RefObject<string | undefined>;
   handleData: (data: string) => void;
-  request: TerminalCommandLineRequest | undefined;
+  request: ScispaceState["terminalCommandLineRequest"];
   scrollToBottom: () => void;
   shellRef: RefObject<BashShell | null>;
   terminalFsStateRef: RefObject<TerminalFsState>;
@@ -37,13 +36,16 @@ export const useTerminalCommandLineRequest = ({
         `\r\x1b[2K${terminalPrompt(terminalModeRef.current.mode, terminalFsStateRef.current.cwd)}`,
       );
     }
-    void shellRef.current.handleInput(terminalCommandLineText(request.command)).then(() => {
-      if (request.execute) {
-        handleData("\r");
-        return;
-      }
-      scrollToBottom();
-    });
+    const wrapForShell = Boolean(request.scispace && terminalModeRef.current.mode === "bash");
+    void shellRef.current
+      .handleInput(terminalCommandLineText(request.command, wrapForShell))
+      .then(() => {
+        if (request.execute) {
+          handleData("\r");
+          return;
+        }
+        scrollToBottom();
+      });
   }, [
     commandLineRequestIdRef,
     handleData,

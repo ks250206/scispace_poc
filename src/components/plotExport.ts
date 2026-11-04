@@ -1,6 +1,7 @@
+import type uPlot from "uplot";
 import { normalizePlotSpecForCommand } from "../domain/scispace";
-import type { Dataset, PlotMarkerShape, PlotSpec } from "../domain/types";
-import { sortedPlotSeries } from "./plotRendering";
+import type { PlotMarkerShape, PlotSpec } from "../domain/types";
+import { sortedPlotSeries, type PlotAxisTicks } from "./plotRendering";
 
 const escapeXml = (value: string): string =>
   value
@@ -14,28 +15,6 @@ export const plotSchemaJson = (spec: PlotSpec): string =>
 
 export const safePlotFileName = (title: string, extension: string): string =>
   `${title.replace(/[^\w.-]+/g, "_") || "plot"}.${extension}`;
-
-const finiteValues = (values: number[]): number[] =>
-  values.filter((value) => Number.isFinite(value));
-
-const dataRange = (
-  values: number[],
-  axisRange: PlotSpec["axes"]["x"]["range"],
-): { min: number; max: number } => {
-  if (
-    axisRange.mode === "manual" &&
-    axisRange.min !== undefined &&
-    axisRange.max !== undefined &&
-    axisRange.min !== axisRange.max
-  ) {
-    return { min: axisRange.min, max: axisRange.max };
-  }
-  const finite = finiteValues(values);
-  const min = Math.min(...finite);
-  const max = Math.max(...finite);
-  if (!Number.isFinite(min) || !Number.isFinite(max)) return { min: 0, max: 1 };
-  return min === max ? { min: min - 1, max: max + 1 } : { min, max };
-};
 
 const markerSvg = (
   shape: PlotMarkerShape,
@@ -81,104 +60,145 @@ const markerSvg = (
   return `<circle cx="${x}" cy="${y}" r="${radius}" fill="#fff" stroke="${color}"/>`;
 };
 
-export const buildPlotSvg = (spec: PlotSpec, dataset: Dataset): string => {
-  const normalized = normalizePlotSpecForCommand(spec);
-  const series = sortedPlotSeries(normalized.series);
-  const width = normalized.size.width;
-  const height = normalized.size.height;
-  const plotLeft = normalized.padding.left + normalized.axes.y.size;
-  const plotTop = normalized.padding.top + normalized.font.size + 12;
-  const plotRight = width - normalized.padding.right;
-  const plotBottom = height - normalized.padding.bottom - normalized.axes.x.size;
-  const plotWidth = Math.max(1, plotRight - plotLeft);
-  const plotHeight = Math.max(1, plotBottom - plotTop);
-  const xValues = dataset.rows.map((row, index) => Number(row[normalized.x] ?? index));
-  const yValues = series.flatMap((item) =>
-    dataset.rows.map((row) => Number(row[item.y] ?? Number.NaN)),
-  );
-  const xRange = dataRange(xValues, normalized.axes.x.range);
-  const yRange = dataRange(yValues, normalized.axes.y.range);
-  const xToSvg = (value: number) =>
-    plotLeft + ((value - xRange.min) / (xRange.max - xRange.min)) * plotWidth;
-  const yToSvg = (value: number) =>
-    plotBottom - ((value - yRange.min) / (yRange.max - yRange.min)) * plotHeight;
+export interface PlotExportLayout {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  ticks: PlotAxisTicks;
+  position: (value: number, axis: "x" | "y") => number;
+}
 
-  const grid = [
-    normalized.grid.x
-      ? `<g stroke="${normalized.axes.x.gridColor}" opacity="0.8">${[0, 0.25, 0.5, 0.75, 1]
-          .map((ratio) => {
-            const x = plotLeft + ratio * plotWidth;
-            return `<line x1="${x}" y1="${plotTop}" x2="${x}" y2="${plotBottom}"/>`;
-          })
-          .join("")}</g>`
-      : "",
-    normalized.grid.y
-      ? `<g stroke="${normalized.axes.y.gridColor}" opacity="0.8">${[0, 0.25, 0.5, 0.75, 1]
-          .map((ratio) => {
-            const y = plotTop + ratio * plotHeight;
-            return `<line x1="${plotLeft}" y1="${y}" x2="${plotRight}" y2="${y}"/>`;
-          })
-          .join("")}</g>`
-      : "",
-  ].join("");
+export const plotExportLayout = (
+  plot: uPlot,
+  spec: PlotSpec,
+  ticks: PlotAxisTicks,
+): PlotExportLayout => {
+  const ratio = plot.ctx.canvas.width / spec.size.width;
+  return {
+    left: plot.bbox.left / ratio,
+    top: plot.bbox.top / ratio,
+    width: plot.bbox.width / ratio,
+    height: plot.bbox.height / ratio,
+    ticks,
+    position: (value, axis) => plot.valToPos(value, axis, true) / ratio,
+  };
+};
 
-  const traces = series
-    .map((item) => {
-      const points = dataset.rows
-        .map((row, index) => {
-          const x = xToSvg(Number(row[normalized.x] ?? index));
-          const y = yToSvg(Number(row[item.y] ?? Number.NaN));
-          return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : undefined;
-        })
-        .filter((point): point is { x: number; y: number } => Boolean(point));
-      const path = points.map((point) => `${point.x},${point.y}`).join(" ");
-      const line =
-        normalized.plotType === "marker"
-          ? ""
-          : `<polyline fill="none" stroke="${item.color}" stroke-width="${item.lineWidth}" points="${path}"/>`;
-      const markers =
-        normalized.plotType === "line"
-          ? ""
-          : points
-              .map((point) =>
-                markerSvg(item.markerShape, point.x, point.y, item.markerSize, item.color),
-              )
-              .join("");
-      return `<g data-series="${escapeXml(item.label)}">${line}${markers}</g>`;
+export const buildPlotSvg = (
+  spec: PlotSpec,
+  data: uPlot.AlignedData,
+  layout: PlotExportLayout,
+): string => {
+  const { left, top, width, height, ticks, position } = layout;
+  const right = left + width;
+  const bottom = top + height;
+  const midpoint = (left + right) / 2;
+  const middle = (top + bottom) / 2;
+  const line = (x1: number, y1: number, x2: number, y2: number, color: string) =>
+    `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}"/>`;
+  const grid: string[] = [];
+  const axes: string[] = [];
+  for (const axis of ["x", "y"] as const) {
+    const axisSpec = spec.axes[axis];
+    const horizontal = axis === "x";
+    const tickLength =
+      axisSpec.ticks.orientation === "none"
+        ? 0
+        : axisSpec.ticks.length * (axisSpec.ticks.orientation === "in" ? -1 : 1);
+    const anchor = horizontal ? "middle" : "end";
+    const baseline = horizontal ? "hanging" : "central";
+    const tickLabels: string[] = [];
+    for (const tick of ticks[axis]) {
+      const at = position(tick.value, axis);
+      if (
+        !Number.isFinite(at) ||
+        at < (horizontal ? left : top) - 0.5 ||
+        at > (horizontal ? right : bottom) + 0.5
+      )
+        continue;
+      if (spec.grid[axis]) {
+        grid.push(
+          horizontal
+            ? line(at, top, at, bottom, axisSpec.gridColor)
+            : line(left, at, right, at, axisSpec.gridColor),
+        );
+      }
+      if (tickLength !== 0) {
+        axes.push(
+          horizontal
+            ? line(at, bottom, at, bottom + tickLength, axisSpec.tickColor)
+            : line(left, at, left - tickLength, at, axisSpec.tickColor),
+        );
+      }
+      if (tick.label) {
+        const x = horizontal ? at : left - tickLength - axisSpec.gap;
+        const y = horizontal ? bottom + tickLength + axisSpec.gap : at;
+        tickLabels.push(`<text x="${x}" y="${y}">${escapeXml(tick.label)}</text>`);
+      }
+    }
+    axes.push(
+      `<g data-axis-ticks="${axis}" text-anchor="${anchor}" dominant-baseline="${baseline}" fill="${axisSpec.color}" font-family="${escapeXml(axisSpec.valueStyle.family)}" font-size="${axisSpec.valueStyle.size}">${tickLabels.join("")}</g>`,
+    );
+    if (!axisSpec.label) continue;
+    const style = `fill="${axisSpec.color}" font-family="${escapeXml(axisSpec.labelStyle.family)}" font-size="${axisSpec.labelStyle.size}" text-anchor="middle"`;
+    const labelArea = Math.max(axisSpec.labelSize, axisSpec.labelGap + axisSpec.labelStyle.size);
+    const labelPosition = horizontal
+      ? spec.size.height - spec.padding.bottom - labelArea + axisSpec.labelGap
+      : left - axisSpec.size - axisSpec.labelGap;
+    axes.push(
+      horizontal
+        ? `<text x="${midpoint}" y="${labelPosition}" dominant-baseline="hanging" ${style}>${escapeXml(axisSpec.label)}</text>`
+        : `<text transform="translate(${labelPosition} ${middle}) rotate(-90)" ${style}>${escapeXml(axisSpec.label)}</text>`,
+    );
+  }
+  const traces = sortedPlotSeries(spec.series)
+    .map((item, seriesIndex) => {
+      const polylines: string[] = [];
+      const markers: string[] = [];
+      let segment: string[] = [];
+      const flushSegment = () => {
+        if (segment.length > 1 && spec.plotType !== "marker") {
+          polylines.push(
+            `<polyline fill="none" stroke="${item.color}" stroke-width="${item.lineWidth}" points="${segment.join(" ")}"/>`,
+          );
+        }
+        segment = [];
+      };
+      data[0].forEach((x, index) => {
+        const y = data[seriesIndex + 1]?.[index];
+        const px = position(x, "x");
+        const py = y == null ? Number.NaN : position(y, "y");
+        if (!Number.isFinite(px) || !Number.isFinite(py)) {
+          flushSegment();
+          return;
+        }
+        segment.push(`${px},${py}`);
+        if (spec.plotType !== "line")
+          markers.push(markerSvg(item.markerShape, px, py, item.markerSize, item.color));
+      });
+      flushSegment();
+      return `<g data-series="${escapeXml(item.label)}">${polylines.join("")}${markers.join("")}</g>`;
     })
     .join("");
-
-  const annotations = normalized.annotations
+  const annotations = spec.annotations
     .map((annotation) => {
-      const x = xToSvg(annotation.x);
-      const y = yToSvg(annotation.y);
+      const x = position(annotation.x, "x");
+      const y = position(annotation.y, "y");
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return "";
       const labelX = x + annotation.dx;
       const labelY = y + annotation.dy;
-      return `<g stroke="${annotation.color}" fill="${annotation.color}" font-family="${escapeXml(
-        annotation.font.family,
-      )}" font-size="${annotation.font.size}"><line x1="${labelX}" y1="${labelY}" x2="${x}" y2="${y}"/><circle cx="${x}" cy="${y}" r="3"/><text x="${
-        labelX + 4
-      }" y="${labelY - 4}">${escapeXml(annotation.text)}</text></g>`;
+      return `<g fill="${annotation.color}" font-family="${escapeXml(annotation.font.family)}" font-size="${annotation.font.size}">${line(labelX, labelY, x, y, annotation.color)}<circle cx="${x}" cy="${y}" r="3"/><text x="${labelX + 4}" y="${labelY - 4}">${escapeXml(annotation.text)}</text></g>`;
     })
     .join("");
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" font-family="${escapeXml(
-    normalized.font.family,
-  )}" font-size="${normalized.font.size}"><rect width="100%" height="100%" fill="#fff"/>${
-    normalized.border
-      ? `<rect x="${plotLeft}" y="${plotTop}" width="${plotWidth}" height="${plotHeight}" fill="none" stroke="${normalized.axes.x.color}"/>`
-      : ""
-  }<text x="${width / 2}" y="${normalized.padding.top + normalized.font.size}" text-anchor="middle" font-weight="700">${escapeXml(
-    normalized.title,
-  )}</text>${grid}${traces}${annotations}<line x1="${plotLeft}" y1="${plotBottom}" x2="${plotRight}" y2="${plotBottom}" stroke="${
-    normalized.axes.x.color
-  }"/><line x1="${plotLeft}" y1="${plotTop}" x2="${plotLeft}" y2="${plotBottom}" stroke="${
-    normalized.axes.y.color
-  }"/><text x="${(plotLeft + plotRight) / 2}" y="${height - normalized.padding.bottom}" text-anchor="middle">${escapeXml(
-    normalized.axes.x.label,
-  )}</text><text x="${normalized.padding.left}" y="${(plotTop + plotBottom) / 2}" transform="rotate(-90 ${normalized.padding.left} ${
-    (plotTop + plotBottom) / 2
-  })" text-anchor="middle">${escapeXml(normalized.axes.y.label)}</text></svg>`;
+  const title = spec.title
+    ? `<text x="${spec.size.width / 2}" y="${spec.padding.top + spec.font.size / 2}" text-anchor="middle" dominant-baseline="central" font-weight="600">${escapeXml(spec.title)}</text>`
+    : "";
+  const border = spec.border
+    ? line(left, bottom, right, bottom, spec.axes.x.color) +
+      line(left, top, left, bottom, spec.axes.y.color)
+    : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${spec.size.width}" height="${spec.size.height}" viewBox="0 0 ${spec.size.width} ${spec.size.height}" font-family="${escapeXml(spec.font.family)}" font-size="${spec.font.size}"><rect width="100%" height="100%" fill="#fff"/><defs><clipPath id="plot-area"><rect x="${left}" y="${top}" width="${width}" height="${height}"/></clipPath></defs>${title}<g clip-path="url(#plot-area)">${grid.join("")}${traces}${annotations}</g>${border}${axes.join("")}</svg>`;
 };
 
 export const svgDataUrl = (svg: string): string =>

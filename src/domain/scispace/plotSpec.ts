@@ -1,5 +1,6 @@
 import type {
   Dataset,
+  DataValue,
   PlotAxisSpec,
   PlotMarkerShape,
   PlotPaddingSpec,
@@ -255,6 +256,12 @@ export const normalizeTextStyle = (
     Number.isFinite(style?.size) && Number(style?.size) > 0 ? Number(style?.size) : fallback.size,
 });
 
+export const finitePlotValue = (value: DataValue | undefined): number | null => {
+  if (value === undefined || (typeof value === "string" && !value.trim())) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+
 export const axisDataHasNonPositiveValues = (
   axis: "x" | "y",
   dataset: Dataset | undefined,
@@ -262,8 +269,11 @@ export const axisDataHasNonPositiveValues = (
   nextX = plot.x,
 ): boolean => {
   if (!dataset) return true;
-  if (axis === "x") {
-    return dataset.rows.some((row, index) => Number(row[nextX] ?? index) <= 0);
-  }
-  return plot.series.some((series) => dataset.rows.some((row) => Number(row[series.y] ?? 0) <= 0));
+  const columns = axis === "x" ? [nextX] : plot.series.map((series) => series.y);
+  return dataset.rows.some((row) =>
+    columns.some((column) => {
+      const value = finitePlotValue(row[column]);
+      return value !== null && value <= 0;
+    }),
+  );
 };

@@ -33,6 +33,20 @@ const shellPathToVirtualPath = (shellPath: string): string | undefined => {
   return undefined;
 };
 
+export const resolveShellRawPath = (path: string, cwd: string): string => {
+  const expanded = normalizeShellPath(path);
+  const absolute = expanded.startsWith("/") ? expanded : cwd + "/" + expanded;
+  const segments: string[] = [];
+  for (const segment of absolute.split("/")) {
+    if (segment === "..") segments.pop();
+    else if (segment && segment !== ".") segments.push(segment);
+  }
+  const resolved = "/" + segments.join("/");
+  return resolved === "/home/user/raw" || resolved.startsWith("/home/user/raw/")
+    ? "~/" + segments.slice(2).join("/")
+    : resolved;
+};
+
 const shellPathForPrompt = (shellPath: string): string => shellPath.replace("/home/user", "~");
 
 const isKnownDirectory = (path: string, files: VirtualFile[]): boolean => {

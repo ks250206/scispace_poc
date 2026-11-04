@@ -2,29 +2,96 @@ import uPlot from "uplot";
 import type { PlotAxisSpec, PlotMarkerShape, PlotSeries, PlotSpec } from "../../domain/types";
 import { sortedPlotSeries } from "./data";
 
-export const xAxisLabelHeight = 24;
 const maxMinorTickSteps = 1000;
 
 const font = (size: number, family: string): string => `${size}px ${family}`;
 
-const axisOptions = (axis: PlotAxisSpec, grid: boolean, border: boolean): uPlot.Axis => ({
-  label: axis.label,
-  size: axis.size,
-  gap: axis.gap,
-  labelGap: axis.labelGap,
-  labelSize: axis.labelSize,
-  font: font(axis.valueStyle.size, axis.valueStyle.family),
-  labelFont: font(axis.labelStyle.size, axis.labelStyle.family),
-  stroke: axis.color,
-  grid: { show: grid, stroke: axis.gridColor },
-  border: { show: border, stroke: axis.color },
-  ticks: {
-    show: axis.ticks.orientation !== "none",
-    size: axis.ticks.orientation === "in" ? -axis.ticks.length : axis.ticks.length,
-    stroke: axis.tickColor,
+const manualTickValues = (min: number, max: number, step: number): number[] => {
+  const first = Math.ceil(min / step - 1e-10);
+  const last = Math.floor(max / step + 1e-10);
+  const count = last - first + 1;
+  if (
+    !Number.isSafeInteger(first) ||
+    !Number.isSafeInteger(last) ||
+    count <= 0 ||
+    count > maxMinorTickSteps
+  )
+    return [];
+  return Array.from({ length: count }, (_, index) =>
+    Number(((first + index) * step).toPrecision(16)),
+  );
+};
+
+export interface PlotAxisTick {
+  value: number;
+  label: string;
+}
+
+export type PlotAxisTicks = Record<"x" | "y", PlotAxisTick[]>;
+
+const captureAxisTicks = (plot: uPlot, ticks: PlotAxisTicks) => {
+  (["x", "y"] as const).forEach((key, index) => {
+    const axis = plot.axes[index];
+    const splits = axis.splits;
+    const values = axis.values;
+    if (typeof splits !== "function" || typeof values !== "function") return;
+    let positions: number[] = [];
+    axis.splits = (...args) => {
+      positions = splits(...args);
+      return positions;
+    };
+    axis.values = (...args) => {
+      const labels = values(...args);
+      ticks[key] = positions.map((value, index) => ({ value, label: String(labels[index] ?? "") }));
+      return labels;
+    };
+  });
+};
+
+const plotTitlePlugin = (spec: PlotSpec): uPlot.Plugin => ({
+  hooks: {
+    draw: (plot) => {
+      if (!spec.title) return;
+      const { ctx } = plot;
+      const ratio = ctx.canvas.width / spec.size.width;
+      ctx.save();
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "600 " + font(spec.font.size * ratio, spec.font.family);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(
+        spec.title,
+        ctx.canvas.width / 2,
+        (spec.padding.top + spec.font.size / 2) * ratio,
+        ctx.canvas.width,
+      );
+      ctx.restore();
+    },
   },
-  incrs: axis.ticks.mode === "manual" && axis.ticks.interval ? [axis.ticks.interval] : undefined,
 });
+
+const axisOptions = (axis: PlotAxisSpec, grid: boolean, border: boolean): uPlot.Axis => {
+  const interval = axis.ticks.mode === "manual" ? axis.ticks.interval : undefined;
+  return {
+    label: axis.label || undefined,
+    size: axis.size,
+    gap: axis.gap,
+    labelGap: axis.labelGap,
+    labelSize: Math.max(axis.labelSize, axis.labelGap + axis.labelStyle.size),
+    font: font(axis.valueStyle.size, axis.valueStyle.family),
+    labelFont: font(axis.labelStyle.size, axis.labelStyle.family),
+    stroke: axis.color,
+    grid: { show: grid, stroke: axis.gridColor },
+    border: { show: border, stroke: axis.color },
+    ticks: {
+      show: axis.ticks.orientation !== "none",
+      size: axis.ticks.orientation === "in" ? -axis.ticks.length : axis.ticks.length,
+      stroke: axis.tickColor,
+    },
+    splits: interval ? (_plot, _axis, min, max) => manualTickValues(min, max, interval) : undefined,
+    filter: interval ? (_plot, splits) => splits : undefined,
+  };
+};
 
 const drawMarker = (
   context: CanvasRenderingContext2D,
@@ -168,15 +235,32 @@ export const buildPlotOptions = (
   spec: PlotSpec,
   height = spec.size.height,
   cursorBind?: uPlot.Cursor.Bind,
+  exportTicks?: PlotAxisTicks,
 ): uPlot.Options => {
   const xRange = spec.axes.x.range;
   const yRange = spec.axes.y.range;
   const series = sortedPlotSeries(spec.series);
+  const titleHeight = spec.title ? spec.font.size * 1.65 : 0;
+  const xAxis = axisOptions(spec.axes.x, spec.grid.x, spec.border);
+  const reservedLabel = spec.axes.x.label ? (xAxis.labelSize ?? 0) : 0;
+  const tickArea = spec.axes.x.valueStyle.size + spec.axes.x.gap + (xAxis.ticks?.size ?? 0);
+  xAxis.size = Math.min(
+    spec.axes.x.size,
+    Math.max(
+      tickArea,
+      height * 0.75 - spec.padding.top - spec.padding.bottom - titleHeight - reservedLabel,
+    ),
+  );
   return {
     width: spec.size.width,
     height,
-    title: spec.title,
-    padding: [spec.padding.top, spec.padding.right, spec.padding.bottom, spec.padding.left],
+    padding: [
+      spec.padding.top + titleHeight,
+      spec.padding.right,
+      spec.padding.bottom,
+      spec.padding.left,
+    ],
+    hooks: exportTicks ? { init: [(plot) => captureAxisTicks(plot, exportTicks)] } : undefined,
     cursor: { bind: cursorBind, drag: { x: false, y: false, setScale: false } },
     scales: {
       x: {
@@ -193,10 +277,7 @@ export const buildPlotOptions = (
         max: yRange.mode === "manual" ? yRange.max : undefined,
       },
     },
-    axes: [
-      { ...axisOptions(spec.axes.x, spec.grid.x, spec.border), label: undefined },
-      axisOptions(spec.axes.y, spec.grid.y, spec.border),
-    ],
+    axes: [xAxis, axisOptions(spec.axes.y, spec.grid.y, spec.border)],
     series: [
       { label: spec.x },
       ...series.map((item) => ({
@@ -210,6 +291,6 @@ export const buildPlotOptions = (
         },
       })),
     ],
-    plugins: [minorTickPlugin(spec), annotationPlugin(spec)],
+    plugins: [minorTickPlugin(spec), annotationPlugin(spec), plotTitlePlugin(spec)],
   };
 };

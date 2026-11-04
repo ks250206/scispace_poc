@@ -81,7 +81,7 @@ describe("plot rendering options", () => {
 
     const options = buildPlotOptions(spec);
 
-    expect(options.padding).toEqual([8, 10, 12, 14]);
+    expect(options.padding).toEqual([8 + 14 * 1.65, 10, 12, 14]);
     expect(options.scales?.y).toMatchObject({ distr: 3, log: 10 });
     expect(options.axes?.[0]).toMatchObject({
       size: 56,
@@ -95,7 +95,7 @@ describe("plot rendering options", () => {
       ticks: { size: 10, stroke: "#6b7280" },
     });
     expect(options.series?.map((series) => series.label)).toEqual(["time", "Background", "Signal"]);
-    expect(options.plugins).toHaveLength(2);
+    expect(options.plugins).toHaveLength(3);
   });
 
   it("sorts trace drawing order deterministically", () => {
@@ -161,6 +161,25 @@ describe("plot rendering options", () => {
     expect(buildSortedAlignedPlotData(unsortedDataset, created.spec)).toEqual([
       [1, 2, 3],
       [10, 20, 30],
+    ]);
+  });
+
+  it("keeps each series aligned when other series have missing values", () => {
+    const dataset = createSeedDataset();
+    const created = executeScispaceCommand("plot waveform.csv x=time y=signal,background", {
+      datasets: [dataset],
+    });
+    if (created.kind !== "plot-created") throw new Error(created.output);
+    const rows = [
+      { time: 0, signal: 3, background: "NA" },
+      { time: 1, signal: 4, background: "" },
+      { time: 2, signal: 5, background: 0 },
+      { time: "", signal: 6, background: 2 },
+    ];
+    expect(buildSortedAlignedPlotData({ ...dataset, rows }, created.spec)).toEqual([
+      [0, 1, 2],
+      [3, 4, 5],
+      [null, null, 0],
     ]);
   });
 
