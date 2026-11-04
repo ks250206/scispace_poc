@@ -1,3 +1,5 @@
+import { quoteCommandToken } from "../../domain/scispace/commandUtils";
+
 export const quoteImportCommandArg = (value: string): string =>
   /[\s"']/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value;
 
@@ -11,3 +13,10 @@ export const importColumnCommand = (importId: string, columnId: string, exclude:
   `import-column ${importId} column=${quoteImportCommandArg(columnId)} action=${
     exclude ? "exclude" : "include"
   }`;
+
+export const importRenameColumnCommand = (
+  importId: string,
+  columnId: string,
+  name: string,
+): string =>
+  `import-column ${importId} column=${quoteCommandToken(columnId)} action=rename name=${quoteCommandToken(name)}`;

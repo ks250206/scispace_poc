@@ -19,30 +19,18 @@ export const applyImportOpenResult = async (
     const baseOptions = detectedPreset
       ? { ...result.pendingImport.options, ...detectedPreset.options }
       : result.pendingImport.options;
-    const initialPreview = createPreviews(
+    const previews = createPreviews(
       importId,
       result.pendingImport.fileName,
       result.pendingImport.text,
       baseOptions,
-    );
-    const options = {
-      ...baseOptions,
-      excludedColumnIds: emptyColumnIds(initialPreview.allPreview),
-    };
-    const { allPreview, preview, error } = createPreviews(
-      importId,
-      result.pendingImport.fileName,
-      result.pendingImport.text,
-      options,
+      emptyColumnIds,
     );
     const pendingImport: PendingImport = {
       ...result.pendingImport,
-      options,
+      ...previews,
       detectedPreset,
       presetOverridden: false,
-      allPreview,
-      preview,
-      error,
     };
     set((state) => {
       const existingWindow = state.windows.find((window) => window.importId === importId);

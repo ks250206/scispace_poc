@@ -19,6 +19,7 @@ import { ImportTabs } from "./import-window/ImportTabs";
 import {
   importColumnCommand,
   importLineCommand,
+  importRenameColumnCommand,
   importSetCommand,
 } from "./import-window/importCommands";
 import { RawTextTable } from "./import-window/RawTextTable";
@@ -44,6 +45,8 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   );
   const runScispace = useScispaceStore((state) => state.runScispace);
   const confirmImport = useScispaceStore((state) => state.confirmImport);
+  const windowRef = useRef<HTMLDivElement>(null);
+  const pendingColumnEdit = useRef<ReturnType<typeof runScispace> | undefined>(undefined);
   const rawParentRef = useRef<HTMLDivElement>(null);
   const previewParentRef = useRef<HTMLDivElement>(null);
   const [previewColumnWidths, setPreviewColumnWidths] = useState<Record<string, number>>({});
@@ -144,6 +147,24 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   const toggleExcludedColumn = (columnId: string, checked: boolean) => {
     void runScispace(importColumnCommand(importId, columnId, checked), { source: "gui" });
   };
+  const runColumnEdit = (command: string) => {
+    pendingColumnEdit.current = pendingColumnEdit.current
+      ? pendingColumnEdit.current.then(() => runScispace(command, { source: "gui" }))
+      : runScispace(command, { source: "gui" });
+  };
+  const submitImport = async () => {
+    const active = document.activeElement;
+    if (
+      active instanceof HTMLInputElement &&
+      windowRef.current?.contains(active) &&
+      active.closest(".column-name-editor")
+    )
+      active.blur();
+    const edit = pendingColumnEdit.current;
+    const result = await edit;
+    if (pendingColumnEdit.current === edit) pendingColumnEdit.current = undefined;
+    if (result?.kind !== "error") await confirmImport(importId);
+  };
   const reapplyPreset = () => {
     void runScispace(importSetCommand(importId, "preset=apply"), { source: "gui" });
   };
@@ -153,7 +174,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   );
 
   return (
-    <div className="import-window">
+    <div className="import-window" ref={windowRef}>
       <div className="import-summary">
         <div>
           <span className="import-summary-kicker">Import source</span>
@@ -166,7 +187,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
           pendingImport={pendingImport}
           onImportSet={runImportSet}
           onCancel={() => void runScispace(`import-cancel ${importId}`, { source: "gui" })}
-          onImport={() => void confirmImport(importId)}
+          onImport={() => void submitImport()}
         />
         <ImportPresetCard
           pendingImport={pendingImport}
@@ -174,7 +195,11 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
           onReapplyPreset={reapplyPreset}
         />
       </div>
-      {pendingImport.error && !preview ? (
+      {pendingImport.mode === "tabular" && pendingImport.columnTypeError ? (
+        <div className="import-error" role="alert">
+          {pendingImport.columnTypeError}
+        </div>
+      ) : pendingImport.error && !preview ? (
         <div className="import-error">{pendingImport.error}</div>
       ) : null}
       <div className="import-tab-area">
@@ -218,7 +243,14 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
             <ImportColumnsTab
               allPreview={allPreview}
               pendingImport={pendingImport}
-              onImportSet={runImportSet}
+              onRenameColumn={(columnId, name) =>
+                runColumnEdit(importRenameColumnCommand(importId, columnId, name))
+              }
+              onSetColumnType={(index, type, format = "iso") =>
+                runColumnEdit(
+                  `import-column ${importId} action=type index=${index + 1} type=${type} format=${format}`,
+                )
+              }
               onToggleExcludedColumn={toggleExcludedColumn}
             />
           ) : null}

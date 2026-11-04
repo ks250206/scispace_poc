@@ -1,9 +1,10 @@
 import { datasetColumnIds, normalizeVirtualPath } from "../../domain/csv";
+import { readOption, tokenizeCommand } from "../../domain/scispace/commandUtils";
 import type { PendingImport, ScispaceCommandResult } from "../../domain/types";
 import {
   createPreviews,
   emptyColumnIds,
-  normalizeColumnNames,
+  remapRenamedColumnExclusions,
   readCommandPath,
 } from "./importPreview";
 import type { ResultApplyContext } from "./resultApplyContext";
@@ -18,26 +19,19 @@ export const applyImportResult = async (
   const { db, get, input, set } = context;
   if (result.kind === "import-updated") {
     const updatedImport = result.pendingImport;
-    const { allPreview, preview, error } = createPreviews(
+    const previous = get().pendingImports.find(({ id }) => id === updatedImport.id);
+    const [command, ...args] = tokenizeCommand(input);
+    const reapplyPreset = command === "import-set" && readOption(args, "preset") === "apply";
+    const previews = createPreviews(
       updatedImport.id,
       updatedImport.fileName,
       updatedImport.text,
       updatedImport.options,
+      reapplyPreset
+        ? emptyColumnIds
+        : (allPreview) => remapRenamedColumnExclusions(previous, updatedImport, allPreview),
     );
-    const normalizedOptions =
-      updatedImport.detectedPreset && updatedImport.presetOverridden === false
-        ? normalizeColumnNames(
-            { ...updatedImport.options, excludedColumnIds: emptyColumnIds(allPreview) },
-            allPreview,
-          )
-        : normalizeColumnNames(updatedImport.options, allPreview);
-    const normalizedImport: PendingImport = {
-      ...updatedImport,
-      options: normalizedOptions,
-      allPreview,
-      preview,
-      error,
-    };
+    const normalizedImport: PendingImport = { ...updatedImport, ...previews };
     set((state) => ({
       pendingImports: state.pendingImports.map((pendingImport) =>
         pendingImport.id === normalizedImport.id ? normalizedImport : pendingImport,

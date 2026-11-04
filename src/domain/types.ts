@@ -1,3 +1,5 @@
+import type { ColumnConversionType, ColumnDateFormat } from "./columnConversion";
+
 export type WindowKind =
   | "browser"
   | "table"
@@ -20,6 +22,7 @@ export interface ImportParseOptions {
   commentPrefix: string;
   hasHeader: boolean;
   columnNames: string[];
+  columnTypes?: Record<number, { type: ColumnConversionType; format?: ColumnDateFormat }>;
   excludedColumnIds: string[];
 }
 
@@ -218,7 +221,14 @@ export type ScispaceCommandResult =
       targetDirectory?: string;
       output: string;
     }
-  | { kind: "import-preview"; importId: string; preview?: Dataset; error?: string; output: string }
+  | {
+      kind: "import-preview";
+      importId: string;
+      preview?: Dataset;
+      error?: string;
+      columnTypeErrors?: Record<string, string>;
+      output: string;
+    }
   | { kind: "import-open"; importId: string; pendingImport: PendingImport; output: string }
   | { kind: "import-updated"; importId: string; pendingImport: PendingImport; output: string }
   | { kind: "import-cancel"; importId: string; output: string }
@@ -259,4 +269,5 @@ export interface PendingImport {
   allPreview?: Dataset;
   preview?: Dataset;
   error?: string;
+  columnTypeError?: string;
 }
