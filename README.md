@@ -64,7 +64,7 @@ Plot、Import、Terminal、Command History などのウィンドウを配置し�
 
 ### Plot
 
-- uPlot ベースの line / line-marker / marker plot。
+- React SVG と D3 による line / line-marker / marker plot。
 - 複数 series、色、ラベル、線幅、marker size / shape。
 - title、axis label、range、tick、grid、border、font、padding、annotation。
 - Plot Config window による設定編集。

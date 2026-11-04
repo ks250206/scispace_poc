@@ -20,10 +20,10 @@ export const plotSelectionRectForZoomMode = (
   start: { left: number; top: number },
   end: { left: number; top: number },
   plotSize: { width: number; height: number },
+  mode = inferPlotDragZoomMode(end.left - start.left, end.top - start.top),
 ): { left: number; top: number; width: number; height: number } => {
   const width = Math.abs(end.left - start.left);
   const height = Math.abs(end.top - start.top);
-  const mode = inferPlotDragZoomMode(width, height);
   const horizontal = {
     left: Math.min(start.left, end.left),
     width,
