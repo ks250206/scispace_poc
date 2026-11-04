@@ -68,6 +68,8 @@ export const executePlotAxisCommand = (
   const tickLength = parseNonNegativeNumber(tickLengthValue);
   const minorTickValue = readOption(args, "minorTick");
   const minorTick = parseOptionalBoolean(minorTickValue);
+  const mirrorTickValue = readOption(args, "mirrorTick");
+  const mirrorTick = parseOptionalBoolean(mirrorTickValue);
 
   if (labelFontSizeValue !== undefined && labelFontSize === undefined)
     return { kind: "error", output: `Invalid label font size: ${labelFontSizeValue}` };
@@ -91,6 +93,9 @@ export const executePlotAxisCommand = (
     return { kind: "error", output: `Invalid tick length: ${tickLengthValue}` };
   if (minorTickValue !== undefined && minorTick === undefined)
     return { kind: "error", output: `Invalid minor tick: ${minorTickValue}` };
+
+  if (mirrorTickValue !== undefined && mirrorTick === undefined)
+    return { kind: "error", output: `Invalid mirror tick: ${mirrorTickValue}` };
 
   const axis = {
     ...current.axes[axisKey],
@@ -120,6 +125,7 @@ export const executePlotAxisCommand = (
       ...(tickDir ? { orientation: tickDir as PlotTickDirection } : {}),
       ...(tickLength !== undefined ? { length: tickLength } : {}),
       ...(minorTick !== undefined ? { minor: minorTick } : {}),
+      ...(mirrorTick !== undefined ? { mirror: mirrorTick } : {}),
     },
   };
   const spec = normalizePlotSpecForCommand({

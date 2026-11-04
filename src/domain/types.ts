@@ -136,6 +136,7 @@ export interface PlotAxisSpec {
     orientation: PlotTickDirection;
     length: number;
     minor: boolean;
+    mirror?: boolean;
   };
   scale: PlotScale;
   labelStyle: PlotTextStyle;

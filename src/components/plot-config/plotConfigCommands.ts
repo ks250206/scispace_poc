@@ -49,6 +49,7 @@ export const plotAxisCommand = (plotId: string, axis: "x" | "y", axisSpec: PlotA
     tickColor: axisSpec.tickColor,
     tickLength: axisSpec.ticks.length,
     minorTick: axisSpec.ticks.minor,
+    mirrorTick: axisSpec.ticks.mirror,
   })}`;
 
 export const plotSeriesStyleCommand = (

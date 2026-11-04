@@ -291,10 +291,57 @@ describe("Workbench plot and history UI", () => {
     expect(exported.querySelector(".plot-interaction")).toBeNull();
   });
 
+  it("mirrors the configured axis marks and includes them in the exported figure", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    await clickToolbarItem(user, "Plot", "Plot Config");
+    await user.click(await screen.findByRole("tab", { name: "Axes" }));
+    const xMirror = screen.getByRole("checkbox", { name: "x mirror ticks" });
+    expect(xMirror).not.toBeChecked();
+    await user.click(xMirror);
+    const axis = (key: "x" | "y") => document.querySelector(`[data-plot-axis="${key}"]`);
+    const marks = (key: "x" | "y") => [
+      ...(axis(key)?.querySelectorAll("[data-mirrored-tick]") ?? []),
+    ];
+    await waitFor(() => expect(marks("x").length).toBeGreaterThan(0));
+    expect(marks("y")).toHaveLength(0);
+    const mirror = marks("x")[0]!;
+    const primary = mirror.parentElement?.querySelector("line");
+    expect(mirror.getAttribute("x1")).toBe(primary?.getAttribute("x1"));
+    expect(Number(mirror.getAttribute("y2"))).toBeLessThan(Number(mirror.getAttribute("y1")));
+
+    await act(async () => {
+      await storeState().runScispace("plot-set seed-plot width=120 height=120 padding=0:0:0:0");
+      await storeState().runScispace("plot-axis seed-plot axis=x mirrorTick=true tick=2");
+      await storeState().runScispace("plot-axis seed-plot axis=y mirrorTick=true tickDir=in");
+    });
+    expect(marks("x").every((mark) => Number(mark.getAttribute("y2")) >= 0)).toBe(true);
+    expect(
+      marks("y").every((mark) => Number(mark.getAttribute("x2")) < Number(mark.getAttribute("x1"))),
+    ).toBe(true);
+    const figure = document.querySelector(".plot-figure")!;
+    const exported = new DOMParser().parseFromString(
+      new XMLSerializer().serializeToString(figure),
+      "image/svg+xml",
+    );
+    expect(exported.querySelectorAll("[data-mirrored-tick]")).toHaveLength(
+      marks("x").length + marks("y").length,
+    );
+    const schema = await storeState().runScispace("plot-schema seed-plot");
+    expect(JSON.parse(schema.output).axes.x.ticks.mirror).toBe(true);
+
+    await act(async () => {
+      await storeState().runScispace("plot-axis seed-plot axis=x tickDir=none");
+    });
+    expect(marks("x")).toHaveLength(0);
+    expect(marks("y").length).toBeGreaterThan(0);
+  });
+
   it("zooms on the configured axis in a scaled plot and resets on double click", async () => {
     await renderWorkbench();
     await act(async () => {
       await storeState().runScispace("plot-set seed-plot zoom=x", { source: "gui" });
+      await storeState().runScispace("plot-axis seed-plot axis=x mirrorTick=true");
     });
     const interaction = document.querySelector(".plot-interaction") as SVGSVGElement;
     vi.spyOn(interaction, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 50, 1280, 720));
@@ -311,6 +358,9 @@ describe("Workbench plot and history UI", () => {
     expect(interaction.querySelector("rect")).toBeNull();
     expect(ticks("x")).not.toEqual(before.x);
     expect(ticks("y")).toEqual(before.y);
+    expect(document.querySelectorAll('[data-plot-axis="x"] [data-mirrored-tick]')).toHaveLength(
+      ticks("x").length,
+    );
 
     fireEvent.doubleClick(interaction);
     expect(ticks("x")).toEqual(before.x);

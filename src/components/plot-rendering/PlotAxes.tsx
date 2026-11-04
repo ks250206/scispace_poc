@@ -42,10 +42,14 @@ export function PlotAxisFigure({ axis, spec, geometry, scale }: AxisProps) {
   const horizontal = axis === "x";
   const { left, top, right, bottom } = geometry;
   const { major, minor } = plotTicks(settings, scale, axis);
-  const tickLength =
+  const requestedLength =
     settings.ticks.orientation === "none"
       ? 0
       : settings.ticks.length * (settings.ticks.orientation === "in" ? -1 : 1);
+  const tickLength =
+    settings.ticks.mirror && requestedLength > 0
+      ? Math.min(requestedLength, Math.max(0, (horizontal ? top : spec.size.width - right) - 1))
+      : requestedLength;
   const labelOffset = Math.max(0, tickLength) + settings.gap;
   const labelPosition = axisLabelPosition(spec, settings, geometry, horizontal);
   const titleX = horizontal ? (left + right) / 2 : labelPosition;
@@ -61,6 +65,21 @@ export function PlotAxisFigure({ axis, spec, geometry, scale }: AxisProps) {
       strokeDasharray={dashed ? "2 3" : undefined}
     />
   );
+
+  const tickMark = (position: number, mirrored = false) => {
+    const edge = horizontal ? (mirrored ? top : bottom) : mirrored ? right : left;
+    const end = edge + tickLength * (horizontal === mirrored ? -1 : 1);
+    return (
+      <line
+        data-mirrored-tick={mirrored ? "" : undefined}
+        x1={horizontal ? position : edge}
+        x2={horizontal ? position : end}
+        y1={horizontal ? edge : position}
+        y2={horizontal ? end : position}
+        stroke={settings.tickColor}
+      />
+    );
+  };
 
   return (
     <g data-plot-axis={axis}>
@@ -92,15 +111,8 @@ export function PlotAxisFigure({ axis, spec, geometry, scale }: AxisProps) {
       >
         {major.map(({ value, position, label }) => (
           <g key={value} data-tick-value={value}>
-            {tickLength !== 0 ? (
-              <line
-                x1={horizontal ? position : left}
-                x2={horizontal ? position : left - tickLength}
-                y1={horizontal ? bottom : position}
-                y2={horizontal ? bottom + tickLength : position}
-                stroke={settings.tickColor}
-              />
-            ) : null}
+            {tickLength !== 0 && tickMark(position)}
+            {settings.ticks.mirror && tickLength !== 0 && tickMark(position, true)}
             {label ? (
               <text
                 x={horizontal ? position : left - labelOffset}

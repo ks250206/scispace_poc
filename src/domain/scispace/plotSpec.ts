@@ -62,7 +62,7 @@ export const plotSpecSchema = {
       tickColor: "#rrggbb",
       range: '{ mode: "auto" } | { mode: "manual", min: number, max: number }',
       ticks:
-        '{ mode: "auto", orientation: "out" | "in" | "none", length: number, minor: boolean } | { mode: "manual", interval: number, orientation: "out" | "in" | "none", length: number, minor: boolean }',
+        '{ mode: "auto", orientation: "out" | "in" | "none", length: number, minor: boolean, mirror?: boolean } | { mode: "manual", interval: number, orientation: "out" | "in" | "none", length: number, minor: boolean, mirror?: boolean }',
     },
     y: {
       label: "string",
@@ -78,7 +78,7 @@ export const plotSpecSchema = {
       tickColor: "#rrggbb",
       range: '{ mode: "auto" } | { mode: "manual", min: number, max: number }',
       ticks:
-        '{ mode: "auto", orientation: "out" | "in" | "none", length: number, minor: boolean } | { mode: "manual", interval: number, orientation: "out" | "in" | "none", length: number, minor: boolean }',
+        '{ mode: "auto", orientation: "out" | "in" | "none", length: number, minor: boolean, mirror?: boolean } | { mode: "manual", interval: number, orientation: "out" | "in" | "none", length: number, minor: boolean, mirror?: boolean }',
     },
   },
   grid: { x: "boolean", y: "boolean" },
@@ -112,7 +112,7 @@ export const plotSpecSchema = {
 export const defaultPlotAxis = (label: string): PlotAxisSpec => ({
   label,
   range: { mode: "auto" },
-  ticks: { mode: "auto", orientation: "out", length: 6, minor: false },
+  ticks: { mode: "auto", orientation: "out", length: 6, minor: false, mirror: false },
   scale: "linear",
   labelStyle: defaultAxisLabelFont,
   valueStyle: defaultAxisValueFont,
@@ -162,6 +162,7 @@ export const normalizeAxis = (axis: PlotAxisSpec | undefined, label: string): Pl
           ? Number(axis?.ticks.length)
           : fallback.ticks.length,
       minor: Boolean(axis?.ticks.minor),
+      mirror: axis?.ticks.mirror === true,
     },
     labelStyle: normalizeTextStyle(axis?.labelStyle, fallback.labelStyle),
     valueStyle: normalizeTextStyle(axis?.valueStyle, fallback.valueStyle),
