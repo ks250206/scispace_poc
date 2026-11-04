@@ -36,7 +36,9 @@ export function CommandHistoryWindow() {
               <button
                 type="button"
                 aria-label={`Run ${command}`}
-                onClick={() => sendCommandToTerminalLine(command, { execute: true })}
+                onClick={() =>
+                  sendCommandToTerminalLine(command, { execute: true, scispace: true })
+                }
               >
                 Run
               </button>
@@ -50,7 +52,7 @@ export function CommandHistoryWindow() {
               <button
                 type="button"
                 aria-label={`To command line ${command}`}
-                onClick={() => sendCommandToTerminalLine(command)}
+                onClick={() => sendCommandToTerminalLine(command, { scispace: true })}
               >
                 To cmd line
               </button>

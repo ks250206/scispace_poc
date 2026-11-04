@@ -15,7 +15,7 @@ interface WorkbenchToolbarMenuOptions {
   directWindowItems: ToolbarMenuItem[];
   exportActivePlotPng: () => void;
   exportActivePlotSvg: () => void;
-  hasResolvablePlotDataset: boolean;
+  canExportActivePlot: boolean;
   handleDeleteProject: () => Promise<void>;
   handleExportProject: () => Promise<void>;
   handleNewFolder: () => Promise<void>;
@@ -93,7 +93,7 @@ export const useWorkbenchToolbarMenus = ({
   handleNewFolder,
   handleNewProject,
   handleSaveProjectAs,
-  hasResolvablePlotDataset,
+  canExportActivePlot,
   openActivePlotConfig,
   openActivePlotSchemaApply,
   openDatasetCalcWindow,
@@ -232,11 +232,12 @@ export const useWorkbenchToolbarMenus = ({
         {
           label: "Export plot PNG",
           onSelect: exportActivePlotPng,
+          disabled: !canExportActivePlot,
         },
         {
           label: "Export plot SVG",
           onSelect: exportActivePlotSvg,
-          disabled: !hasResolvablePlotDataset,
+          disabled: !canExportActivePlot,
         },
       ],
     },

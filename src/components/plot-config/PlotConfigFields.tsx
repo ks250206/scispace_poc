@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 interface ConfigGroupProps {
   title: string;
@@ -26,5 +26,34 @@ export function ConfigField({ label, children, compact = false }: ConfigFieldPro
       <span>{label}</span>
       {children}
     </label>
+  );
+}
+
+interface CommittedTextInputProps {
+  label: string;
+  value: string;
+  className?: string;
+  onCommit: (value: string) => void;
+}
+
+export function CommittedTextInput({ label, value, className, onCommit }: CommittedTextInputProps) {
+  const [draft, setDraft] = useState<{ base: string; value: string }>();
+  const text = draft?.base === value ? draft.value : value;
+  return (
+    <input
+      aria-label={label}
+      className={className}
+      value={text}
+      onChange={(event) => setDraft({ base: value, value: event.target.value })}
+      onBlur={() => {
+        setDraft(undefined);
+        if (text !== value) onCommit(text);
+      }}
+      onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing) return;
+        if (event.key === "Enter") event.currentTarget.blur();
+        if (event.key === "Escape") setDraft(undefined);
+      }}
+    />
   );
 }

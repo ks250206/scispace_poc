@@ -96,7 +96,9 @@ describe("Workbench plot and history UI", () => {
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
     const otherPlotId = storeState().currentPlotId;
     expect(otherPlotId).not.toBe("seed-plot");
-    fireEvent.change(screen.getByLabelText("Plot title"), { target: { value: "Background" } });
+    const title = screen.getByLabelText("Plot title");
+    fireEvent.change(title, { target: { value: "Background" } });
+    fireEvent.blur(title);
     await waitFor(() =>
       expect(storeState().plotSpecs.find((plot) => plot.id === otherPlotId)?.title).toBe(
         "Background",
@@ -144,6 +146,82 @@ describe("Workbench plot and history UI", () => {
       releaseRejection();
       useScispaceStore.setState({ runScispace });
     }
+  });
+
+  it("commits both manual range bounds together and keeps an invalid draft", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    await clickToolbarItem(user, "Plot", "Plot Config");
+    await user.click(await screen.findByRole("tab", { name: "Axes" }));
+    await user.selectOptions(screen.getByLabelText("x range mode"), "manual");
+    const min = screen.getByLabelText("x range min");
+    const max = screen.getByLabelText("x range max");
+    fireEvent.change(min, { target: { value: "10" } });
+    const apply = screen.getByRole("button", { name: "Apply X range" });
+    await user.click(apply);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter a minimum");
+    expect(min).toHaveValue(10);
+    expect(storeState().plotSpecs[0]?.axes.x.range.mode).toBe("auto");
+    fireEvent.change(max, { target: { value: "20" } });
+    await user.click(apply);
+    await waitFor(() =>
+      expect(storeState().plotSpecs[0]?.axes.x.range).toEqual({ mode: "manual", min: 10, max: 20 }),
+    );
+  });
+
+  it("commits literal plot title edits once, and can undo and replay the command", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    await clickToolbarItem(user, "Plot", "Plot Config");
+    const input = await screen.findByLabelText("Plot title");
+    const original = storeState().plotSpecs[0]?.title;
+    const edited = 'Sample "A" = C:\\raw';
+    const historyBefore = storeState().commandHistory.length;
+    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.change(input, { target: { value: "Sample" } });
+    fireEvent.change(input, { target: { value: edited } });
+    expect(storeState().commandHistory).toHaveLength(historyBefore);
+    fireEvent.blur(input);
+    await waitFor(() => expect(storeState().commandHistory).toHaveLength(historyBefore + 1));
+    expect(storeState().plotSpecs[0]?.title).toBe(edited);
+    const command = storeState().commandHistory.at(-1)?.command;
+    if (!command) throw new Error("Missing title command");
+    await act(async () => storeState().undo());
+    expect(storeState().plotSpecs[0]?.title).toBe(original);
+    await act(async () => storeState().runScispace(command, { source: "history" }));
+    expect(storeState().plotSpecs[0]?.title).toBe(edited);
+  });
+
+  it("commits series and annotation labels as separate undoable edits", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    await clickToolbarItem(user, "Plot", "Plot Config");
+    await user.click(await screen.findByRole("tab", { name: "Series" }));
+    const series = screen.getByLabelText("Series label signal");
+    const label = 'Raw "signal" = C:\\raw';
+    fireEvent.change(series, { target: { value: "" } });
+    fireEvent.change(series, { target: { value: label } });
+    expect(storeState().commandHistory).toHaveLength(0);
+    fireEvent.blur(series);
+    await waitFor(() => expect(storeState().commandHistory).toHaveLength(1));
+    expect(storeState().plotSpecs[0]?.series[0]?.label).toBe(label);
+
+    await user.click(screen.getByRole("tab", { name: "Annotations" }));
+    await user.click(screen.getByRole("button", { name: "Add annotation" }));
+    const annotation = await screen.findByLabelText(/^Annotation label /);
+    const text = 'Peak "A" = C:\\samples';
+    fireEvent.change(annotation, { target: { value: "" } });
+    fireEvent.change(annotation, { target: { value: text } });
+    expect(storeState().commandHistory).toHaveLength(2);
+    fireEvent.blur(annotation);
+    await waitFor(() => expect(storeState().commandHistory).toHaveLength(3));
+    expect(storeState().plotSpecs[0]?.annotations[0]?.text).toBe(text);
+    await act(async () => storeState().undo());
+    expect(storeState().plotSpecs[0]?.annotations[0]?.text).toBe("Annotation");
+    await act(async () => storeState().undo());
+    expect(storeState().plotSpecs[0]?.annotations).toHaveLength(0);
+    await act(async () => storeState().undo());
+    expect(storeState().plotSpecs[0]?.series[0]?.label).toBe("signal");
   });
 
   it("copies plot schema and exports the current plot canvas as png and svg", async () => {

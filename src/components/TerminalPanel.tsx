@@ -4,6 +4,7 @@ import "@wterm/react/css";
 import type { WTerm } from "@wterm/dom";
 import { BashShell } from "@wterm/just-bash";
 import { defineCommand } from "just-bash";
+import { useDialog } from "./dialog/DialogProvider";
 import { useContextMenu } from "./context-menu/ContextMenuProvider";
 import { useScispaceStore } from "../store/scispaceStore";
 import { buildInitialFiles, syncBashFiles } from "./terminal/terminalFs";
@@ -15,6 +16,7 @@ import {
 import {
   applyReplTabCompletion,
   resetEditableLine,
+  scispaceReplCommandLine,
   stripScispacePrefix,
   tabSequence,
   terminalControlCommandFromInput,
@@ -81,6 +83,8 @@ export function TerminalPanel() {
   const runScispace = useScispaceStore((state) => state.runScispace);
   const terminalCommandLineRequest = useScispaceStore((state) => state.terminalCommandLineRequest);
   const { openContextMenu } = useContextMenu();
+  const { confirm } = useDialog();
+  const pastePending = useRef(false);
   const filesRef = useRef(files);
   const datasetsRef = useRef(datasets);
 
@@ -178,6 +182,7 @@ export function TerminalPanel() {
       const shell = new BashShell({
         files: initialFiles,
         cwd: "/home/user",
+        env: { HOME: "/home/user", SHELL: "/bin/bash", TERM: "xterm-256color" },
         greeting: ["SciSpace REPL", "Run `help` or inspect ~/raw with `file-list ~/raw`."],
         prompt: (cwd) =>
           terminalPrompt(
@@ -196,12 +201,13 @@ export function TerminalPanel() {
         };
       };
       shell.bash?.registerCommand(
-        defineCommand("scispace", async (args) => {
+        defineCommand("scispace", async (args, context) => {
           if (args[0] === "repl") {
             terminalFsStateRef.current = { cwd: shell.cwd };
             return applyControlResult(terminalControlResult("repl", [], terminalModeRef.current));
           }
-          const result = await runScispace(stripScispacePrefix(["scispace", ...args].join(" ")), {
+          const [command = "", ...options] = args;
+          const result = await runScispace(scispaceReplCommandLine(command, options, context.cwd), {
             source: "terminal",
           });
           scrollToBottom();
@@ -224,8 +230,109 @@ export function TerminalPanel() {
     ],
   );
 
+  const executeReplCommand = useCallback(
+    async (replCommand: string, fromPaste = false) => {
+      if (!replCommand) {
+        writeOutput(`\r\n${terminalPrompt("repl", terminalFsStateRef.current.cwd)}`);
+        scrollToBottom();
+        return;
+      }
+      const [command = "", ...args] = replCommand.split(/\s+/);
+      if (fromPaste && command === "shell") {
+        writeOutput(
+          terminalPromptOutput(
+            "Enter shell separately after the pasted commands.",
+            "repl",
+            terminalFsStateRef.current.cwd,
+          ),
+        );
+        return;
+      }
+      const controlResult = terminalControlResult(command, args, terminalModeRef.current);
+      if (controlResult.handled) {
+        writeTerminalControlResult(controlResult);
+        return;
+      }
+      if (command === "clear") {
+        writeOutput(clearVisibleScreenSequence);
+        writeOutput(terminalPrompt("repl", terminalFsStateRef.current.cwd));
+        scrollToBottom();
+        return;
+      }
+      const shellCommandMessage = terminalReplShellCommandMessage(command);
+      if (shellCommandMessage) {
+        writeOutput(
+          terminalPromptOutput(shellCommandMessage, "repl", terminalFsStateRef.current.cwd),
+        );
+        scrollToBottom();
+        return;
+      }
+      const result = await runScispace(replCommand, { source: "terminal" });
+      writeOutput(
+        terminalPromptOutput(
+          result.output,
+          terminalModeRef.current.mode,
+          terminalFsStateRef.current.cwd,
+        ),
+      );
+      scrollToBottom();
+    },
+    [runScispace, scrollToBottom, writeOutput, writeTerminalControlResult],
+  );
+
+  const reviewReplPaste = useCallback(
+    async (text: string) => {
+      if (pastePending.current) return;
+      pastePending.current = true;
+      const projectId = useScispaceStore.getState().currentProjectId;
+      try {
+        const accepted = await confirm({
+          title: "Run pasted SciSpace commands?",
+          message: text,
+          confirmLabel: "Run commands",
+        });
+        if (
+          !accepted ||
+          terminalModeRef.current.mode !== "repl" ||
+          useScispaceStore.getState().currentProjectId !== projectId
+        )
+          return;
+        const shell = shellRef.current;
+        const editableShell = shell as unknown as EditableBashShell | null;
+        if (editableShell?._line) {
+          resetEditableLine(shell, "");
+          writeOutput("\r\x1b[2K" + terminalPrompt("repl", terminalFsStateRef.current.cwd));
+        }
+        for (const line of text.split("\n")) {
+          const command = line.trim();
+          if (!command || useScispaceStore.getState().currentProjectId !== projectId) continue;
+          writeOutput(command);
+          resetEditableLine(shell, command);
+          await executeReplCommand(stripScispacePrefix(command), true);
+        }
+      } finally {
+        pastePending.current = false;
+      }
+    },
+    [confirm, executeReplCommand, writeOutput],
+  );
+
   const handleData = useCallback(
     (data: string) => {
+      if (pastePending.current) return;
+      if (terminalModeRef.current.mode === "repl" && data !== "\r" && data !== "\n") {
+        const pasteStart = "\x1b[200~";
+        const pasteEnd = "\x1b[201~";
+        const text =
+          data.startsWith(pasteStart) && data.endsWith(pasteEnd)
+            ? data.slice(pasteStart.length, -pasteEnd.length)
+            : data;
+        if (/[\r\n]/.test(text)) {
+          void reviewReplPaste(text.replace(/\r\n?/g, "\n"));
+          return;
+        }
+        data = text;
+      }
       const shell = shellRef.current;
       const editableShell = shell as unknown as EditableBashShell | null;
       if (terminalModeRef.current.mode === "repl" && data === tabSequence) {
@@ -255,46 +362,12 @@ export function TerminalPanel() {
       );
       if (replCommand !== undefined) {
         resetEditableLine(shell, editableShell?._line?.trim() ?? "");
-        if (!replCommand) {
-          writeOutput(`\r\n${terminalPrompt("repl", terminalFsStateRef.current.cwd)}`);
-          scrollToBottom();
-          return;
-        }
-        const [command = "", ...args] = replCommand.split(/\s+/);
-        const controlResult = terminalControlResult(command, args, terminalModeRef.current);
-        if (controlResult.handled) {
-          writeTerminalControlResult(controlResult);
-          return;
-        }
-        if (command === "clear") {
-          writeOutput(clearVisibleScreenSequence);
-          writeOutput(terminalPrompt("repl", terminalFsStateRef.current.cwd));
-          scrollToBottom();
-          return;
-        }
-        const shellCommandMessage = terminalReplShellCommandMessage(command);
-        if (shellCommandMessage) {
-          writeOutput(
-            terminalPromptOutput(shellCommandMessage, "repl", terminalFsStateRef.current.cwd),
-          );
-          scrollToBottom();
-          return;
-        }
-        void runScispace(replCommand, { source: "terminal" }).then((result) => {
-          writeOutput(
-            terminalPromptOutput(
-              result.output,
-              terminalModeRef.current.mode,
-              terminalFsStateRef.current.cwd,
-            ),
-          );
-          scrollToBottom();
-        });
+        void executeReplCommand(replCommand);
         return;
       }
       void handleTerminalInput(shellRef.current, data).then(scrollToBottom);
     },
-    [runScispace, scrollToBottom, writeOutput, writeTerminalControlResult],
+    [executeReplCommand, reviewReplPaste, scrollToBottom, writeTerminalControlResult],
   );
 
   useEffect(() => {

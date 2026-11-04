@@ -1,8 +1,6 @@
+import { quoteCommandToken } from "../../domain/scispace/commandUtils";
 import type { PlotAnnotation, PlotAxisSpec, PlotSeries } from "../../domain/types";
 import type { AnnotationDraft, ParsedAnnotationDraft } from "./plotConfigModel";
-
-export const quotePlotArg = (value: string): string =>
-  /[\s=]/.test(value) ? `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"` : value;
 
 const rangeToCommand = (range: PlotAxisSpec["range"]): string =>
   range.mode === "manual" ? `${range.min}:${range.max}` : "auto";
@@ -17,9 +15,10 @@ export const paddingToCommand = (padding: {
   left: number;
 }): string => `${padding.top}:${padding.right}:${padding.bottom}:${padding.left}`;
 
-const commandArgs = (args: Record<string, string | number | boolean>): string =>
+const commandArgs = (args: Record<string, string | number | boolean | undefined>): string =>
   Object.entries(args)
-    .map(([key, value]) => `${key}=${typeof value === "string" ? quotePlotArg(value) : value}`)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}=${typeof value === "string" ? quoteCommandToken(value) : value}`)
     .join(" ");
 
 export const plotSetCommand = (
@@ -52,22 +51,29 @@ export const plotAxisCommand = (plotId: string, axis: "x" | "y", axisSpec: PlotA
     minorTick: axisSpec.ticks.minor,
   })}`;
 
-export const plotSeriesStyleCommand = (plotId: string, series: PlotSeries): string =>
-  `plot-series ${plotId} ${commandArgs({
-    y: series.y,
-    label: series.label,
-    color: series.color,
-    lineWidth: series.lineWidth,
-    markerSize: series.markerSize,
-    markerShape: series.markerShape,
-    order: series.drawOrder,
-  })}`;
+export const plotSeriesStyleCommand = (
+  plotId: string,
+  y: string,
+  patch: Partial<PlotSeries>,
+): string =>
+  "plot-series " +
+  plotId +
+  " " +
+  commandArgs({
+    y,
+    label: patch.label,
+    color: patch.color,
+    lineWidth: patch.lineWidth,
+    markerSize: patch.markerSize,
+    markerShape: patch.markerShape,
+    order: patch.drawOrder,
+  });
 
 export const plotSeriesActionCommand = (
   plotId: string,
   y: string,
   action: "add" | "remove",
-): string => `plot-series ${plotId} y=${quotePlotArg(y)} action=${action}`;
+): string => `plot-series ${plotId} y=${quoteCommandToken(y)} action=${action}`;
 
 export const addAnnotationCommand = (
   plotId: string,
@@ -83,18 +89,25 @@ export const addAnnotationCommand = (
     dy: position.dy,
   })}`;
 
-export const updateAnnotationCommand = (plotId: string, annotation: PlotAnnotation): string =>
-  `plot-annotation ${plotId} action=update ${commandArgs({
-    id: annotation.id,
-    text: annotation.text,
-    x: annotation.x,
-    y: annotation.y,
-    dx: annotation.dx,
-    dy: annotation.dy,
-    color: annotation.color,
-    fontFamily: annotation.font.family,
-    fontSize: annotation.font.size,
-  })}`;
+export const updateAnnotationCommand = (
+  plotId: string,
+  id: string,
+  patch: Partial<PlotAnnotation>,
+): string =>
+  "plot-annotation " +
+  plotId +
+  " action=update " +
+  commandArgs({
+    id,
+    text: patch.text,
+    x: patch.x,
+    y: patch.y,
+    dx: patch.dx,
+    dy: patch.dy,
+    color: patch.color,
+    fontFamily: patch.font?.family,
+    fontSize: patch.font?.size,
+  });
 
 export const removeAnnotationCommand = (plotId: string, annotationId: string): string =>
-  `plot-annotation ${plotId} action=remove id=${quotePlotArg(annotationId)}`;
+  `plot-annotation ${plotId} action=remove id=${quoteCommandToken(annotationId)}`;

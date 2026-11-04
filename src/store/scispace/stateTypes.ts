@@ -73,13 +73,18 @@ export interface ScispaceState {
   uploadPayloads: Record<string, UploadPayload>;
   undoStack: UndoHistoryEntry[];
   redoStack: UndoHistoryEntry[];
-  terminalCommandLineRequest?: { id: string; command: string; execute?: boolean };
+  terminalCommandLineRequest?: {
+    id: string;
+    command: string;
+    execute?: boolean;
+    scispace?: boolean;
+  };
   columnSelections: Record<string, string[]>;
   activeDatasetId?: string;
   activeWindowId?: string;
   currentPlotId?: string;
   tableMenuState?: TableMenuState;
-  plotMenuState?: PlotMenuState;
+  plotMenuStates: Partial<Record<string, PlotMenuState>>;
   viewport: ViewportState;
   initialize: () => Promise<void>;
   importTextFile: (name: string, text: string) => Promise<ImportFileResult>;
@@ -126,7 +131,10 @@ export interface ScispaceState {
   setPlotMenuState: (state: PlotMenuState) => void;
   clearPlotMenuState: (plotId: string) => void;
   setViewport: (viewport: ViewportState) => void;
-  sendCommandToTerminalLine: (command: string, options?: { execute?: boolean }) => void;
+  sendCommandToTerminalLine: (
+    command: string,
+    options?: { execute?: boolean; scispace?: boolean },
+  ) => void;
 }
 
 export interface ProjectSnapshot {

@@ -13,9 +13,9 @@ import {
   plotScaleRange,
   scalePlotSpecForRender,
   scaledPlotCursorBind,
-  xAxisLabelHeight,
+  type PlotAxisTicks,
 } from "./plotRendering";
-import { buildPlotSvg, safePlotFileName, svgDataUrl } from "./plotExport";
+import { buildPlotSvg, plotExportLayout, safePlotFileName, svgDataUrl } from "./plotExport";
 import { useContextMenu } from "./context-menu/ContextMenuProvider";
 
 interface PlotWindowProps {
@@ -23,10 +23,16 @@ interface PlotWindowProps {
   windowId: string;
 }
 
+type AxisZoom = { binding: string; range: { min: number; max: number } };
+type PlotAxis = "x" | "y";
+
 export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
   const { openContextMenu } = useContextMenu();
   const containerRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
+  const ticksRef = useRef<PlotAxisTicks>({ x: [], y: [] });
+  const zoomRef = useRef<Partial<Record<PlotAxis, AxisZoom>>>({});
+  const projectId = useScispaceStore((state) => state.currentProjectId);
   const spec = useScispaceStore((state) => state.plotSpecs.find((item) => item.id === plotId));
   const workspaceScale = useScispaceStore((state) => state.viewport.scale);
   const dataset = useScispaceStore((state) =>
@@ -46,18 +52,41 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
 
   useEffect(() => {
     if (!containerRef.current || !plotData || !spec) return;
-    plotRef.current?.destroy();
-
     const renderScale = plotRenderScale(workspaceScale);
     const renderSpec = scalePlotSpecForRender(spec, renderScale);
-    const plotHeight = Math.max(160, renderSpec.size.height - xAxisLabelHeight * renderScale);
-    plotRef.current = new uPlot(
-      buildPlotOptions(renderSpec, plotHeight, scaledPlotCursorBind(workspaceScale, renderScale)),
+    const axes = ["x", "y"] as const;
+    const binding = (axis: PlotAxis) =>
+      JSON.stringify([
+        projectId,
+        spec.source,
+        spec.x,
+        axis === "y" ? spec.series.map(({ y }) => y).sort() : null,
+        spec.axes[axis].scale,
+        spec.axes[axis].range.mode,
+        spec.axes[axis].range.min,
+        spec.axes[axis].range.max,
+      ]);
+    const ticks: PlotAxisTicks = { x: [], y: [] };
+    const plot = new uPlot(
+      buildPlotOptions(
+        renderSpec,
+        renderSpec.size.height,
+        scaledPlotCursorBind(workspaceScale, renderScale),
+        ticks,
+      ),
       plotData,
       containerRef.current,
     );
+    plotRef.current = plot;
+    ticksRef.current = ticks;
+    plot.batch(() => {
+      for (const axis of axes) {
+        const saved = zoomRef.current[axis];
+        if (saved?.binding === binding(axis)) plot.setScale(axis, saved.range);
+        else delete zoomRef.current[axis];
+      }
+    });
 
-    const plot = plotRef.current;
     plot.root.style.transform = `scale(${1 / renderScale})`;
     plot.root.style.transformOrigin = "0 0";
     let dragStart: { left: number; top: number } | undefined;
@@ -96,8 +125,8 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
     const handleMouseUp = (event: MouseEvent) => {
       if (!dragStart) return;
       event.preventDefault();
-      const start = dragStart;
-      const end = positionFromEvent(event);
+      const start = clampPosition(dragStart);
+      const end = clampPosition(positionFromEvent(event));
       updateSelection(end);
       const width = Math.abs(end.left - start.left);
       const height = Math.abs(end.top - start.top);
@@ -106,20 +135,27 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
         const currentXRange = plotScaleRange(plot.scales.x);
         const currentYRange = plotScaleRange(plot.scales.y);
         plot.batch(() => {
-          if (zoomAxis === "x" || zoomAxis === "xy") {
-            plot.setScale("x", {
-              min: plot.posToVal(Math.min(start.left, end.left), "x"),
-              max: plot.posToVal(Math.max(start.left, end.left), "x"),
-            });
+          for (const axis of axes) {
+            const currentRange = axis === "x" ? currentXRange : currentYRange;
+            if (zoomAxis !== "xy" && zoomAxis !== axis) {
+              if (currentRange) {
+                zoomRef.current[axis] = { binding: binding(axis), range: currentRange };
+                plot.setScale(axis, currentRange);
+              }
+              continue;
+            }
+            const from = plot.posToVal(axis === "x" ? start.left : start.top, axis);
+            const to = plot.posToVal(axis === "x" ? end.left : end.top, axis);
+            const range = { min: Math.min(from, to), max: Math.max(from, to) };
+            if (
+              !Number.isFinite(range.min) ||
+              !Number.isFinite(range.max) ||
+              range.min >= range.max
+            )
+              continue;
+            zoomRef.current[axis] = { binding: binding(axis), range };
+            plot.setScale(axis, range);
           }
-          if (zoomAxis === "x" && currentYRange) plot.setScale("y", currentYRange);
-          if (zoomAxis === "y" || zoomAxis === "xy") {
-            plot.setScale("y", {
-              min: plot.posToVal(Math.max(start.top, end.top), "y"),
-              max: plot.posToVal(Math.min(start.top, end.top), "y"),
-            });
-          }
-          if (zoomAxis === "y" && currentXRange) plot.setScale("x", currentXRange);
         });
       }
       plot.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false);
@@ -142,9 +178,10 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
       plot.over.removeEventListener("mousedown", handleMouseDown, { capture: true });
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      plotRef.current = null;
       plot.destroy();
     };
-  }, [plotData, spec, workspaceScale]);
+  }, [plotData, projectId, spec, workspaceScale]);
 
   const copySchema = useCallback(async () => {
     const result = await runScispace(`plot-schema ${plotId}`, { source: "gui" });
@@ -163,9 +200,11 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
     clickDownload(canvas.toDataURL("image/png"), safePlotFileName(spec.title, "png"));
   }, [clickDownload, spec]);
   const exportSvg = useCallback(() => {
-    if (!spec || !dataset) return;
-    clickDownload(svgDataUrl(buildPlotSvg(spec, dataset)), safePlotFileName(spec.title, "svg"));
-  }, [clickDownload, dataset, spec]);
+    const plot = plotRef.current;
+    if (!spec || !plot) return;
+    const svg = buildPlotSvg(spec, plot.data, plotExportLayout(plot, spec, ticksRef.current));
+    clickDownload(svgDataUrl(svg), safePlotFileName(spec.title, "svg"));
+  }, [clickDownload, spec]);
   const openPlotContextMenu = (position: { x: number; y: number }) => {
     focusWindow(windowId);
     openContextMenu({
@@ -237,10 +276,9 @@ export function PlotWindow({ plotId, windowId }: PlotWindowProps) {
           className="plot-canvas-host"
           style={{
             width: spec.size.width,
-            height: Math.max(160, spec.size.height - xAxisLabelHeight),
+            height: spec.size.height,
           }}
         />
-        <div className="plot-x-axis-label">{spec.axes.x.label}</div>
       </div>
     </div>
   );

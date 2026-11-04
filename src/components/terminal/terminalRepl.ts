@@ -1,4 +1,6 @@
 import { BashShell } from "@wterm/just-bash";
+import { quoteCommandToken, tokenizeCommand } from "../../domain/scispace/commandUtils";
+import { resolveShellRawPath } from "./terminalFs";
 import type { EditableBashShell, TerminalMode } from "./terminalTypes";
 
 export const tabSequence = "\t";
@@ -42,10 +44,37 @@ const scispaceReplCompletionCommands = [
 ].sort();
 const shellOnlyCommands = new Set(["cat", "cd", "ls", "pwd", "rm"]);
 
-export const terminalCommandLineText = (command: string): string => command;
+export const terminalCommandLineText = (command: string, wrapForShell = false): string => {
+  if (!wrapForShell) return command;
+  const tokens = tokenizeCommand(stripScispacePrefix(command));
+  const args = tokens.map((token) => "'" + token.replaceAll("'", "'\\''") + "'");
+  return ["scispace", ...args].join(" ");
+};
 
-export const scispaceReplCommandLine = (command: string, args: string[]): string =>
-  [command, ...args].join(" ").trim();
+const virtualFileCommands = new Set([
+  "file-list",
+  "file-mkdir",
+  "file-rename",
+  "file-move",
+  "file-delete",
+]);
+
+export const scispaceReplCommandLine = (
+  command: string,
+  args: string[],
+  cwd = "/home/user",
+): string => {
+  const normalizedArgs = virtualFileCommands.has(command)
+    ? args.map((arg, index) => {
+        if (index === 0) return resolveShellRawPath(arg, cwd);
+        if (command === "file-move" && arg.startsWith("to=")) {
+          return "to=" + resolveShellRawPath(arg.slice(3), cwd);
+        }
+        return arg;
+      })
+    : args;
+  return [command, ...normalizedArgs].map(quoteCommandToken).join(" ");
+};
 
 export const stripScispacePrefix = (commandLine: string): string =>
   commandLine.trim().replace(/^scispace\s+/, "");

@@ -1,5 +1,5 @@
 import type { Dataset, PlotMarkerShape, PlotSeries, PlotSpec } from "../../domain/types";
-import { ConfigField, ConfigGroup } from "./PlotConfigFields";
+import { CommittedTextInput, ConfigField, ConfigGroup } from "./PlotConfigFields";
 
 interface PlotConfigSeriesTabProps {
   spec: PlotSpec;
@@ -51,10 +51,11 @@ export function PlotConfigSeriesTab({
         <ConfigGroup key={`${series.y}-${index}`} title={`Trace: ${series.y}`}>
           <div className="plot-field-grid three">
             <ConfigField label="Label">
-              <input
-                aria-label={`Label ${series.y}`}
+              <CommittedTextInput
+                key={spec.id}
+                label={"Series label " + series.y}
                 value={series.label}
-                onChange={(event) => onUpdateSeries(series, { label: event.target.value })}
+                onCommit={(label) => onUpdateSeries(series, { label })}
               />
             </ConfigField>
             <ConfigField label="Color" compact>

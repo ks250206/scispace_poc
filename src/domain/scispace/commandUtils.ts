@@ -14,24 +14,37 @@ export const findDataset = (datasets: Dataset[], token: string): Dataset | undef
       dataset.id === token || dataset.name === token || dataset.sourcePath.endsWith(`/${token}`),
   );
 
+export const quoteCommandToken = (value: string): string =>
+  !value || /[\s"'\\]/.test(value)
+    ? '"' + value.replaceAll("\\", "\\\\").replaceAll('"', '\\"') + '"'
+    : value;
+
 export const tokenizeCommand = (input: string): string[] => {
   const tokens: string[] = [];
   let current = "";
+  let hasToken = false;
   let quote: "'" | '"' | undefined;
   for (let index = 0; index < input.length; index += 1) {
     const char = input[index];
-    if ((char === "'" || char === '"') && !quote) {
+    const next = input[index + 1];
+    if (char === "\\" && quote === '"' && (next === "\\" || next === '"')) {
+      current += next;
+      index += 1;
+    } else if ((char === "'" || char === '"') && !quote) {
       quote = char;
+      hasToken = true;
     } else if (char === quote) {
       quote = undefined;
     } else if (/\s/.test(char) && !quote) {
-      if (current) tokens.push(current);
+      if (hasToken) tokens.push(current);
       current = "";
+      hasToken = false;
     } else {
       current += char;
+      hasToken = true;
     }
   }
-  if (current) tokens.push(current);
+  if (hasToken) tokens.push(current);
   return tokens;
 };
 
