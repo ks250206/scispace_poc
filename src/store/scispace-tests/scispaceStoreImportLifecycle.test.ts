@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { datasetColumnNames, makeStore, openImport, stateOf } from "./scispaceStoreTestUtils";
 
 describe("scispace store import lifecycle behavior", () => {

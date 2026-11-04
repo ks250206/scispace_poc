@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { renderWorkbench, setupWorkbenchSuite, storeState } from "./workbenchTestUtils";
 import { getWindowTitle } from "./workbenchTestDom";
 

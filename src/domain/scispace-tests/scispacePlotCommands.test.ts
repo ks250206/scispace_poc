@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { dataset, executeScispaceCommand, runCommand } from "./scispaceCommandTestUtils";
 
 describe("scispace plot commands", () => {
@@ -290,6 +290,10 @@ describe("scispace plot commands", () => {
     expect(runCommand("plot-axis plot-1 axis=x scale=log", { plotSpecs }).kind).toBe("error");
     expect(runCommand("plot-axis plot-1 axis=x tickLength=-1", { plotSpecs }).kind).toBe("error");
     expect(runCommand("plot-grid plot-1 x=maybe", { plotSpecs }).kind).toBe("error");
+    expect(runCommand("plot-grid plot-1 y=maybe", { plotSpecs })).toMatchObject({
+      kind: "error",
+      output: "Invalid grid y value: maybe",
+    });
     expect(runCommand("plot-series plot-1 y=missing action=add", { plotSpecs }).kind).toBe("error");
     expect(runCommand("plot-series plot-1 y=signal markerShape=triangle", { plotSpecs }).kind).toBe(
       "plot-series-updated",

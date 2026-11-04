@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { makeStore } from "./scispaceStoreTestUtils";
 
 describe("scispace store file behavior", () => {

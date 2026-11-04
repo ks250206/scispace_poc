@@ -1,5 +1,6 @@
 import { useMemo, useRef } from "react";
-import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import { flexRender, useTable } from "@tanstack/react-table";
+import { visibleTableFeatures } from "./tableFeatures";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { CommandHistoryEntry } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
@@ -60,7 +61,7 @@ export function CommandHistoryWindow() {
     ],
     [sendCommandToTerminalLine],
   );
-  const table = useReactTable({ data: entries, columns, getCoreRowModel: getCoreRowModel() });
+  const table = useTable({ data: entries, columns, features: visibleTableFeatures });
   const rows = table.getRowModel().rows;
   const rowVirtualizer = useVirtualizer({
     count: rows.length,

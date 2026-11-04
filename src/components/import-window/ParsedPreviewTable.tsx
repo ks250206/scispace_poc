@@ -1,5 +1,6 @@
 import { memo, type CSSProperties, type RefObject } from "react";
 import { flexRender, type Row, type Table } from "@tanstack/react-table";
+import type { visibleTableFeatures } from "../tableFeatures";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import type { DataValue, Dataset } from "../../domain/types";
 import { minColumnWidth } from "./importModel";
@@ -10,8 +11,8 @@ type VisiblePreviewRow = Pick<VirtualItem, "index" | "start">;
 interface ParsedPreviewTableProps {
   preview?: Dataset;
   parentRef: RefObject<HTMLDivElement | null>;
-  table: Table<PreviewRow>;
-  rows: Row<PreviewRow>[];
+  table: Table<typeof visibleTableFeatures, PreviewRow>;
+  rows: Row<typeof visibleTableFeatures, PreviewRow>[];
   visibleRows: VisiblePreviewRow[];
   totalSize: number;
   tableWidth: number;

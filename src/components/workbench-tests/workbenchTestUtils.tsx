@@ -1,5 +1,5 @@
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, expect, vi } from "vitest";
+import { afterEach, beforeEach, expect, vi } from "vite-plus/test";
 import App from "../../App";
 import { useScispaceStore } from "../../store/scispaceStore";
 

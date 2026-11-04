@@ -1,13 +1,20 @@
 import { act, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { renderWorkbench, setupWorkbenchSuite, storeState } from "./workbenchTestUtils";
 
 describe("Workbench terminal shell", () => {
   setupWorkbenchSuite();
 
   it("keeps shell command failures on stderr and preserves the exit code", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains("terminal-viewport")
+        ? new DOMRect(0, 0, 900, 400)
+        : new DOMRect();
+    });
     await renderWorkbench();
-    const terminal = await screen.findByRole("textbox", { name: "Terminal" });
+    const terminal = await screen.findByRole("group", { name: "Terminal" });
     const execute = (command: string) =>
       act(async () => storeState().sendCommandToTerminalLine(command, { execute: true }));
 
