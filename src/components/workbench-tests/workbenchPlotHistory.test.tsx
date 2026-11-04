@@ -62,6 +62,90 @@ describe("Workbench plot and history UI", () => {
     expect(storeState().currentPlotId).toBe("seed-plot");
   });
 
+  it("shows rejected plot settings and clears the error after a valid edit", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    await clickToolbarItem(user, "Plot", "Plot Config");
+    await user.click(await screen.findByRole("tab", { name: "Axes" }));
+
+    const scale = screen.getByLabelText("x scale");
+    await user.selectOptions(scale, "log");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Log scale requires positive x values",
+    );
+    expect(scale).toHaveValue("linear");
+
+    fireEvent.change(screen.getByLabelText("x axis label"), { target: { value: "Time (s)" } });
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(storeState().plotSpecs[0]?.axes.x.label).toBe("Time (s)");
+  });
+
+  it("keeps errors per plot until that plot is updated, including from the terminal", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    await clickToolbarItem(user, "Plot", "Plot Config");
+    const fontSize = await screen.findByLabelText("Plot font size");
+    fireEvent.change(fontSize, { target: { value: "0" } });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Invalid font size: 0");
+
+    const seedWindow = storeState().windows.find((window) => window.plotId === "seed-plot");
+    if (!seedWindow) throw new Error("Missing seed plot window");
+    await act(async () => {
+      await storeState().runScispace("plot waveform.csv x=time y=background");
+    });
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    const otherPlotId = storeState().currentPlotId;
+    expect(otherPlotId).not.toBe("seed-plot");
+    fireEvent.change(screen.getByLabelText("Plot title"), { target: { value: "Background" } });
+    await waitFor(() =>
+      expect(storeState().plotSpecs.find((plot) => plot.id === otherPlotId)?.title).toBe(
+        "Background",
+      ),
+    );
+
+    act(() => storeState().focusWindow(seedWindow.id));
+    expect(screen.getByRole("alert")).toHaveTextContent("Invalid font size: 0");
+
+    await act(async () => {
+      await storeState().runScispace("plot-set seed-plot fontSize=18", { source: "terminal" });
+    });
+    expect(screen.getByLabelText("Plot font size")).toHaveValue(18);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps the newer error when a rejected plot command finishes out of order", async () => {
+    const runScispace = storeState().runScispace;
+    let releaseRejection = () => {};
+    const delay = new Promise<void>((resolve) => {
+      releaseRejection = resolve;
+    });
+    const delayedRun = vi.fn<typeof runScispace>(async (...args) => {
+      const result = await runScispace(...args);
+      if (args[0].includes("fontSize=0")) await delay;
+      return result;
+    });
+    useScispaceStore.setState({ runScispace: delayedRun });
+
+    try {
+      const user = userEvent.setup();
+      await renderWorkbench();
+      await clickToolbarItem(user, "Plot", "Plot Config");
+      const fontSize = await screen.findByLabelText("Plot font size");
+      fireEvent.change(fontSize, { target: { value: "0" } });
+      fireEvent.change(fontSize, { target: { value: "-1" } });
+      expect(await screen.findByRole("alert")).toHaveTextContent("Invalid font size: -1");
+
+      await act(async () => {
+        releaseRejection();
+        await delayedRun.mock.results[0]?.value;
+      });
+      expect(screen.getByRole("alert")).toHaveTextContent("Invalid font size: -1");
+    } finally {
+      releaseRejection();
+      useScispaceStore.setState({ runScispace });
+    }
+  });
+
   it("copies plot schema and exports the current plot canvas as png and svg", async () => {
     const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
     const toDataUrl = vi

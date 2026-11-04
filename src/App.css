@@ -1833,6 +1833,13 @@
   flex: 0 0 auto;
 }
 
+.plot-config-error {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex: 0 0 auto;
+}
+
 .plot-config-groups,
 .plot-axis-panel,
 .plot-series-panel,
@@ -2357,7 +2364,8 @@
   white-space: nowrap;
 }
 
-.import-error {
+.import-error,
+.plot-config-error {
   border-bottom: 1px solid #fecaca;
   background: #fef2f2;
   color: #991b1b;
