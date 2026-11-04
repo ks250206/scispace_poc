@@ -156,9 +156,10 @@ const helpSections = [
         example: "import-set import-123 skipRows=1 delimiter=tab hasHeader=true",
       },
       {
-        command: "import-column <importId> column=<col> action=<include|exclude>",
+        command:
+          "import-column <importId> column=<col> action=<include|exclude|rename> name=<newName>",
         description: "Include or exclude a parsed preview column before import confirmation.",
-        example: "import-column import-123 column=blank_1 action=exclude",
+        example: 'import-column import-123 column=Elapsed_sec action=rename name="Time (s)"',
       },
       {
         command: "import-line <importId> line=<n> value=<text>",

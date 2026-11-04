@@ -19,6 +19,7 @@ import { ImportTabs } from "./import-window/ImportTabs";
 import {
   importColumnCommand,
   importLineCommand,
+  importRenameColumnCommand,
   importSetCommand,
 } from "./import-window/importCommands";
 import { RawTextTable } from "./import-window/RawTextTable";
@@ -44,6 +45,8 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   );
   const runScispace = useScispaceStore((state) => state.runScispace);
   const confirmImport = useScispaceStore((state) => state.confirmImport);
+  const windowRef = useRef<HTMLDivElement>(null);
+  const pendingRename = useRef<ReturnType<typeof runScispace> | undefined>(undefined);
   const rawParentRef = useRef<HTMLDivElement>(null);
   const previewParentRef = useRef<HTMLDivElement>(null);
   const [previewColumnWidths, setPreviewColumnWidths] = useState<Record<string, number>>({});
@@ -144,6 +147,24 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   const toggleExcludedColumn = (columnId: string, checked: boolean) => {
     void runScispace(importColumnCommand(importId, columnId, checked), { source: "gui" });
   };
+  const renameColumn = (columnId: string, name: string) => {
+    pendingRename.current = runScispace(importRenameColumnCommand(importId, columnId, name), {
+      source: "gui",
+    });
+  };
+  const submitImport = async () => {
+    const active = document.activeElement;
+    if (
+      active instanceof HTMLInputElement &&
+      windowRef.current?.contains(active) &&
+      active.closest(".column-name-editor")
+    )
+      active.blur();
+    const rename = pendingRename.current;
+    const result = await rename;
+    if (pendingRename.current === rename) pendingRename.current = undefined;
+    if (result?.kind !== "error") await confirmImport(importId);
+  };
   const reapplyPreset = () => {
     void runScispace(importSetCommand(importId, "preset=apply"), { source: "gui" });
   };
@@ -153,7 +174,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   );
 
   return (
-    <div className="import-window">
+    <div className="import-window" ref={windowRef}>
       <div className="import-summary">
         <div>
           <span className="import-summary-kicker">Import source</span>
@@ -166,7 +187,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
           pendingImport={pendingImport}
           onImportSet={runImportSet}
           onCancel={() => void runScispace(`import-cancel ${importId}`, { source: "gui" })}
-          onImport={() => void confirmImport(importId)}
+          onImport={() => void submitImport()}
         />
         <ImportPresetCard
           pendingImport={pendingImport}
@@ -218,7 +239,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
             <ImportColumnsTab
               allPreview={allPreview}
               pendingImport={pendingImport}
-              onImportSet={runImportSet}
+              onRenameColumn={renameColumn}
               onToggleExcludedColumn={toggleExcludedColumn}
             />
           ) : null}

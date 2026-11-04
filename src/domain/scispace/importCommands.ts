@@ -162,8 +162,27 @@ export const executeImportCommand = (
     const column = readOption(args, "column");
     const action = readOption(args, "action");
     if (!column) return { kind: "error", output: "column is required" };
+    if (action === "rename") {
+      const name = readOption(args, "name");
+      const index = pendingImport.allPreview?.columns.findIndex(({ id }) => id === column) ?? -1;
+      if (name === undefined) return { kind: "error", output: "name is required" };
+      if (index < 0) return { kind: "error", output: `Unknown import column: ${column}` };
+      const columnNames = Array.from(pendingImport.options.columnNames, (value) => value ?? "");
+      while (columnNames.length <= index) columnNames.push("");
+      columnNames[index] = name.trim();
+      return {
+        kind: "import-updated",
+        importId,
+        pendingImport: {
+          ...pendingImport,
+          presetOverridden: pendingImport.detectedPreset ? true : pendingImport.presetOverridden,
+          options: { ...pendingImport.options, columnNames },
+        },
+        output: `Import column renamed: ${column}`,
+      };
+    }
     if (action !== "include" && action !== "exclude") {
-      return { kind: "error", output: "action must be include or exclude" };
+      return { kind: "error", output: "action must be include, exclude, or rename" };
     }
 
     const excluded = new Set(pendingImport.options.excludedColumnIds);

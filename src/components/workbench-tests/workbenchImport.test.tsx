@@ -70,13 +70,57 @@ describe("Workbench import UI", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Columns" }));
     expect(screen.getByDisplayValue("x")).toBeInTheDocument();
     expect(screen.getAllByText("number").length).toBeGreaterThan(0);
-    fireEvent.change(screen.getByLabelText("Column name x"), { target: { value: "time" } });
+    const nameInput = screen.getByLabelText("Column name x");
+    const historyLength = storeState().commandHistory.length;
+    fireEvent.change(nameInput, { target: { value: "time" } });
+    expect(storeState().pendingImports[0]?.preview?.columns[0]?.name).toBe("x");
+    expect(storeState().commandHistory).toHaveLength(historyLength);
+    fireEvent.blur(nameInput);
     await waitFor(() =>
       expect(storeState().pendingImports[0]?.preview?.columns[0]).toMatchObject({
         name: "time",
         dataType: "number",
       }),
     );
+  });
+
+  it("refreshes inferred names after skipping metadata and saves a focused edit on Import", async () => {
+    const user = userEvent.setup();
+    let importId = "";
+    act(() => {
+      importId = storeState().openImportDialog(
+        "loadcell.csv",
+        "# Cell ID,UL883,5.327\n# Gain,1,2\n\nDate,Time,Elapsed_sec\n2026-09-10,13:38:13.759,0.118",
+      );
+    });
+    render(<ImportSettingsWindow importId={importId} />);
+    const skipRows = screen.getByRole("spinbutton", { name: "Skip rows" });
+    fireEvent.change(skipRows, { target: { value: "1" } });
+    await waitFor(() =>
+      expect(storeState().pendingImports[0]?.preview?.columns[0]?.name).toBe("# Gain"),
+    );
+    fireEvent.change(skipRows, { target: { value: "3" } });
+    await user.click(screen.getByRole("tab", { name: "Columns" }));
+    const time = await screen.findByRole("textbox", { name: "Column name Time" });
+    expect(time).toHaveValue("Time");
+    expect(screen.getByRole("textbox", { name: "Column name Date" })).toHaveValue("Date");
+    expect(screen.getByRole("textbox", { name: "Column name Elapsed_sec" })).toHaveValue(
+      "Elapsed_sec",
+    );
+
+    await user.clear(time);
+    await user.type(time, "Time, local");
+    expect(storeState().pendingImports[0]?.preview?.columns[1]?.name).toBe("Time");
+    await user.click(screen.getByRole("button", { name: "Import" }));
+    await waitFor(() => {
+      const imported = storeState().datasets.find(({ name }) => name === "loadcell.csv");
+      expect(imported?.columns.map(({ name }) => name)).toEqual([
+        "Date",
+        "Time, local",
+        "Elapsed_sec",
+      ]);
+      expect(imported?.rows[0]?.Elapsed_sec).toBe(0.118);
+    });
   });
 
   it("can mark import columns for deletion and grays skipped raw rows", async () => {

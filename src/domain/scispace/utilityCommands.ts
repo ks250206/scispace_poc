@@ -34,7 +34,7 @@ export const helpText = [
   "  import-open <importId> name=<fileName> text=<encodedText>",
   "  import-preview <importId>",
   "  import-set <importId> skipRows=<n> delimiter=<auto|comma|tab|space|semicolon> hasHeader=<true|false> mode=<tabular|raw>",
-  "  import-column <importId> column=<col> action=<include|exclude>",
+  "  import-column <importId> column=<col> action=<include|exclude|rename> name=<newName>",
   "  import-line <importId> line=<n> value=<text>",
   "  import-cancel <importId>",
   "  import-confirm <importId> mode=<tabular|raw> path=<virtualPath>",

@@ -1,5 +1,5 @@
 import { executeScispaceCommand } from "../../domain/scispace";
-import type { Dataset, ImportParseOptions } from "../../domain/types";
+import type { Dataset, ImportParseOptions, PendingImport } from "../../domain/types";
 
 export const canParseAsTable = (name: string): boolean => /\.(csv|tsv)$/i.test(name);
 
@@ -20,32 +20,66 @@ export const createPreviews = (
   fileName: string,
   text: string,
   options: ImportParseOptions,
-): { allPreview?: Dataset; preview?: Dataset; error?: string } => {
-  const allResult = executeScispaceCommand(`import-preview ${id}`, {
+  resolveExcludedIds?: (allPreview?: Dataset) => string[],
+): Pick<PendingImport, "allPreview" | "preview" | "error" | "options"> => {
+  const result = executeScispaceCommand(`import-preview ${id}`, {
     datasets: [],
     pendingImports: [
       { id, fileName, text, mode: "tabular", options: { ...options, excludedColumnIds: [] } },
     ],
   });
-  const result = executeScispaceCommand(`import-preview ${id}`, {
-    datasets: [],
-    pendingImports: [{ id, fileName, text, mode: "tabular", options }],
-  });
-  if (result.kind === "import-preview" && allResult.kind === "import-preview") {
-    return { allPreview: allResult.preview, preview: result.preview, error: result.error };
-  }
-  return { error: result.output };
+  const allPreview = result.kind === "import-preview" ? result.preview : undefined;
+  const excludedColumnIds = resolveExcludedIds?.(allPreview) ?? options.excludedColumnIds;
+  const resolvedOptions = { ...options, excludedColumnIds };
+  if (!allPreview)
+    return { allPreview, preview: undefined, options: resolvedOptions, error: result.output };
+
+  const columns = allPreview.columns.filter(({ id }) => !excludedColumnIds.includes(id));
+  if (columns.length === 0)
+    return {
+      allPreview,
+      preview: undefined,
+      options: resolvedOptions,
+      error: "No import columns selected",
+    };
+  if (columns.length === allPreview.columns.length)
+    return { allPreview, preview: allPreview, options: resolvedOptions, error: undefined };
+  const rows = allPreview.rows.map((row) =>
+    Object.fromEntries(columns.map(({ id }) => [id, row[id]])),
+  );
+  return {
+    allPreview,
+    preview: { ...allPreview, columns, rows },
+    options: resolvedOptions,
+    error: undefined,
+  };
 };
 
-export const normalizeColumnNames = (
-  options: ImportParseOptions,
-  preview?: Dataset,
-): ImportParseOptions => {
-  if (!preview) return options;
-  const columnNames = preview.columns.map(
-    (column, index) => options.columnNames[index]?.trim() || column.name || `column_${index + 1}`,
-  );
-  return { ...options, columnNames };
+export const remapRenamedColumnExclusions = (
+  previous: PendingImport | undefined,
+  updated: PendingImport,
+  allPreview?: Dataset,
+): string[] => {
+  const excluded = updated.options.excludedColumnIds;
+  const previousColumns = previous?.allPreview?.columns;
+  if (
+    !excluded.length ||
+    !previous ||
+    !previousColumns ||
+    !allPreview ||
+    previous.options.columnNames === updated.options.columnNames ||
+    previous.text !== updated.text ||
+    previous.options.skipRows !== updated.options.skipRows ||
+    previous.options.delimiter !== updated.options.delimiter ||
+    previous.options.commentPrefix !== updated.options.commentPrefix ||
+    previous.options.hasHeader !== updated.options.hasHeader
+  )
+    return excluded;
+
+  return excluded.map((id) => {
+    const index = previousColumns.findIndex((column) => column.id === id);
+    return allPreview.columns[index]?.id ?? id;
+  });
 };
 
 export const readCommandPath = (input: string): string | undefined => {

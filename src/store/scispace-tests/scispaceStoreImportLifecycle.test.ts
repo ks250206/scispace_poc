@@ -91,6 +91,37 @@ describe("scispace store import lifecycle behavior", () => {
     });
   });
 
+  it("keeps explicit names and renamed exclusions separate from inferred headers", async () => {
+    const { store } = await makeStore();
+    const importId = openImport(
+      store,
+      "headers.csv",
+      "x,y,z\nDate,Time,Elapsed_sec\n2026-09-10,13:38:13.759,0.118",
+    );
+    const run = (command: string) => store.getState().runScispace(command);
+    await run(`import-column ${importId} column=y action=rename name="Clock time"`);
+    await run(`import-set ${importId} skipRows=1`);
+    const pending = () => store.getState().pendingImports.find(({ id }) => id === importId);
+    expect(pending()?.options.columnNames).toEqual(["", "Clock time"]);
+    expect(pending()?.preview?.columns.map(({ name }) => name)).toEqual([
+      "Date",
+      "Clock time",
+      "Elapsed_sec",
+    ]);
+
+    await run(`import-column ${importId} column=Clock_time action=exclude`);
+    await run(`import-column ${importId} column=Clock_time action=rename name=""`);
+    expect(pending()?.options.excludedColumnIds).toEqual(["Time"]);
+    expect(pending()?.allPreview?.columns.map(({ name }) => name)).toEqual([
+      "Date",
+      "Time",
+      "Elapsed_sec",
+    ]);
+    expect(pending()?.preview?.columns.map(({ name }) => name)).toEqual(["Date", "Elapsed_sec"]);
+    const result = await store.getState().confirmImport(importId);
+    expect(result?.dataset?.rows).toEqual([{ Date: "2026-09-10", Elapsed_sec: 0.118 }]);
+  });
+
   it("uses edited column names for headerless imports", async () => {
     const { store } = await makeStore();
     const importId = openImport(store, "no-header.csv", "1,2\n3,4");

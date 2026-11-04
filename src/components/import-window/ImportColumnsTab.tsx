@@ -1,17 +1,16 @@
 import type { Dataset, PendingImport } from "../../domain/types";
-import { quoteImportCommandArg } from "./importCommands";
 
 interface ImportColumnsTabProps {
   allPreview?: Dataset;
   pendingImport: PendingImport;
-  onImportSet: (options: string) => void;
+  onRenameColumn: (columnId: string, name: string) => void;
   onToggleExcludedColumn: (columnId: string, checked: boolean) => void;
 }
 
 export function ImportColumnsTab({
   allPreview,
   pendingImport,
-  onImportSet,
+  onRenameColumn,
   onToggleExcludedColumn,
 }: ImportColumnsTabProps) {
   if (!allPreview) {
@@ -29,15 +28,18 @@ export function ImportColumnsTab({
       </div>
       <div className="column-name-editor">
         {allPreview.columns.map((column, index) => (
-          <label key={`${column.id}-${index}`}>
+          <label key={JSON.stringify([column.id, column.name, index])}>
             <span>{`Column ${index + 1}`}</span>
             <input
               aria-label={`Column name ${column.id}`}
-              value={pendingImport.options.columnNames[index] ?? column.name}
-              onChange={(event) => {
-                const columnNames = [...pendingImport.options.columnNames];
-                columnNames[index] = event.currentTarget.value;
-                onImportSet(`columnNames=${quoteImportCommandArg(columnNames.join(","))}`);
+              defaultValue={column.name}
+              onBlur={(event) => {
+                const input = event.currentTarget;
+                const name = input.value.trim();
+                input.value = name || column.name;
+                if (name !== column.name && (name || pendingImport.options.columnNames[index])) {
+                  onRenameColumn(column.id, name);
+                }
               }}
             />
           </label>

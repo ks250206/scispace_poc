@@ -20,12 +20,7 @@ export const createImportDialogState = (
   const baseOptions = detectedPreset
     ? { ...defaultImportParseOptions, ...detectedPreset.options }
     : defaultImportParseOptions;
-  const initialPreview = createPreviews(id, fileName, text, baseOptions);
-  const options = {
-    ...baseOptions,
-    excludedColumnIds: emptyColumnIds(initialPreview.allPreview),
-  };
-  const { allPreview, preview, error } = createPreviews(id, fileName, text, options);
+  const previews = createPreviews(id, fileName, text, baseOptions, emptyColumnIds);
   const zIndex = Math.max(0, ...state.windows.map((window) => window.zIndex)) + 1;
   const position = newWindowPosition(state, 88, 72);
   const pendingImport: PendingImport = {
@@ -33,12 +28,9 @@ export const createImportDialogState = (
     fileName,
     text,
     mode: "tabular",
-    options,
+    ...previews,
     detectedPreset,
     presetOverridden: false,
-    allPreview,
-    preview,
-    error,
   };
   const window: WorkspaceWindow = {
     id: `import-${id}`,
