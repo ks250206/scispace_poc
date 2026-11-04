@@ -116,6 +116,44 @@ describe("column conversion commands", () => {
     ]);
   });
 
+  it("normalizes and sorts clock times without a date or offset", () => {
+    const dataset = datasetWith([
+      "14:30:45.25",
+      "9:30",
+      "09:30:00.004",
+      "00:00",
+      "23:59:59.999",
+      "24:00",
+      "08:60",
+      "09:30:60",
+      "09:30Z",
+      "09:30+09:00",
+      "",
+    ]);
+    expect(command(dataset, "action=convert-column type=time").kind).toBe("error");
+    const converted = updated(dataset, "action=convert-column type=time invalid=missing");
+    expect(converted.columns[0]?.dataType).toBe("time");
+    expect(converted.rows.map(({ value }) => value)).toEqual([
+      "14:30:45.250",
+      "09:30:00",
+      "09:30:00.004",
+      "00:00:00",
+      "23:59:59.999",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+    ]);
+    expect(
+      updated(converted, "action=sort-dates")
+        .rows.slice(0, 5)
+        .map(({ row }) => row),
+    ).toEqual([3, 1, 2, 0, 4]);
+    expect(updated(converted, "action=set-cell row=1 value=6:00").rows[0]?.value).toBe("06:00:00");
+  });
+
   it("rejects invalid command options", () => {
     const dataset = datasetWith(["1"]);
     expect(command(dataset, "action=convert-column type=mixed").kind).toBe("error");

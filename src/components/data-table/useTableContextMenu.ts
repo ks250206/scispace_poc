@@ -80,6 +80,7 @@ export function useTableContextMenu({
       focusWindow(windowId);
       const bounds = context?.cell ? singleCellRange(context.cell) : rangeBounds;
       const column = context?.column ?? context?.cell?.column ?? selectedColumn;
+      const columnType = visibleDatasetColumns.find(({ id }) => id === column)?.dataType;
       const plotSelectionSpec = plotSelectionFromTableSelection(
         bounds,
         context?.column ? [context.column] : selectedColumns,
@@ -96,9 +97,7 @@ export function useTableContextMenu({
           convertColumn,
           sortDates,
           column,
-          isDateColumn: visibleDatasetColumns.some(
-            ({ id, dataType }) => id === column && (dataType === "date" || dataType === "datetime"),
-          ),
+          columnType,
           context,
           copyRange,
           deleteColumn,
@@ -150,7 +149,7 @@ const tableContextItems = ({
   convertColumn,
   sortDates,
   column,
-  isDateColumn,
+  columnType,
   context,
   copyRange,
   deleteColumn,
@@ -171,7 +170,7 @@ const tableContextItems = ({
   convertColumn: (columnId: string) => void;
   sortDates: (columnId: string, order: "asc" | "desc") => void;
   column?: string;
-  isDateColumn: boolean;
+  columnType?: DatasetColumn["dataType"];
   context?: { cell?: TableCellPosition; column?: string };
   copyRange: (bounds: TableRangeBounds) => void;
   deleteColumn: (columnId: string) => void;
@@ -248,9 +247,16 @@ const tableContextItems = ({
       if (column) convertColumn(column);
     },
   },
-  ...(column && isDateColumn
+  ...(column && (columnType === "date" || columnType === "datetime" || columnType === "time")
     ? (["asc", "desc"] as const).map((order) => ({
-        label: order === "asc" ? "Sort dates oldest first" : "Sort dates newest first",
+        label:
+          columnType === "time"
+            ? order === "asc"
+              ? "Sort times earliest first"
+              : "Sort times latest first"
+            : order === "asc"
+              ? "Sort dates oldest first"
+              : "Sort dates newest first",
         disabled: isLocked,
         onSelect: () => sortDates(column, order),
       }))

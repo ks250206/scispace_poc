@@ -1,10 +1,14 @@
-import type { Dataset, DataValue } from "./types";
+import type { Dataset, DatasetColumn, DataValue } from "./types";
 
-export type ColumnConversionType = "number" | "string" | "date" | "datetime";
+export type ColumnConversionType = Exclude<DatasetColumn["dataType"], "mixed">;
 export type ColumnDateFormat = "iso" | "dmy" | "mdy";
 
 export const isConversionType = (value?: string): value is ColumnConversionType =>
-  value === "number" || value === "string" || value === "date" || value === "datetime";
+  value === "number" ||
+  value === "string" ||
+  value === "date" ||
+  value === "datetime" ||
+  value === "time";
 
 export const isColumnDateFormat = (value: string): value is ColumnDateFormat =>
   value === "iso" || value === "dmy" || value === "mdy";
@@ -13,6 +17,7 @@ const isoDate = /^\d{4}-\d{2}-\d{2}$/;
 const slashDate = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
 const isoDateTime =
   /^(\d{4}-\d{2}-\d{2})T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,3})?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
+const clockTime = /^([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d)(?:\.(\d{1,3}))?)?$/;
 const decimal = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
 
 const parseIsoDate = (date: string): string | undefined => {
@@ -41,6 +46,15 @@ const parseDateTime = (text: string): string | undefined => {
   return canonical.length === 24 ? canonical : undefined;
 };
 
+const parseTime = (text: string): string | undefined => {
+  const match = clockTime.exec(text);
+  if (!match) return undefined;
+  const [, hour, minute, second = "00", fraction = ""] = match;
+  const milliseconds = fraction.padEnd(3, "0");
+  const time = `${hour.padStart(2, "0")}:${minute}:${second}`;
+  return milliseconds === "000" ? time : `${time}.${milliseconds}`;
+};
+
 export const isBlankColumnValue = (value: DataValue | undefined): boolean =>
   value === undefined || (typeof value === "string" && value.trim() === "");
 
@@ -54,6 +68,7 @@ export const convertColumnValue = (
   const text = String(value).trim();
   if (type === "date") return parseCalendarDate(text, format);
   if (type === "datetime") return parseDateTime(text);
+  if (type === "time") return parseTime(text);
   const number = Number(text);
   return decimal.test(text) && Number.isFinite(number) ? number : undefined;
 };

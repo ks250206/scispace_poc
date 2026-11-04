@@ -20,8 +20,12 @@ export const executeTableColumnCommand = (
   const column = dataset.columns.find(({ id }) => id === columnId);
 
   if (action === "sort-dates") {
-    if (column?.dataType !== "date" && column?.dataType !== "datetime")
-      return { kind: "error", output: "Sort dates requires a date or datetime column" };
+    if (
+      column?.dataType !== "date" &&
+      column?.dataType !== "datetime" &&
+      column?.dataType !== "time"
+    )
+      return { kind: "error", output: "Sorting requires a date, datetime, or time column" };
     const order = readOption(args, "order") ?? "asc";
     if (order !== "asc" && order !== "desc")
       return { kind: "error", output: "order must be asc or desc" };
@@ -31,7 +35,7 @@ export const executeTableColumnCommand = (
       const leftBlank = isBlankColumnValue(left);
       const rightBlank = isBlankColumnValue(right);
       if (leftBlank || rightBlank) return Number(leftBlank) - Number(rightBlank);
-      // Converted date and datetime strings have fixed-width ISO fields.
+      // Canonical date and time values sort in chronological order as strings.
       const comparison = left < right ? -1 : left > right ? 1 : 0;
       return order === "asc" ? comparison : -comparison;
     });
@@ -45,7 +49,7 @@ export const executeTableColumnCommand = (
 
   const type = readOption(args, "type");
   if (!isConversionType(type))
-    return { kind: "error", output: "type must be number, string, date, or datetime" };
+    return { kind: "error", output: "type must be number, string, date, datetime, or time" };
   const format = readOption(args, "format") ?? "iso";
   if (!isColumnDateFormat(format) || (type !== "date" && format !== "iso"))
     return { kind: "error", output: "format must be iso, or dmy or mdy for date columns" };

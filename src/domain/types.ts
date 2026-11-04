@@ -96,7 +96,7 @@ export interface DatasetColumn {
   id: string;
   name: string;
   sourceName?: string;
-  dataType: "number" | "string" | "mixed" | "date" | "datetime";
+  dataType: "number" | "string" | "mixed" | "date" | "datetime" | "time";
   explicitType?: true;
 }
 

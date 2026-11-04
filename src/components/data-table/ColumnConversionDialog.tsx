@@ -102,6 +102,7 @@ export function ColumnConversionDialog({
             <option value="string">String</option>
             <option value="date">Date</option>
             <option value="datetime">Date and time</option>
+            <option value="time">Time</option>
           </select>
         </label>
         {type === "date" && (
@@ -122,6 +123,9 @@ export function ColumnConversionDialog({
               <option value="mdy">MM/DD/YYYY</option>
             </select>
           </label>
+        )}
+        {type === "time" && (
+          <p className="app-dialog-message">Use 24-hour time, for example 09:30 or 14:30:45.250.</p>
         )}
         {type === "datetime" && (
           <p className="app-dialog-message">

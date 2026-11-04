@@ -14,7 +14,7 @@ export const helpText = [
   "  dataset-calc <dataset> column=<newOrExistingCol> expr=<expression>",
   "  table <dataset> columns=<column[,column...]>",
   "  table-edit <dataset> action=<delete-row|delete-column|set-cell|insert-column> index=<n> row=<n> column=<col> value=<value> before=<col>",
-  "  table-edit <dataset> action=<convert-column|preview-conversion> column=<col> type=<number|string|date|datetime> format=<iso|dmy|mdy> invalid=<abort|missing>",
+  "  table-edit <dataset> action=<convert-column|preview-conversion> column=<col> type=<number|string|date|datetime|time> format=<iso|dmy|mdy> invalid=<abort|missing>",
   "  table-edit <dataset> action=sort-dates column=<col> order=<asc|desc>",
   "  table-range <dataset> action=<clear|fill-down> r1=<n> c1=<col> r2=<n> c2=<col>",
   "  plot <dataset> x=<column> y=<column[,column...]> type=<line|line-marker|marker>",

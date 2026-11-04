@@ -26,6 +26,11 @@ describe("Workbench table commands", () => {
     });
     await user.click(screen.getByRole("menuitem", { name: "Convert column type" }));
     expect(await screen.findByRole("dialog", { name: "Convert column type" })).toBeVisible();
+    const targetType = screen.getByRole("combobox", { name: "Target type" });
+    await user.selectOptions(targetType, "time");
+    expect(screen.getByText(/Use 24-hour time/)).toBeVisible();
+    expect(screen.getByText("0 convertible, 0 blank, 160 invalid")).toBeVisible();
+    await user.selectOptions(targetType, "number");
     expect(screen.getByText("159 convertible, 0 blank, 1 invalid")).toBeVisible();
     await user.click(screen.getByText("Invalid row numbers (1)"));
     expect(screen.getByText("1", { selector: "details p" })).toBeVisible();

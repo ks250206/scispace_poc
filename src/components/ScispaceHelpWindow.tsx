@@ -39,15 +39,15 @@ const helpSections = [
       },
       {
         command:
-          "table-edit <dataset> action=<convert-column|preview-conversion> column=<col> type=<number|string|date|datetime>",
+          "table-edit <dataset> action=<convert-column|preview-conversion> column=<col> type=<number|string|date|datetime|time>",
         description:
-          "Preview or convert an existing column. Use format=dmy or format=mdy for slash dates. Datetimes require Z or an explicit offset and are stored in UTC. Use invalid=missing to replace invalid values with blanks.",
+          "Preview or convert an existing column. Use format=dmy or format=mdy for slash dates. Datetimes require Z or an explicit offset and are stored in UTC. Time accepts 24-hour clock values. Use invalid=missing to replace invalid values with blanks.",
         example:
           "table-edit measurements.csv action=convert-column column=measured type=date format=dmy",
       },
       {
         command: "table-edit <dataset> action=sort-dates column=<col> order=<asc|desc>",
-        description: "Reorder rows by a date or datetime column, with blanks at the end.",
+        description: "Reorder rows by date or time, with blanks at the end.",
         example: "table-edit measurements.csv action=sort-dates column=measured order=asc",
       },
       {
