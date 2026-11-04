@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { PlotAnnotation, PlotSeries, PlotType } from "../domain/types";
 import { useScispaceStore } from "../store/scispaceStore";
 import { PlotConfigAnnotationsTab } from "./plot-config/PlotConfigAnnotationsTab";
@@ -35,6 +35,8 @@ export function PlotConfigWindow() {
     state.datasets.find((item) => item.id === spec?.source),
   );
   const runScispace = useScispaceStore((state) => state.runScispace);
+  const commandSequence = useRef(0);
+  const [commandError, setCommandError] = useState<{ plotId: string; message: string }>();
   const [seriesToAdd, setSeriesToAdd] = useState("");
   const [activeTab, setActiveTab] = useState<PlotConfigTab>("basic");
   const [plotSizeDraft, setPlotSizeDraft] = useState<PlotSizeDraft>({ width: "", height: "" });
@@ -74,7 +76,13 @@ export function PlotConfigWindow() {
   }
 
   const runPlotCommand = (command: string) => {
-    void runScispace(command, { source: "gui" });
+    const sequence = ++commandSequence.current;
+    void runScispace(command, { source: "gui" }).then((result) => {
+      if (sequence !== commandSequence.current) return;
+      setCommandError(
+        result.kind === "error" ? { plotId: currentPlotId, message: result.output } : undefined,
+      );
+    });
   };
   const setPlotType = (plotType: PlotType) =>
     runPlotCommand(plotSetCommand(currentPlotId, { type: plotType }));
@@ -161,6 +169,11 @@ export function PlotConfigWindow() {
           </button>
         ))}
       </div>
+      {commandError?.plotId === currentPlotId ? (
+        <div className="plot-config-error" role="alert">
+          {commandError.message}
+        </div>
+      ) : null}
       {activeTab === "basic" ? (
         <PlotConfigBasicTab
           currentPlotId={currentPlotId}

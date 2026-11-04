@@ -62,6 +62,23 @@ describe("Workbench plot and history UI", () => {
     expect(storeState().currentPlotId).toBe("seed-plot");
   });
 
+  it("shows rejected plot settings and clears the error after a valid edit", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    await clickToolbarItem(user, "Plot", "Plot Config");
+    await user.click(await screen.findByRole("tab", { name: "Axes" }));
+
+    const scale = screen.getByLabelText("x scale");
+    await user.selectOptions(scale, "log");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Log scale requires positive x values",
+    );
+    expect(scale).toHaveValue("linear");
+
+    fireEvent.change(screen.getByLabelText("x axis label"), { target: { value: "Time (s)" } });
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  });
+
   it("copies plot schema and exports the current plot canvas as png and svg", async () => {
     const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
     const toDataUrl = vi
