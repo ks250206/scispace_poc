@@ -97,4 +97,31 @@ describe("Workbench context menus", () => {
     await user.click(screen.getByRole("menuitem", { name: "Unsafe mode" }));
     expect(screen.getByText("safe")).toBeInTheDocument();
   });
+
+  it("shows the active terminal interpreter independently of unsafe permission", async () => {
+    await renderWorkbench();
+    expect(await screen.findByText("scispace REPL")).toBeInTheDocument();
+    expect(screen.getByText("safe")).toBeInTheDocument();
+
+    const execute = (command: string) =>
+      act(async () => storeState().sendCommandToTerminalLine(command, { execute: true }));
+
+    await execute("unsafe on");
+    expect(await screen.findByText("unsafe")).toBeInTheDocument();
+    expect(screen.getByText("scispace REPL")).toBeInTheDocument();
+
+    await execute("shell");
+    expect(await screen.findByText("just-bash shell")).toBeInTheDocument();
+    expect(screen.getByText("unsafe")).toBeInTheDocument();
+
+    await execute("exit");
+    expect(await screen.findByText("scispace REPL")).toBeInTheDocument();
+    expect(screen.getByText("unsafe")).toBeInTheDocument();
+
+    await execute("shell");
+    await screen.findByText("just-bash shell");
+    await execute("unsafe off");
+    expect(await screen.findByText("scispace REPL")).toBeInTheDocument();
+    expect(screen.getByText("safe")).toBeInTheDocument();
+  });
 });
