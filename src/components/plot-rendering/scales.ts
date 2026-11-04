@@ -16,18 +16,31 @@ const maxTickCount = 1000;
 const labelArea = (axis: PlotAxisSpec) =>
   axis.label ? Math.max(axis.labelSize, axis.labelGap + axis.labelStyle.size) : 0;
 
-const mirrorPadding = ({ ticks }: PlotAxisSpec, dimension: number) =>
-  ticks.mirror && ticks.orientation === "out" && ticks.length > 0
-    ? Math.min(ticks.length + 1, dimension / 4)
-    : 0;
+const mirrorPadding = (axis: PlotAxisSpec, dimension: number, available: number) => {
+  const { ticks } = axis;
+  const outward = ticks.orientation === "out" && ticks.length > 0 ? ticks.length + 1 : 0;
+  if (axis.mirror) {
+    const tickArea = Math.max(axis.size, outward + axis.gap + axis.valueStyle.size);
+    return Math.min(tickArea + labelArea(axis), Math.max(0, available * 0.42));
+  }
+  return ticks.mirror ? Math.min(outward, dimension / 4) : 0;
+};
 
 export const plotGeometry = (spec: PlotSpec) => {
   const { width, height } = spec.size;
   const { x, y } = spec.axes;
   const { padding } = spec;
   const titleHeight = spec.title ? spec.font.size * 1.65 : 0;
-  const top = Math.min(height - 2, padding.top + titleHeight + mirrorPadding(x, height));
-  const right = Math.max(2, width - padding.right - mirrorPadding(y, width));
+  const top = Math.min(
+    height - 2,
+    padding.top +
+      titleHeight +
+      mirrorPadding(x, height, height - padding.top - titleHeight - padding.bottom),
+  );
+  const right = Math.max(
+    2,
+    width - padding.right - mirrorPadding(y, width, width - padding.left - padding.right),
+  );
   const minWidth = Math.min(32, right * 0.25);
   const minHeight = Math.min(32, (height - top) * 0.25);
   const left = Math.min(right - minWidth, padding.left + y.size + labelArea(y));

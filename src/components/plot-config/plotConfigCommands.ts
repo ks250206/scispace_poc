@@ -50,6 +50,7 @@ export const plotAxisCommand = (plotId: string, axis: "x" | "y", axisSpec: PlotA
     tickLength: axisSpec.ticks.length,
     minorTick: axisSpec.ticks.minor,
     mirrorTick: axisSpec.ticks.mirror,
+    mirrorAxis: axisSpec.mirror,
   })}`;
 
 export const plotSeriesStyleCommand = (

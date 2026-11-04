@@ -59,7 +59,7 @@ const helpSections = [
       },
       {
         command:
-          "plot-axis <plotId> axis=<x|y> range=<auto|min:max> tick=<auto|interval> mirrorTick=<true|false>",
+          "plot-axis <plotId> axis=<x|y> range=<auto|min:max> tick=<auto|interval> mirrorTick=<true|false> mirrorAxis=<true|false>",
         description:
           "Configure axis range, tick interval and direction, scale, labels, and colors.",
         example: "plot-axis plot-abc axis=x range=0:10 tick=1",

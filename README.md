@@ -101,6 +101,7 @@ table-range waveform.csv action=fill-down r1=1 c1=signal r2=10 c2=signal
 
 plot waveform.csv x=time y=signal,background type=line-marker
 plot-axis plot-1 axis=x range=auto tick=auto tickDir=out mirrorTick=true label=time
+plot-axis plot-1 axis=y mirrorAxis=true
 plot-grid plot-1 x=true y=true
 plot-schema plot-1
 plot-apply-schema plot-1 json=%7B...%7D

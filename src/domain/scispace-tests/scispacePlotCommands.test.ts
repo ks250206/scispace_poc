@@ -86,7 +86,7 @@ describe("scispace plot commands", () => {
     });
 
     const axis = runCommand(
-      'plot-axis plot-1 axis=y label="Signal axis" range=0.1:10 tick=2 tickDir=in scale=linear labelFontFamily=Helvetica labelFontSize=16 valueFontFamily=Menlo valueFontSize=11 size=56 gap=8 labelGap=12 labelSize=28 color=#111827 gridColor=#d1d5db tickColor=#6b7280 tickLength=10 minorTick=true mirrorTick=true',
+      'plot-axis plot-1 axis=y label="Signal axis" range=0.1:10 tick=2 tickDir=in scale=linear labelFontFamily=Helvetica labelFontSize=16 valueFontFamily=Menlo valueFontSize=11 size=56 gap=8 labelGap=12 labelSize=28 color=#111827 gridColor=#d1d5db tickColor=#6b7280 tickLength=10 minorTick=true mirrorTick=true mirrorAxis=true',
       { plotSpecs },
     );
     expect(axis).toMatchObject({
@@ -95,6 +95,7 @@ describe("scispace plot commands", () => {
         axes: {
           y: {
             label: "Signal axis",
+            mirror: true,
             range: { mode: "manual", min: 0.1, max: 10 },
             ticks: {
               mode: "manual",
@@ -291,6 +292,7 @@ describe("scispace plot commands", () => {
     expect(runCommand("plot-axis plot-1 axis=x scale=log", { plotSpecs }).kind).toBe("error");
     expect(runCommand("plot-axis plot-1 axis=x tickLength=-1", { plotSpecs }).kind).toBe("error");
     expect(runCommand("plot-axis plot-1 axis=x mirrorTick=yes", { plotSpecs }).kind).toBe("error");
+    expect(runCommand("plot-axis plot-1 axis=x mirrorAxis=yes", { plotSpecs }).kind).toBe("error");
     expect(runCommand("plot-grid plot-1 x=maybe", { plotSpecs }).kind).toBe("error");
     expect(runCommand("plot-grid plot-1 y=maybe", { plotSpecs })).toMatchObject({
       kind: "error",

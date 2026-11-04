@@ -68,6 +68,8 @@ export const executePlotAxisCommand = (
   const tickLength = parseNonNegativeNumber(tickLengthValue);
   const minorTickValue = readOption(args, "minorTick");
   const minorTick = parseOptionalBoolean(minorTickValue);
+  const mirrorAxisValue = readOption(args, "mirrorAxis");
+  const mirrorAxis = parseOptionalBoolean(mirrorAxisValue);
   const mirrorTickValue = readOption(args, "mirrorTick");
   const mirrorTick = parseOptionalBoolean(mirrorTickValue);
 
@@ -97,8 +99,12 @@ export const executePlotAxisCommand = (
   if (mirrorTickValue !== undefined && mirrorTick === undefined)
     return { kind: "error", output: `Invalid mirror tick: ${mirrorTickValue}` };
 
+  if (mirrorAxisValue !== undefined && mirrorAxis === undefined)
+    return { kind: "error", output: `Invalid mirror axis: ${mirrorAxisValue}` };
+
   const axis = {
     ...current.axes[axisKey],
+    ...(mirrorAxis !== undefined ? { mirror: mirrorAxis } : {}),
     ...(label !== undefined ? { label } : {}),
     ...(range ? { range } : {}),
     ...(scale !== undefined ? { scale } : {}),

@@ -122,6 +122,15 @@ export function PlotConfigAxesTab({ spec, onSetAxis }: PlotConfigAxesTabProps) {
             </ConfigField>
           </div>
 
+          <label className="plot-config-check">
+            <input
+              aria-label={`${axis} mirror axis`}
+              type="checkbox"
+              checked={spec.axes[axis].mirror ?? false}
+              onChange={(event) => onSetAxis(axis, { mirror: event.target.checked })}
+            />
+            <span>Mirror axis</span>
+          </label>
           <div className="plot-subgroup-title">Range</div>
           <AxisRangeFields
             key={[

@@ -337,6 +337,29 @@ describe("Workbench plot and history UI", () => {
     expect(marks("y").length).toBeGreaterThan(0);
   });
 
+  it("mirrors the complete axis independently of tick-only mirroring", async () => {
+    const user = userEvent.setup();
+    await renderWorkbench();
+    await clickToolbarItem(user, "Plot", "Plot Config");
+    await user.click(await screen.findByRole("tab", { name: "Axes" }));
+    const xMirrorAxis = screen.getByRole("checkbox", { name: "x mirror axis" });
+    expect(xMirrorAxis).not.toBeChecked();
+    await user.click(xMirrorAxis);
+    const axis = (key: "x" | "y") => document.querySelector(`[data-plot-axis="${key}"]`);
+    await waitFor(() => expect(axis("x")?.querySelector("[data-mirrored-axis]")).not.toBeNull());
+    expect(axis("x")?.querySelector("[data-mirrored-axis-label]")?.textContent).toBe("time");
+    expect(axis("x")?.querySelectorAll("[data-mirrored-tick-label]").length).toBeGreaterThan(0);
+    expect(axis("y")?.querySelector("[data-mirrored-axis]")).toBeNull();
+    const mirroredMarks = () => axis("x")?.querySelectorAll("[data-mirrored-tick]").length;
+    const count = mirroredMarks();
+    await user.click(screen.getByRole("checkbox", { name: "x mirror ticks" }));
+    await waitFor(() => expect(storeState().plotSpecs[0]?.axes.x.ticks.mirror).toBe(true));
+    expect(mirroredMarks()).toBe(count);
+    await user.click(xMirrorAxis);
+    await waitFor(() => expect(axis("x")?.querySelector("[data-mirrored-axis]")).toBeNull());
+    expect(mirroredMarks()).toBeGreaterThan(0);
+  });
+
   it("zooms on the configured axis in a scaled plot and resets on double click", async () => {
     await renderWorkbench();
     await act(async () => {

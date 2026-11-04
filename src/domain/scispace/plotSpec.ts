@@ -50,6 +50,7 @@ export const plotSpecSchema = {
   axes: {
     x: {
       label: "string",
+      mirror: "boolean (optional)",
       scale: '"linear" | "log"',
       labelStyle: { family: "string", size: "number" },
       valueStyle: { family: "string", size: "number" },
@@ -66,6 +67,7 @@ export const plotSpecSchema = {
     },
     y: {
       label: "string",
+      mirror: "boolean (optional)",
       scale: '"linear" | "log"',
       labelStyle: { family: "string", size: "number" },
       valueStyle: { family: "string", size: "number" },
@@ -111,6 +113,7 @@ export const plotSpecSchema = {
 
 export const defaultPlotAxis = (label: string): PlotAxisSpec => ({
   label,
+  mirror: false,
   range: { mode: "auto" },
   ticks: { mode: "auto", orientation: "out", length: 6, minor: false, mirror: false },
   scale: "linear",
@@ -152,6 +155,7 @@ export const normalizeAxis = (axis: PlotAxisSpec | undefined, label: string): Pl
     ...fallback,
     ...axis,
     label: axis?.label ?? label,
+    mirror: axis?.mirror === true,
     range: axis?.range ?? fallback.range,
     scale: axis?.scale === "log" ? "log" : "linear",
     ticks: {
