@@ -46,7 +46,7 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   const runScispace = useScispaceStore((state) => state.runScispace);
   const confirmImport = useScispaceStore((state) => state.confirmImport);
   const windowRef = useRef<HTMLDivElement>(null);
-  const pendingRename = useRef<ReturnType<typeof runScispace> | undefined>(undefined);
+  const pendingColumnEdit = useRef<ReturnType<typeof runScispace> | undefined>(undefined);
   const rawParentRef = useRef<HTMLDivElement>(null);
   const previewParentRef = useRef<HTMLDivElement>(null);
   const [previewColumnWidths, setPreviewColumnWidths] = useState<Record<string, number>>({});
@@ -147,10 +147,10 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
   const toggleExcludedColumn = (columnId: string, checked: boolean) => {
     void runScispace(importColumnCommand(importId, columnId, checked), { source: "gui" });
   };
-  const renameColumn = (columnId: string, name: string) => {
-    pendingRename.current = runScispace(importRenameColumnCommand(importId, columnId, name), {
-      source: "gui",
-    });
+  const runColumnEdit = (command: string) => {
+    pendingColumnEdit.current = pendingColumnEdit.current
+      ? pendingColumnEdit.current.then(() => runScispace(command, { source: "gui" }))
+      : runScispace(command, { source: "gui" });
   };
   const submitImport = async () => {
     const active = document.activeElement;
@@ -160,9 +160,9 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
       active.closest(".column-name-editor")
     )
       active.blur();
-    const rename = pendingRename.current;
-    const result = await rename;
-    if (pendingRename.current === rename) pendingRename.current = undefined;
+    const edit = pendingColumnEdit.current;
+    const result = await edit;
+    if (pendingColumnEdit.current === edit) pendingColumnEdit.current = undefined;
     if (result?.kind !== "error") await confirmImport(importId);
   };
   const reapplyPreset = () => {
@@ -195,7 +195,11 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
           onReapplyPreset={reapplyPreset}
         />
       </div>
-      {pendingImport.error && !preview ? (
+      {pendingImport.mode === "tabular" && pendingImport.columnTypeError ? (
+        <div className="import-error" role="alert">
+          {pendingImport.columnTypeError}
+        </div>
+      ) : pendingImport.error && !preview ? (
         <div className="import-error">{pendingImport.error}</div>
       ) : null}
       <div className="import-tab-area">
@@ -239,7 +243,14 @@ export function ImportSettingsWindow({ importId }: ImportSettingsWindowProps) {
             <ImportColumnsTab
               allPreview={allPreview}
               pendingImport={pendingImport}
-              onRenameColumn={renameColumn}
+              onRenameColumn={(columnId, name) =>
+                runColumnEdit(importRenameColumnCommand(importId, columnId, name))
+              }
+              onSetColumnType={(index, type, format = "iso") =>
+                runColumnEdit(
+                  `import-column ${importId} action=type index=${index + 1} type=${type} format=${format}`,
+                )
+              }
               onToggleExcludedColumn={toggleExcludedColumn}
             />
           ) : null}

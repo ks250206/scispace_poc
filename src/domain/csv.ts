@@ -1,3 +1,4 @@
+import { convertColumnValue } from "./columnConversion";
 import type {
   DataValue,
   Dataset,
@@ -259,12 +260,15 @@ const parseHeaders = (firstCells: string[], options: ImportParseOptions): string
     return `column_${index + 1}`;
   });
 
+export class InvalidImportColumnValue extends Error {}
+
 export const parseDelimitedText = (
   text: string,
   name: string,
   sourcePath: string,
   now = Date.now(),
   options: Partial<ImportParseOptions> = {},
+  onInvalidColumnValue?: (columnId: string, message: string) => void,
 ): Dataset => {
   const resolvedOptions = { ...defaultImportParseOptions, ...options };
   const lines = tabularLines(text, resolvedOptions);
@@ -286,32 +290,40 @@ export const parseDelimitedText = (
     dataType: "string" as const,
   }));
 
-  const rows = dataLines.map((line) => {
+  const excludedColumnIds = new Set(resolvedOptions.excludedColumnIds);
+  const included = columns
+    .map((column, index) => ({ column, index, conversion: resolvedOptions.columnTypes?.[index] }))
+    .filter(({ column }) => !excludedColumnIds.has(column.id));
+  const rows = dataLines.map((line, rowIndex) => {
     const cells = splitDelimitedLine(line, delimiter);
     return Object.fromEntries(
-      columns.map((column, index) => [column.id, normalizeDataValue(cells[index] ?? "")]),
+      included.map(({ column, index, conversion }) => {
+        const raw = cells[index] ?? "";
+        if (!conversion) return [column.id, normalizeDataValue(raw)];
+        const value = convertColumnValue(raw.trim(), conversion.type, conversion.format);
+        if (value !== undefined) return [column.id, value];
+
+        const message = `Column "${column.name}", data row ${rowIndex + 1}: invalid ${conversion.type} value`;
+        if (!onInvalidColumnValue) throw new InvalidImportColumnValue(message);
+        onInvalidColumnValue(column.id, message);
+        return [column.id, raw];
+      }),
     );
   });
-  const typedColumns = columns.map((column) => ({
-    ...column,
-    dataType: inferColumnType(rows.map((row) => row[column.id] ?? "")),
-  }));
-  const excludedColumnIds = new Set(resolvedOptions.excludedColumnIds);
-  const includedColumns = typedColumns.filter((column) => !excludedColumnIds.has(column.id));
+  const includedColumns: DatasetColumn[] = included.map(({ column, conversion }) =>
+    conversion
+      ? { ...column, dataType: conversion.type, explicitType: true }
+      : { ...column, dataType: inferColumnType(rows.map((row) => row[column.id] ?? "")) },
+  );
   if (includedColumns.length === 0) {
     throw new Error("No import columns selected");
   }
-  const includedColumnIds = new Set(includedColumns.map((column) => column.id));
-  const includedRows = rows.map((row) =>
-    Object.fromEntries(Object.entries(row).filter(([columnId]) => includedColumnIds.has(columnId))),
-  );
-
   return {
     id: crypto.randomUUID(),
     name,
     sourcePath,
     columns: includedColumns,
-    rows: includedRows,
+    rows,
     createdBy: "upload",
     createdAt: now,
   };

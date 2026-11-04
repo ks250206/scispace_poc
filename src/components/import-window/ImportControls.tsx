@@ -86,7 +86,12 @@ export function ImportControls({
         <button type="button" onClick={onCancel}>
           Cancel
         </button>
-        <button type="button" className="primary" onClick={onImport}>
+        <button
+          type="button"
+          className="primary"
+          onClick={onImport}
+          disabled={pendingImport.mode === "tabular" && Boolean(pendingImport.columnTypeError)}
+        >
           Import
         </button>
       </div>

@@ -122,6 +122,31 @@ describe("scispace store import lifecycle behavior", () => {
     expect(result?.dataset?.rows).toEqual([{ Date: "2026-09-10", Elapsed_sec: 0.118 }]);
   });
 
+  it("validates typed columns beyond the preview and allows excluding an invalid field", async () => {
+    const { store } = await makeStore();
+    const validRows = Array.from({ length: 500 }, () => "2026-09-10,13:38");
+    const importId = openImport(
+      store,
+      "bad-date.csv",
+      ["day,clock", ...validRows, "2026-02-30,14:00"].join("\n"),
+    );
+    const run = (args: string) => store.getState().runScispace(args);
+    await run(`import-column ${importId} action=type index=1 type=date`);
+    await run(`import-column ${importId} action=type index=2 type=time`);
+    expect(store.getState().pendingImports[0]?.columnTypeError).toContain("data row 501");
+    expect(await store.getState().confirmImport(importId)).toBeUndefined();
+    expect(store.getState().files.some(({ name }) => name === "bad-date.csv")).toBe(false);
+    await run(`import-column ${importId} column=day action=exclude`);
+    expect(store.getState().pendingImports[0]?.columnTypeError).toBeUndefined();
+    const result = await store.getState().confirmImport(importId);
+    expect(result?.dataset?.columns[0]).toMatchObject({
+      id: "clock",
+      dataType: "time",
+      explicitType: true,
+    });
+    expect(result?.dataset?.rows.at(-1)).toEqual({ clock: "14:00:00" });
+  });
+
   it("uses edited column names for headerless imports", async () => {
     const { store } = await makeStore();
     const importId = openImport(store, "no-header.csv", "1,2\n3,4");

@@ -2581,6 +2581,13 @@
   padding-bottom: 1px;
 }
 
+.import-column-field {
+  flex: 0 0 140px;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
 .column-name-editor label {
   display: flex;
   min-width: 140px;
@@ -2590,7 +2597,8 @@
   font-size: 11px;
 }
 
-.column-name-editor input {
+.column-name-editor input,
+.column-name-editor select {
   height: 28px;
   border: 1px solid var(--border);
   border-radius: 5px;

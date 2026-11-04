@@ -1,4 +1,10 @@
-import { defaultImportParseOptions, normalizeVirtualPath, parseDelimitedText } from "../csv";
+import { isColumnDateFormat, isConversionType } from "../columnConversion";
+import {
+  defaultImportParseOptions,
+  InvalidImportColumnValue,
+  normalizeVirtualPath,
+  parseDelimitedText,
+} from "../csv";
 import type { PendingImport, ScispaceCommandResult } from "../types";
 import {
   importDelimiters,
@@ -54,12 +60,16 @@ export const executeImportCommand = (
     if (!pendingImport) return { kind: "error", output: `Pending import not found: ${importId}` };
 
     try {
+      const columnTypeErrors = new Map<string, string>();
       const preview = parseDelimitedText(
         pendingImport.text,
         pendingImport.fileName,
         normalizeVirtualPath(pendingImport.fileName),
         Date.now(),
         pendingImport.options,
+        (columnId, message) => {
+          if (!columnTypeErrors.has(columnId)) columnTypeErrors.set(columnId, message);
+        },
       );
       return {
         kind: "import-preview",
@@ -67,6 +77,9 @@ export const executeImportCommand = (
         preview: parseBooleanOption(args, "full")
           ? preview
           : { ...preview, rows: preview.rows.slice(0, 500) },
+        ...(columnTypeErrors.size
+          ? { columnTypeErrors: Object.fromEntries(columnTypeErrors) }
+          : {}),
         output: `Import preview parsed: ${pendingImport.fileName}`,
       };
     } catch (error) {
@@ -161,6 +174,32 @@ export const executeImportCommand = (
     if (!pendingImport) return { kind: "error", output: `Pending import not found: ${importId}` };
     const column = readOption(args, "column");
     const action = readOption(args, "action");
+    if (action === "type") {
+      const index = (parseInteger(readOption(args, "index")) ?? 0) - 1;
+      const type = readOption(args, "type");
+      const format = readOption(args, "format") ?? "iso";
+      if (!pendingImport.allPreview?.columns[index])
+        return { kind: "error", output: "Invalid import column index" };
+      if (type !== "auto" && !isConversionType(type))
+        return {
+          kind: "error",
+          output: "type must be auto, number, string, date, datetime, or time",
+        };
+      if (!isColumnDateFormat(format) || (format !== "iso" && type !== "date"))
+        return { kind: "error", output: "format must be iso, or dmy or mdy for date columns" };
+      const columnTypes = { ...pendingImport.options.columnTypes };
+      if (type === "auto") delete columnTypes[index];
+      else columnTypes[index] = { type, format };
+      return {
+        kind: "import-updated",
+        importId,
+        pendingImport: {
+          ...pendingImport,
+          options: { ...pendingImport.options, columnTypes },
+        },
+        output: `Import column ${index + 1} type: ${type}`,
+      };
+    }
     if (!column) return { kind: "error", output: "column is required" };
     if (action === "rename") {
       const name = readOption(args, "name");
@@ -182,7 +221,7 @@ export const executeImportCommand = (
       };
     }
     if (action !== "include" && action !== "exclude") {
-      return { kind: "error", output: "action must be include, exclude, or rename" };
+      return { kind: "error", output: "action must be include, exclude, rename, or type" };
     }
 
     const excluded = new Set(pendingImport.options.excludedColumnIds);
@@ -270,6 +309,8 @@ export const executeImportCommand = (
       );
       return { kind: "import-confirm", importId, dataset, output: `Import confirmed: ${path}` };
     } catch (error) {
+      if (error instanceof InvalidImportColumnValue)
+        return { kind: "error", output: error.message };
       const message = error instanceof Error ? error.message : "Unable to parse tabular file";
       return { kind: "import-confirm", importId, parseError: message, output: message };
     }

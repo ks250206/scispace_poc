@@ -35,6 +35,7 @@ export const helpText = [
   "  import-preview <importId>",
   "  import-set <importId> skipRows=<n> delimiter=<auto|comma|tab|space|semicolon> hasHeader=<true|false> mode=<tabular|raw>",
   "  import-column <importId> column=<col> action=<include|exclude|rename> name=<newName>",
+  "  import-column <importId> action=type index=<n> type=<auto|number|string|date|datetime|time> format=<iso|dmy|mdy>",
   "  import-line <importId> line=<n> value=<text>",
   "  import-cancel <importId>",
   "  import-confirm <importId> mode=<tabular|raw> path=<virtualPath>",

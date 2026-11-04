@@ -123,6 +123,35 @@ describe("Workbench import UI", () => {
     });
   });
 
+  it("selects Date and Time in Columns and imports typed values", async () => {
+    const user = userEvent.setup();
+    let importId = "";
+    act(() => {
+      importId = storeState().openImportDialog(
+        "typed-log.csv",
+        "Date,Time,ID\n10/09/2026,13:38:13.759,0007",
+      );
+    });
+    render(<ImportSettingsWindow importId={importId} />);
+    await user.click(screen.getByRole("tab", { name: "Columns" }));
+    const dateType = screen.getByRole("combobox", { name: "Column type Date" });
+    await user.selectOptions(dateType, "date");
+    expect(await screen.findByRole("alert")).toHaveTextContent('Column "Date", data row 1');
+    expect(screen.getByRole("button", { name: "Import" })).toBeDisabled();
+    await user.selectOptions(screen.getByRole("combobox", { name: "Date format Date" }), "dmy");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Column type Time" }), "time");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Column type ID" }), "string");
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    await user.click(screen.getByRole("tab", { name: "Preview" }));
+    expect(screen.getByText("2026-09-10")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Import" }));
+    await waitFor(() => {
+      const imported = storeState().datasets.find(({ name }) => name === "typed-log.csv");
+      expect(imported?.columns.map(({ dataType }) => dataType)).toEqual(["date", "time", "string"]);
+      expect(imported?.rows).toEqual([{ Date: "2026-09-10", Time: "13:38:13.759", ID: "0007" }]);
+    });
+  });
+
   it("can mark import columns for deletion and grays skipped raw rows", async () => {
     let importId = "";
     act(() => {

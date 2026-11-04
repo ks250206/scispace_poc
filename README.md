@@ -89,6 +89,7 @@ Plot、Import、Terminal、Command History などのウィンドウを配置し�
 file-list ~/raw
 upload-open upload-123 name=data.csv ref=upload-123 mode=tabular
 import-set import-123 skipRows=1 delimiter=tab hasHeader=true
+import-column import-123 action=type index=1 type=date
 import-confirm import-123 path=~/raw/data.csv
 
 dataset-new calc columns=x:number,y:number,label:string rows=10

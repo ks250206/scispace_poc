@@ -21,7 +21,7 @@ export const createPreviews = (
   text: string,
   options: ImportParseOptions,
   resolveExcludedIds?: (allPreview?: Dataset) => string[],
-): Pick<PendingImport, "allPreview" | "preview" | "error" | "options"> => {
+): Pick<PendingImport, "allPreview" | "preview" | "error" | "columnTypeError" | "options"> => {
   const result = executeScispaceCommand(`import-preview ${id}`, {
     datasets: [],
     pendingImports: [
@@ -32,7 +32,13 @@ export const createPreviews = (
   const excludedColumnIds = resolveExcludedIds?.(allPreview) ?? options.excludedColumnIds;
   const resolvedOptions = { ...options, excludedColumnIds };
   if (!allPreview)
-    return { allPreview, preview: undefined, options: resolvedOptions, error: result.output };
+    return {
+      allPreview,
+      preview: undefined,
+      options: resolvedOptions,
+      error: result.output,
+      columnTypeError: undefined,
+    };
 
   const columns = allPreview.columns.filter(({ id }) => !excludedColumnIds.includes(id));
   if (columns.length === 0)
@@ -41,9 +47,19 @@ export const createPreviews = (
       preview: undefined,
       options: resolvedOptions,
       error: "No import columns selected",
+      columnTypeError: undefined,
     };
+  const typeErrors = result.kind === "import-preview" ? result.columnTypeErrors : undefined;
+  const invalidColumn = typeErrors && columns.find(({ id }) => Object.hasOwn(typeErrors, id));
+  const columnTypeError = invalidColumn && typeErrors[invalidColumn.id];
   if (columns.length === allPreview.columns.length)
-    return { allPreview, preview: allPreview, options: resolvedOptions, error: undefined };
+    return {
+      allPreview,
+      preview: allPreview,
+      options: resolvedOptions,
+      error: undefined,
+      columnTypeError,
+    };
   const rows = allPreview.rows.map((row) =>
     Object.fromEntries(columns.map(({ id }) => [id, row[id]])),
   );
@@ -52,6 +68,7 @@ export const createPreviews = (
     preview: { ...allPreview, columns, rows },
     options: resolvedOptions,
     error: undefined,
+    columnTypeError,
   };
 };
 
